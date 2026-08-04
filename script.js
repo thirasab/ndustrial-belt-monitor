@@ -1983,11 +1983,13 @@ function setLegendForMode_(){
   }
 }
 
-// =========================================================
-// 13. UI MODE / SWITCHING (ให้ก๊อปปี้ไปทับฟังก์ชัน setPageMode เดิม)
-// =========================================================
 function setPageMode(mode){
-  // 1. อัปเดตสถานะของโหมดปัจจุบัน
+  var isCurrentMapVisible = (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH");
+  if (isCurrentMapVisible && typeof map !== 'undefined' && map) {
+    map.__lastCenter = map.getCenter();
+    map.__lastZoom = map.getZoom();
+  }
+
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
   localStorage.setItem("scada_page_mode", mode);
@@ -1996,58 +1998,34 @@ function setPageMode(mode){
   setModeButtons_();
   setLegendForMode_();
   hideMapPopup_();
+
   clearMapDotStateCache_();
 
-  // 2. 🗺️ คำนวณขอบเขตแผนที่ใหม่ เพื่อซูมให้เห็นทุกจุดของโหมดนั้นๆ
   if (typeof map !== 'undefined' && map) {
     setTimeout(function() {
-      map.invalidateSize(true); // ป้องกันบั๊กแผนที่โหลดไม่เต็มกรอบ
-      
+      map.invalidateSize(true);
       var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
-      if (isNewMapVisible) {
-        var bounds = L.latLngBounds();
-        var hasPoints = false;
-        
-        // หาพิกัดของจุดทั้งหมดในโหมดที่กำลังจะเปิด
-        for (var i = 0; i < MAP_POINTS.length; i++) {
-          var p = MAP_POINTS[i];
-          if (p.modes && p.modes.includes(mode)) {
-            bounds.extend([p.lat, p.lng]);
-            hasPoints = true;
-          }
-        }
-        
-        // สั่งซูมให้ครอบคลุมทุกจุด (ใส่ padding [80,80] ป้องกันป้ายการ์ดตกขอบจอ)
-        if (hasPoints) {
-          map.fitBounds(bounds, { padding: [80, 80], animate: true });
-        } else {
-          // ค่าเริ่มต้นกรณีแผนที่ไม่มีจุด
-          map.setView([14.5, 100.5], 17.5); 
-        }
+      if (isNewMapVisible && map.__lastCenter && map.__lastZoom) {
+        map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
       }
-    }, 150); // หน่วงเวลาเล็กน้อยรอให้ UI จัดหน้าเสร็จ
+    }, 150);
   }
 
-  // 3. 🌟 จัดการซ่อน/แสดง ดวงไฟบนแผนที่ตามโหมด
   for(var i=0; i<MAP_POINTS.length; i++){
     var p = MAP_POINTS[i];
     if(p && p.__marker){
-      // รีเซ็ตคลาสกลับเป็นดวงไฟธรรมดาก่อน
       if (p.__el) {
          p.__el.className = "mapDot";
          p.__el.classList.remove("pmFocus");
          p.__el.innerHTML = String(p.pos);
       }
 
-      // ถ้าจุดนี้ถูกกำหนดให้แสดงในโหมดนี้
       if(p.modes && p.modes.includes(mode)) {
         p.__marker.addTo(map); 
-        
         if (mode === "PM10") {
           if(p.__card) p.__card.style.display = "none";
         } else {
           if(p.__card) {
-            // บนมือถือให้ซ่อนการ์ดไว้ก่อนรอคนกด, บนจอคอมให้กางออกเลย
             if(window.innerWidth <= 768) {
               p.__card.style.display = "none";
             } else {
@@ -2056,7 +2034,6 @@ function setPageMode(mode){
           }
         }
         
-        // ช่วงกำลังโหลดข้อมูล VIB ครั้งแรก ให้ขึ้นข้อความ Loading...
         if(mode === "VIB") {
           applyMapDotState_(p.__el, "VIB", "stale", true);
           var sumEl = $id("posSum_" + p.pos + "_" + p.modes[0]); 
@@ -2070,14 +2047,12 @@ function setPageMode(mode){
           }
         }
       } else {
-        // เอาจุดออกจากแผนที่ ถ้าไม่ได้อยู่ในโหมดนี้
         map.removeLayer(p.__marker);
         if(p.__card) p.__card.style.display = "none";
       }
     }
   }
 
-  // 4. สั่ง Fetch ข้อมูลจาก Server ตามโหมด
   if(mode === "PM10"){
     setText("title", "Monitor");
     setText("subtitle", "PM10 Monitor");
@@ -2105,7 +2080,6 @@ function setPageMode(mode){
     }
   }
 
-  // รีเซ็ตเวลา Auto Switch ใหม่
   if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
 }
 
