@@ -1730,7 +1730,6 @@ function updateGlobalLeftAlarms_() {
   document.addEventListener("keydown", e => { if(e.key==="Escape") closeQR(); });
 })();
 
-
 // =========================================================
 // 19. INITIALIZATION
 // =========================================================
@@ -1745,6 +1744,5 @@ window.addEventListener("load", function(){
     fetchStatus(); 
     refreshVibStatus_(); 
     startPolling();
-    // (ลบ if(AppState.autoSwitch) startAutoSwitch_(); ออกไปแล้ว)
   }, 50);
 });
