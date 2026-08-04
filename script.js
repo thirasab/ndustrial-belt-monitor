@@ -65,7 +65,6 @@ async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) 
     const options = { method: method };
     if (method === 'POST' && bodyData) {
       options.body = JSON.stringify(bodyData);
-      // GAS ต้องการ text/plain เพื่อหลีกเลี่ยง CORS Preflight แบบซับซ้อน
       options.headers = { "Content-Type": "text/plain;charset=utf-8" };
     }
 
@@ -127,13 +126,12 @@ function hardCrashScreen(title,msg,stack){
       <button onclick="location.reload()" style="margin-top:12px;padding:10px 12px;">Reload</button>
     </div>`;
 }
-
 window.addEventListener("error", e => hardCrashScreen("SCADA UI crashed", (e&&e.message)||"Unknown", (e&&e.error&&e.error.stack)||""));
 window.addEventListener("unhandledrejection", e => hardCrashScreen("SCADA Promise crashed", (e&&e.reason)||"Unknown", ""));
+
 function loadLogo(){
   var img = $id("logoImg"); 
   if(!img) return;
-  
   var cached = null;
   try { cached = localStorage.getItem("scada_logo"); } catch(e){}
   
@@ -152,6 +150,7 @@ function loadLogo(){
     })
     .catch(err => console.error("Logo fetch error:", err));
 }
+
 // =========================================================
 // 5. MOBILE MENU & THEME
 // =========================================================
@@ -334,7 +333,6 @@ function applyPageModeChange(mode) {
   hideMapPopup_();
   clearMapDotStateCache_();
 
-  // 🗺️ ซูมขอบเขตแผนที่แบบอัตโนมัติ ให้อยู่ตรงกลางเสมอ
   if (typeof map !== 'undefined' && map && mode !== "AI" && mode !== "VIB_DASH") {
     setTimeout(() => {
       map.invalidateSize(true);
@@ -350,7 +348,6 @@ function applyPageModeChange(mode) {
     }, 150);
   }
 
-  // อัปเดต Marker
   MAP_POINTS.forEach(p => {
     if(p && p.__marker){
       if (p.__el) {
@@ -433,7 +430,7 @@ setInterval(() => {
   if(AppState.remainingSec <= 0) {
     const seq = ["BELT", "PM10", "VIB", "VIB_DASH", "AI"];
     const nextIdx = (seq.indexOf(AppState.mode) + 1) % seq.length;
-    AppState.mode = seq[nextIdx]; // Trigger Proxy
+    AppState.mode = seq[nextIdx]; 
     AppState.remainingSec = CONFIG.AUTO_SWITCH_SEC;
   }
 }, 1000);
@@ -580,7 +577,7 @@ function buildAiRows_(data){
        else if(latest.level.includes("CHECK")) { level = "MEDIUM"; baseScore = Math.max(baseScore, 45); }
        rows.push({
           belt: name, group: "Vibration Gear", status: "ALERT", alarmType: "VIB_" + level, run: 1, score: baseScore, level: level, isAcked: false, cause: latest.reason, action: latest.advice, 
-          reasonText: "เกินเกณฑ์ที่ตั้งไว้ (>" + limitWarn + " mm/s)", alarmMsg: "Peak: " + (latest.acc||0).toFixed(2) + " mm/s", sortKey: (level==="CRITICAL"?500:level==="HIGH"?400:level==="MEDIUM"?300:level==="LOW"?200:100) + baseScore
+          reasonText: `เกินเกณฑ์ที่ตั้งไว้ (>${limitWarn} mm/s)`, alarmMsg: "Peak: " + (latest.acc||0).toFixed(2) + " mm/s", sortKey: (level==="CRITICAL"?500:level==="HIGH"?400:level==="MEDIUM"?300:level==="LOW"?200:100) + baseScore
        });
      }
      function getLimits(posNum) {
@@ -608,8 +605,8 @@ function buildAiRows_(data){
                 var isCrit = increasePct >= 50 && newAvg >= 30;
                 rows.push({
                    belt: name, group: "Predictive Maint.", status: "WARN", alarmType: "TREND_UP", run: 1, score: isCrit ? 85 : 65, level: isCrit ? "CRITICAL" : "HIGH", isAcked: false,
-                   cause: "📈 ระดับพลังงานการสั่นสะเทือน (RMS) ไต่ระดับเพิ่มขึ้น " + increasePct.toFixed(1) + "%", action: "ตรวจสอบตลับลูกปืน, การหล่อลื่น (จาระบี) และ Alignment เพื่อป้องกัน Break down",
-                   reasonText: "AI วิเคราะห์แนวโน้มจาก " + vibData.length + " ข้อมูลย้อนหลัง (5 วัน)", alarmMsg: "RMS เดิม: " + oldAvg.toFixed(3) + "G ➔ ปัจจุบัน: " + newAvg.toFixed(3) + "G", sortKey: isCrit ? 485 : 385
+                   cause: `📈 ระดับพลังงานการสั่นสะเทือน (RMS) ไต่ระดับเพิ่มขึ้น ${increasePct.toFixed(1)}%`, action: "ตรวจสอบตลับลูกปืน, การหล่อลื่น (จาระบี) และ Alignment เพื่อป้องกัน Break down",
+                   reasonText: `AI วิเคราะห์แนวโน้มจาก ${vibData.length} ข้อมูลย้อนหลัง (5 วัน)`, alarmMsg: `RMS เดิม: ${oldAvg.toFixed(3)}G ➔ ปัจจุบัน: ${newAvg.toFixed(3)}G`, sortKey: isCrit ? 485 : 385
                 });
             }
         }
@@ -1408,6 +1405,42 @@ function fetchEventList24h_(){
 ["alarmLogBtn", "alarmLogBtn2"].forEach(id => $id(id)?.addEventListener("click", () => fetchAlarmLog24h_()));
 ["eventListBtn", "eventListBtn2"].forEach(id => $id(id)?.addEventListener("click", () => fetchEventList24h_()));
 
+document.addEventListener("click", function(event) {
+  if (event.target.closest('.dropbtn')) {
+    var btn = event.target.closest('.dropbtn');
+    var targetId = btn.getAttribute('data-target');
+    var dropdown = document.getElementById(targetId);
+    if (dropdown) {
+      dropdown.classList.toggle("show");
+    }
+  } else {
+    var openDropdowns = document.querySelectorAll(".dropdown-content.show");
+    for (var i = 0; i < openDropdowns.length; i++) {
+      openDropdowns[i].classList.remove('show');
+    }
+  }
+});
+
+window.addEventListener("resize", function() {
+  if (typeof MAP_POINTS === "undefined" || !MAP_POINTS || !MAP_POINTS.length) return;
+  for (var i = 0; i < MAP_POINTS.length; i++) {
+    var p = MAP_POINTS[i];
+    if (!p.__card) continue;
+    if (window.innerWidth <= 768) {
+      p.__card.style.display = "none";
+    } else {
+      if (p.modes && p.modes.includes(AppState.mode) && AppState.mode !== "PM10") {
+        p.__card.style.display = "block";
+      } else {
+        p.__card.style.display = "none";
+      }
+    }
+  }
+  if (typeof map !== 'undefined' && map) {
+    map.invalidateSize();
+  }
+});
+
 // =========================================================
 // 15. REPORT CRUD & IMAGE UPLOAD
 // =========================================================
@@ -1545,7 +1578,6 @@ function reportDelete_(){
   });
 }
 
-// ผูก Event ปุ่ม Report ต่างๆ
 $id("reportBtn")?.addEventListener("click", () => { if($id("reportOverlay")) $id("reportOverlay").style.display="flex"; reportRefresh_(); });
 $id("reportBtn2")?.addEventListener("click", () => { if($id("reportOverlay")) $id("reportOverlay").style.display="flex"; reportRefresh_(); });
 $id("reportCloseBtn")?.addEventListener("click", () => { if($id("reportOverlay")) $id("reportOverlay").style.display="none"; });
