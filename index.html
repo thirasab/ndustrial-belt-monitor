@@ -4,26 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
   
-  <!-- Preconnect & DNS Prefetch -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-  
-  <!-- External CSS Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  
-  <!-- Main CSS -->
   <link rel="stylesheet" href="style.css" />
 
   <title>Industrial Belt Monitor</title>
 
-  <!-- External JS Libraries -->
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
-  <!-- Main JS -->
+  <!-- Script ของเรา -->
   <script defer src="script.js"></script>
 </head>
 
@@ -31,6 +25,7 @@
   
   <!-- ================= TOP BAR ================= -->
   <div class="top">
+    <!-- ... (โค้ด Top Bar เหมือนเดิม) ... -->
     <div class="left">
       <div class="brand">
         <div style="display:flex;align-items:center;gap:9px;">
@@ -58,7 +53,7 @@
       <button class="btn modeBtn aiBtn" id="modeAiBtn">AI Analysis</button>
 
       <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .5px;">🔄 Auto: ON 30s</button>
-      <button class="btn" id="qrBtn" style="font-weight: 1000; letter-spacing: .5px; border-color: rgba(255,255,255,0.3);">📱 QR code webapp</button>
+      <button class="btn" id="qrBtn" style="font-weight: 1000; letter-spacing: .5px; border-color: rgba(255,255,255,0.3);">📱 QR code</button>
 
       <div class="dropdown">
         <button class="btn dropbtn" data-target="ddMainMenu" style="padding: 9px 14px; border-radius: 11px; font-weight: 1000;">⚙️ Menu ▾</button>
@@ -73,7 +68,6 @@
         </div>
       </div>
     </div>
-
     <button class="hamburger" id="hamburgerBtn" aria-label="Menu">☰</button>
   </div>
 
@@ -84,19 +78,16 @@
         <button class="btn modeBtn headBtn primary" id="modeBeltBtn2">Head-Open</button>
         <button class="btn modeBtn pmBtn" id="modePm10Btn2">PM10</button>
         <button class="btn modeBtn vibBtn" id="modeVibBtn2">Vibration</button>
-        <button class="btn modeBtn vibBtn" id="modeVibDashBtn2" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button> 
+        <button class="btn modeBtn vibBtn" id="modeVibDashBtn2" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Dashboard</button> 
         <button class="btn modeBtn aiBtn" id="modeAiBtn2">AI Analysis</button>
       </div>
-      
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-        <button class="btn" id="autoSwitchBtn2" style="font-weight: 1000; letter-spacing: .5px;">🔄 Auto: ON 30s</button>
-        <button class="btn" id="qrBtn2" style="font-weight: 1000; letter-spacing: .5px;">📱 QR code webapp</button>
+        <button class="btn" id="autoSwitchBtn2" style="font-weight: 1000;">🔄 Auto</button>
+        <button class="btn" id="qrBtn2" style="font-weight: 1000;">📱 QR code</button>
         <button class="btn" id="opBtn2">👤 Operator: -</button>
         <button class="btn" id="muteBtn2">🔊 Beep: ON</button>
         <button class="btn" id="themeBtnToggle2">🌙 Theme: NIGHT</button>
-        
         <div style="grid-column: span 2; border-top:1px dashed var(--border); margin: 2px 0;"></div>
-        
         <button class="btn btn-report" id="reportBtn2" style="grid-column: span 2;">📝 Report Form</button>
         <button class="btn" id="alarmLogBtn2" style="background:rgba(255,59,48,0.15); border-color:rgba(255,59,48,0.3); color:#ff3b30;">🚨 Alarm Log</button>
         <button class="btn" id="eventListBtn2">📜 Event List</button>
@@ -104,58 +95,28 @@
     </div>
   </div>
 
-  <!-- ================= MAP SECTION ================= -->
+  <!-- ================= SECTIONS ================= -->
   <div class="section" id="mapSection">
     <div class="secHead">
-      <div class="secTitle">
-        <span class="dot ok"></span>
-        <span id="mapTitle">Plant Map • หัวสายพานชำรุด Check Points</span>
-      </div>
+      <div class="secTitle"><span class="dot ok"></span><span id="mapTitle">Plant Map</span></div>
       <div class="secMeta mono" id="mapHint">Click dot/card to view details</div>
     </div>
-    <div class="mapOuter">
-      <div class="mapCanvas" id="mapCanvas"></div>
-    </div>
+    <div class="mapOuter"><div class="mapCanvas" id="mapCanvas"></div></div>
   </div>
 
-  <!-- ================= AI ANALYSIS SECTION ================= -->
   <div class="section aiSection" id="aiSection">
     <div class="secHead">
-      <div class="secTitle">
-        <span class="dot ok"></span>
-        <span id="aiTitle">AI Analysis • ภาพรวมการแจ้งเตือน</span>
-      </div>
+      <div class="secTitle"><span class="dot ok"></span><span id="aiTitle">AI Analysis</span></div>
       <div class="secMeta mono" id="aiHint">Priority • probable cause • action</div>
     </div>
     <div class="aiWrap">
       <div class="aiGrid">
-        <div class="aiCard kpi-critical">
-          <div class="aiKicker">Critical</div>
-          <div class="aiValue mono" id="aiKpiCritical">0</div>
-          <div class="aiSub" id="aiKpiCriticalSub">ต้องแจ้งทันที</div>
-        </div>
-        <div class="aiCard kpi-high">
-          <div class="aiKicker">High</div>
-          <div class="aiValue mono" id="aiKpiHigh">0</div>
-          <div class="aiSub" id="aiKpiHighSub">เฝ้าระวังสูง</div>
-        </div>
-        <div class="aiCard kpi-medium">
-          <div class="aiKicker">Medium</div>
-          <div class="aiValue mono" id="aiKpiMedium">0</div>
-          <div class="aiSub" id="aiKpiMediumSub">ควรติดตาม</div>
-        </div>
-        <div class="aiCard kpi-watch">
-          <div class="aiKicker">Watch / Offline</div>
-          <div class="aiValue mono" id="aiKpiWatch">0</div>
-          <div class="aiSub" id="aiKpiWatchSub">สัญญาณหายหรือเริ่มผิดปกติ</div>
-        </div>
-        <div class="aiCard kpi-normal">
-          <div class="aiKicker">Normal</div>
-          <div class="aiValue mono" id="aiKpiNormal">0</div>
-          <div class="aiSub" id="aiKpiNormalSub">ไม่มีความเสี่ยงเด่น</div>
-        </div>
+        <div class="aiCard kpi-critical"><div class="aiKicker">Critical</div><div class="aiValue mono" id="aiKpiCritical">0</div></div>
+        <div class="aiCard kpi-high"><div class="aiKicker">High</div><div class="aiValue mono" id="aiKpiHigh">0</div></div>
+        <div class="aiCard kpi-medium"><div class="aiKicker">Medium</div><div class="aiValue mono" id="aiKpiMedium">0</div></div>
+        <div class="aiCard kpi-watch"><div class="aiKicker">Watch / Offline</div><div class="aiValue mono" id="aiKpiWatch">0</div></div>
+        <div class="aiCard kpi-normal"><div class="aiKicker">Normal</div><div class="aiValue mono" id="aiKpiNormal">0</div></div>
       </div>
-
       <div class="aiMain">
         <div class="aiPanel">
           <div class="aiPanelHead">
@@ -164,166 +125,50 @@
           </div>
           <div class="aiTableWrap">
             <table class="aiTable">
-              <thead>
-                <tr>
-                  <th style="width:74px;">Score</th>
-                  <th style="width:92px;">Level</th>
-                  <th style="width:110px;">Belt</th>
-                  <th style="width:86px;">Run</th>
-                  <th style="width:96px;">Alarm</th>
-                  <th>Probable cause</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="aiTbody">
-                <tr><td colspan="7" class="rMut">Waiting for data...</td></tr>
-              </tbody>
+              <thead><tr><th>Score</th><th>Level</th><th>Belt</th><th>Run</th><th>Alarm</th><th>Probable cause</th><th>Action</th></tr></thead>
+              <tbody id="aiTbody"><tr><td colspan="7" class="rMut">Waiting for data...</td></tr></tbody>
             </table>
           </div>
         </div>
-
         <div class="aiPanel">
-          <div class="aiPanelHead">
-            <div class="aiPanelTitle">AI Observations</div>
-            <div class="aiPanelMeta">Top 5 current findings</div>
-          </div>
-          <div class="aiReasonList" id="aiReasonList">
-            <div class="aiEmpty">Waiting for data...</div>
-          </div>
+          <div class="aiPanelHead"><div class="aiPanelTitle">AI Observations</div></div>
+          <div class="aiReasonList" id="aiReasonList"><div class="aiEmpty">Waiting for data...</div></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ================= VIBRATION DASHBOARD SECTION ================= -->
   <div class="section" id="vibDashboardSection" style="display: none; height: calc(100vh - 120px);">
     <div class="secHead">
-      <div class="secTitle">
-        <span class="dot ok"></span>
-        <span id="vibDashTitle">Vibration Gear-Motor Dashboard</span>
-      </div>
-      <div class="secMeta mono">Live Dashboard from External Source</div>
+      <div class="secTitle"><span class="dot ok"></span><span id="vibDashTitle">Vibration Dashboard</span></div>
     </div>
     <div style="width: 100%; height: 100%; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); margin-top: 10px;">
       <iframe src="https://thirasab.github.io/vibration-dashboard/" style="width: 100%; height: 100%; border: none;"></iframe>
     </div>
   </div>
 
-  <!-- ================= MODALS & OVERLAYS ================= -->
-  
-  <!-- History / Vib Modal -->
+  <!-- ================= MODALS ================= -->
   <div class="overlay" id="overlay">
     <div class="modal" role="dialog" aria-modal="true">
-      <div class="modalHead">
-        <div class="modalTitle" id="modalTitle">History</div>
-        <button class="closeBtn" id="closeBtn">✕ Close</button>
-      </div>
+      <div class="modalHead"><div class="modalTitle" id="modalTitle">History</div><button class="closeBtn" id="closeBtn">✕ Close</button></div>
       <div class="modalBody" id="modalBody">Loading...</div>
     </div>
   </div>
-
-  <!-- Toast Wrap -->
   <div class="toastWrap" id="toastWrap"></div>
 
-  <!-- QR Code Overlay -->
-  <div class="qrOverlay" id="qrOverlay" aria-hidden="true">
-    <div class="qrZoomBox" id="qrZoomBox">
-      <img id="qrZoomImg"
-           src="https://lh3.googleusercontent.com/d/1OLkLLT-nnUsJK6FeIS8x9kQwav53za-t"
-           alt="QR Zoom"
-           referrerpolicy="no-referrer" />
-      <div class="qrZoomHint">Click to close • ESC</div>
-    </div>
-  </div>
-
-  <!-- Report Data Table Overlay -->
-  <div class="reportOverlay" id="reportOverlay">
-    <div class="reportModal" role="dialog" aria-modal="true">
-      <div class="reportHead">
-        <div class="ttl">REPORT • รายงานเช็คหัวสายพาน</div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;">
-          <button class="rBtn primary" id="reportOpenFormBtn">+ New</button>
-          <button class="rBtn" id="reportRefreshBtn">Refresh</button>
-          <button class="rBtn danger" id="reportCloseBtn">✕ Close</button>
-        </div>
-      </div>
-      <div class="reportBody">
-        <div class="rCard">
-          <div style="display:flex;justify-content:space-between;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-            <div class="rLabel">Data table</div>
-            <div class="rMut rSmallMono" id="r_count">-</div>
-          </div>
-          <div class="rTableWrap">
-            <table class="rTable">
-              <thead><tr>
-                <th style="width:155px;">Check time</th>
-                <th style="width:100px;">Code</th>
-                <th>Detail</th>
-                <th style="width:130px;">Images</th>
-                <th style="width:120px;">OP</th>
-                <th style="width:130px;">Action</th>
-              </tr></thead>
-              <tbody id="r_tbody"><tr><td colspan="6" class="rMut">Loading...</td></tr></tbody>
-            </table>
-          </div>
-          <div class="rMut" style="font-size:10px;margin-top:8px;">✅ คลิกรูปเพื่อขยาย • Edit เพื่อแก้ไข</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Report Form Overlay -->
-  <div class="reportFormOverlay" id="reportFormOverlay">
-    <div class="reportFormBox" role="dialog" aria-modal="true">
-      <div class="reportFormHead">
-        <div class="ttl" id="formHeadTitle">FORM • กรอก/แก้ไข รายงาน</div>
-        <button class="reportFormCloseBtn" id="reportFormCloseBtn">✕</button>
-      </div>
-      <div class="reportFormBody">
-        <div class="rRow">
-          <div class="rLabel">เวลาเช็ค (Indochina time)</div>
-          <input class="rInput" id="r_checkTime" type="datetime-local" />
-        </div>
-        <div class="rRow">
-          <div class="rLabel">Code</div>
-          <input class="rInput" id="r_code" placeholder="เช่น 542.21 / POS6" maxlength="80" />
-        </div>
-        <div class="rRow">
-          <div class="rLabel">รายละเอียด</div>
-          <textarea class="rText" id="r_detail" placeholder="พิมพ์รายละเอียด..." maxlength="2000"></textarea>
-        </div>
-        <div class="rRow">
-          <div class="rLabel">แนบรูป (1–4 รูป)</div>
-          <input class="rInput" id="r_files" type="file" accept="image/*" multiple />
-          <div class="uploadBar" id="uploadBar"><div class="uploadBarFill" id="uploadBarFill"></div></div>
-          <div class="rThumbs" id="r_imgThumbs"></div>
-        </div>
-        <div class="rActions">
-          <button class="rBtn primary" id="r_saveBtn">💾 Save</button>
-          <button class="rBtn" id="r_clearBtn">Clear</button>
-          <button class="rBtn danger" id="r_deleteBtn" style="display:none;">🗑 Delete</button>
-          <button class="rBtn" id="r_formCancelBtn">Close</button>
-          <span class="rMut rSmallMono" id="r_editId" style="font-size:10px;"></span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Fullscreen Image Viewer -->
-  <div class="imgViewer" id="imgViewer">
-    <div class="imgViewerBox">
-      <div class="imgViewerHead">
-        <div class="imgViewerTitle" id="imgViewerTitle">Image</div>
-        <button class="imgViewerClose" id="imgViewerClose">✕ Close</button>
-      </div>
-      <div class="imgViewerBody" id="imgViewerBody">
-        <div class="imgViewerStage" id="imgViewerStage">
-          <img id="imgViewerImg" alt="preview" />
-          <div class="imgViewerHint">ลากเพื่อเลื่อน • ใช้ 2 นิ้วเพื่อย่อ/ขยาย • ดับเบิลแตะเพื่อซูม</div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- ================= TEMPLATES (NEW) ================= -->
+  <!-- Template สำหรับสร้างแถวตาราง AI (ปลอดภัยกว่าการต่อ String) -->
+  <template id="tpl-ai-row">
+    <tr>
+      <td class="mono"><b class="t-score"></b></td>
+      <td><span class="aiLevel t-level"></span></td>
+      <td class="mono"><b class="t-belt"></b><div class="aiTiny t-group" style="color:var(--text);"></div></td>
+      <td class="mono"><span class="t-run"></span><div class="aiTiny t-ack"></div></td>
+      <td class="mono"><span class="t-alarm"></span><div class="aiTiny t-msg" style="color:#ff3b30;"></div></td>
+      <td class="t-cause"></td>
+      <td style="color:var(--scada-cyan);" class="t-action"></td>
+    </tr>
+  </template>
 
 </body>
 </html>
