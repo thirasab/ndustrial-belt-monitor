@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & STATE
 // =========================================================
 // 🛑 นำ URL ของ Google Apps Script Web App ที่ Deploy ใหม่มาใส่ตรงนี้ 🛑
-const GAS_URL = "https://script.google.com/macros/s/YOUR_WEB_APP_ID/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwvucmeMFhcN_6wIyOGg33kd6XKKe3K66T311r8nm7GtlA29-qmisdoo5a6Rm5q690V/exec";
 
 // Global Variables
 let MAP_POINTS = [];
