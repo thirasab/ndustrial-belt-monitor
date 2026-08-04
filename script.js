@@ -708,6 +708,21 @@ function renderAiAnalysis_(data){
 // =========================================================
 // 10. MAP, POS CARDS & POPUPS
 // =========================================================
+// =========================================================
+// 10. MAP, POS CARDS & POPUPS
+// =========================================================
+
+function applyMapDotState_(el, mode, cls, pulse){
+  if(!el) return;
+  el.className = "mapDot " + cls + (pulse ? (" " + (mode === "PM10" ? "pmPulse" : "beltPulse")) : "");
+}
+
+function clearMapDotStateCache_(){
+  MAP_POINTS.forEach(p => {
+    p.__beltStateSig = "";
+    p.__pmStateSig = "";
+  });
+}
 function buildMapDotsOnce_() {
   var canvas = $id("mapCanvas"); 
   if(!canvas || canvas.__dotsBuilt) return;
