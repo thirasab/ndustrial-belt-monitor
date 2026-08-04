@@ -127,6 +127,9 @@ function hardCrashScreen(title,msg,stack){
       <button onclick="location.reload()" style="margin-top:12px;padding:10px 12px;">Reload</button>
     </div>`;
 }
+
+window.addEventListener("error", e => hardCrashScreen("SCADA UI crashed", (e&&e.message)||"Unknown", (e&&e.error&&e.error.stack)||""));
+window.addEventListener("unhandledrejection", e => hardCrashScreen("SCADA Promise crashed", (e&&e.reason)||"Unknown", ""));
 function loadLogo(){
   var img = $id("logoImg"); 
   if(!img) return;
@@ -149,9 +152,6 @@ function loadLogo(){
     })
     .catch(err => console.error("Logo fetch error:", err));
 }
-window.addEventListener("error", e => hardCrashScreen("SCADA UI crashed", (e&&e.message)||"Unknown", (e&&e.error&&e.error.stack)||""));
-window.addEventListener("unhandledrejection", e => hardCrashScreen("SCADA Promise crashed", (e&&e.reason)||"Unknown", ""));
-
 // =========================================================
 // 5. MOBILE MENU & THEME
 // =========================================================
