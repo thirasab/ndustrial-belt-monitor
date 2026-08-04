@@ -127,6 +127,28 @@ function hardCrashScreen(title,msg,stack){
       <button onclick="location.reload()" style="margin-top:12px;padding:10px 12px;">Reload</button>
     </div>`;
 }
+function loadLogo(){
+  var img = $id("logoImg"); 
+  if(!img) return;
+  
+  var cached = null;
+  try { cached = localStorage.getItem("scada_logo"); } catch(e){}
+  
+  if(cached){
+    img.src = cached; 
+    img.style.display = "block";
+    return;
+  }
+  
+  callGasAPI('getLogoBase64')
+    .then(res => {
+      if(!res || res.ok === false) return;
+      img.src = res.dataUrl; 
+      img.style.display = "block";
+      try { localStorage.setItem("scada_logo", res.dataUrl); } catch(e){}
+    })
+    .catch(err => console.error("Logo fetch error:", err));
+}
 window.addEventListener("error", e => hardCrashScreen("SCADA UI crashed", (e&&e.message)||"Unknown", (e&&e.error&&e.error.stack)||""));
 window.addEventListener("unhandledrejection", e => hardCrashScreen("SCADA Promise crashed", (e&&e.reason)||"Unknown", ""));
 
