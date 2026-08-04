@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & STATE
 // =========================================================
 // 🛑 นำ URL ของ Google Apps Script Web App ที่ Deploy ใหม่มาใส่ตรงนี้ 🛑
-const GAS_URL = "https://script.google.com/macros/s/AKfycbwvucmeMFhcN_6wIyOGg33kd6XKKe3K66T311r8nm7GtlA29-qmisdoo5a6Rm5q690V/exec";
+const GAS_URL = "https://script.google.com/macros/s/YOUR_WEB_APP_ID/exec";
 
 // Global Variables
 let MAP_POINTS = [];
@@ -2108,6 +2108,7 @@ function setPageMode(mode){
   // รีเซ็ตเวลา Auto Switch ใหม่
   if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
 }
+
 function isShown_(el){
   if(!el) return false;
   if(el.classList && el.classList.contains("open")) return true;
