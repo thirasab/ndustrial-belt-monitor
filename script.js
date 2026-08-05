@@ -23,18 +23,24 @@ let __AI_ROWS__ = [];
 // =========================================================
 // 2. HELPER API CALLER (แทนที่ google.script.run)
 // =========================================================
+/**
+ * ฟังก์ชันกลางสำหรับเรียกข้อมูลจาก GAS
+ */
 async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) {
   try {
     let url = new URL(GAS_URL);
     url.searchParams.append('action', action);
     
+    // แนบพารามิเตอร์อื่นๆ ในกรณี GET
     if (method === 'GET') {
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.append(key, value);
       }
     }
 
-    const options = { method: method };
+    const options = {
+      method: method,
+    };
 
     if (method === 'POST' && bodyData) {
       options.body = JSON.stringify(bodyData);
@@ -272,6 +278,7 @@ function handleBeepFromData(data){
 });
 document.addEventListener("click",function(){ ensureAudio(); if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume().catch(function(){}); },{once:true});
 
+
 // =========================================================
 // 6. UI RENDER HELPERS
 // =========================================================
@@ -321,6 +328,7 @@ function closeModal(){
 var c=$id("closeBtn"); if(c) c.addEventListener("click",closeModal);
 var ov=$id("overlay"); if(ov) ov.addEventListener("click",function(e){ if(e.target&&e.target.id==="overlay") closeModal(); });
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
+
 
 // =========================================================
 // 7. AI ENGINE
@@ -1163,84 +1171,38 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 // 11. MAP & POPUP RENDERERS
 // =========================================================
 
-function getMapLeftPadding_() {
-  if (window.innerWidth <= 768) return 15; 
-  var panel = document.getElementById("leftAlarmPanel");
-  if (panel && panel.style.display !== "none" && !panel.classList.contains("collapsed")) {
-    return 240; 
-  }
-  return 40; 
-}
-
+// =========================================================
+// เพิ่มฟังก์ชันจัดตำแหน่ง posCard ไม่ให้ล้นขอบจอ
+// =========================================================
 function adjustCardPositions_() {
   var canvas = document.getElementById("mapCanvas");
   if (!canvas || typeof map === 'undefined' || !map) return;
   
-  try {
-      var cr = canvas.getBoundingClientRect();
-      if(cr.width === 0 || cr.height === 0) return; 
+  var cr = canvas.getBoundingClientRect();
+  var currentZoom = map.getZoom();
+  var BASE_ZOOM = map.__BASE_ZOOM || 17.5;
+  var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
+
+  for (var i = 0; i < MAP_POINTS.length; i++) {
+    var p = MAP_POINTS[i];
+    if (p.__card && p.__card.style.display !== "none") {
+      var dx = p.labelDx || 0;
+      var dy = p.labelDy || 0;
+      p.__card.style.transform = "translate(" + dx + "px," + dy + "px)";
       
-      var currentZoom = map.getZoom();
-      var BASE_ZOOM = map.__BASE_ZOOM || 15.8;
-      var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
-
-      var isMobile = window.innerWidth <= 768;
-      var leftOffset = isMobile ? 15 : getMapLeftPadding_(); 
-      var rightOffset = isMobile ? 15 : 15;
-      var topOffset = isMobile ? 15 : 15;
-      var bottomOffset = isMobile ? 15 : 15;
-
-      for (var i = 0; i < MAP_POINTS.length; i++) {
-        var p = MAP_POINTS[i];
-        if (p.__card && p.__card.style.display !== "none") {
-          var dx = p.labelDx || 0;
-          var dy = p.labelDy || 0;
-          p.__card.style.transform = "translate(" + dx + "px," + dy + "px)";
-          
-          var rect = p.__card.getBoundingClientRect();
-          var shiftX = 0;
-          var shiftY = 0;
-          
-          if (rect.left < cr.left + leftOffset) shiftX = (cr.left + leftOffset - rect.left) / scaleFactor;
-          if (rect.right > cr.right - rightOffset) shiftX = (cr.right - rightOffset - rect.right) / scaleFactor;
-          if (rect.top < cr.top + topOffset) shiftY = (cr.top + topOffset - rect.top) / scaleFactor;
-          if (rect.bottom > cr.bottom - bottomOffset) shiftY = (cr.bottom - bottomOffset - rect.bottom) / scaleFactor;
-          
-          if (shiftX !== 0 || shiftY !== 0) {
-             p.__card.style.transform = "translate(" + (dx + shiftX) + "px," + (dy + shiftY) + "px)";
-          }
-        }
+      var rect = p.__card.getBoundingClientRect();
+      var shiftX = 0;
+      var shiftY = 0;
+      
+      if (rect.left < cr.left + 12) shiftX = (cr.left + 12 - rect.left) / scaleFactor;
+      if (rect.right > cr.right - 12) shiftX = (cr.right - 12 - rect.right) / scaleFactor;
+      if (rect.top < cr.top + 12) shiftY = (cr.top + 12 - rect.top) / scaleFactor;
+      if (rect.bottom > cr.bottom - 12) shiftY = (cr.bottom - 12 - rect.bottom) / scaleFactor;
+      
+      if (shiftX !== 0 || shiftY !== 0) {
+         p.__card.style.transform = "translate(" + (dx + shiftX) + "px," + (dy + shiftY) + "px)";
       }
-  } catch(e) { console.warn("Card adjustment skipped:", e); }
-}
-
-// =========================================================
-// จัดกรอบแผนที่ให้เห็นภาพรวมอัตโนมัติ
-// =========================================================
-function fitMapToActivePoints_() {
-  if (typeof map === 'undefined' || !map) return;
-  
-  var isMobile = window.innerWidth <= 768;
-  var leftPad = isMobile ? 15 : getMapLeftPadding_();
-  var topPad = isMobile ? 15 : 40;
-  var rightPad = isMobile ? 15 : 40;
-  var bottomPad = isMobile ? 15 : 40;
-  
-  // ลดระยะการซูมสูงสุดลง ให้เห็นภาพรวมโรงงานมากขึ้น
-  var MAX_Z = 15.8; 
-  
-  try {
-    // บังคับใช้ __factoryBounds เสมอ เพื่อให้เห็นทั้งโรงงานแม้จะเปลี่ยนโหมด
-    if (map.__factoryBounds && map.__factoryBounds.isValid()) {
-      map.fitBounds(map.__factoryBounds, { 
-        paddingTopLeft: [leftPad, topPad], 
-        paddingBottomRight: [rightPad, bottomPad], 
-        maxZoom: MAX_Z 
-      });
-      setTimeout(adjustCardPositions_, 300);
     }
-  } catch(e) {
-    console.warn("fitMapToActivePoints_ error:", e);
   }
 }
 
@@ -1346,18 +1308,17 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  var allBounds = L.latLngBounds();
-  var hasAnyPoints = false;
-
+  var bounds = L.latLngBounds();
+  var hasPoints = false;
   for (var i = 0; i < MAP_POINTS.length; i++) {
     var p = MAP_POINTS[i];
-    if (p.lat && p.lng) {
-      allBounds.extend([p.lat, p.lng]);
-      hasAnyPoints = true;
+    if (p.modes && p.modes.includes(__PAGE_MODE__)) {
+      bounds.extend([p.lat, p.lng]);
+      hasPoints = true;
     }
   }
 
-  var BASE_ZOOM = 15.8; 
+  var BASE_ZOOM = 17.5; 
   map = L.map('mapCanvas', {
     zoomControl: false, 
     attributionControl: false,
@@ -1365,29 +1326,14 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
-  if (hasAnyPoints) { map.__factoryBounds = allBounds; }
-
-  var isMobile = window.innerWidth <= 768;
-  var leftPad = isMobile ? 15 : getMapLeftPadding_();
-  var topPad = isMobile ? 15 : 40;
-  var rightPad = isMobile ? 15 : 40;
-  var bottomPad = isMobile ? 15 : 40;
-  
-  var MAX_Z = 15.8;
-
-  try {
-    // บังคับให้ fitBounds ไปที่ allBounds เสมอ เพื่อไม่ให้มันซูมลึกเกินไป
-    if (hasAnyPoints && allBounds.isValid()) {
-      map.fitBounds(allBounds, { paddingTopLeft: [leftPad, topPad], paddingBottomRight: [rightPad, bottomPad], maxZoom: MAX_Z });
-      BASE_ZOOM = map.getZoom();
-    } else {
-      map.setView([14.5, 100.5], 15.8);
-    }
-  } catch (e) {
-    map.setView([14.5, 100.5], 15.8);
+  if (hasPoints) {
+    map.fitBounds(bounds, { padding: [80, 80] }); 
+    BASE_ZOOM = map.getZoom(); 
+  } else {
+    map.setView([14.5, 100.5], BASE_ZOOM);
   }
   
-  map.__BASE_ZOOM = BASE_ZOOM || 15.8; 
+  map.__BASE_ZOOM = BASE_ZOOM; 
   
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 22,
@@ -1421,7 +1367,6 @@ function initLeafletMap_() {
             if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.style.display = "none";
           }
           card.style.display = isHidden ? "block" : "none";
-          if (isHidden) { setTimeout(adjustCardPositions_, 50); } 
         } else {
           showPosCards_(p.pos, wrapper);
         }
@@ -1444,9 +1389,15 @@ function initLeafletMap_() {
         if (__PAGE_MODE__ === "PM10") {
           p.__card.style.display = "none";
         } else {
-          p.__card.style.display = (window.innerWidth <= 768) ? "none" : "block";
+          if (window.innerWidth <= 768) {
+            p.__card.style.display = "none";
+          } else {
+            p.__card.style.display = "block";
+          }
         }
-      } else { p.__card.style.display = "none"; }
+      } else {
+        p.__card.style.display = "none";
+      }
 
       markerWrappers.push(wrapper);
     })(MAP_POINTS[i]);
@@ -1461,6 +1412,7 @@ function initLeafletMap_() {
     adjustCardPositions_(); 
   });
   map.fire('zoom');
+
   map.on('move', adjustCardPositions_); 
 
   map.on('click', function() {
@@ -1472,9 +1424,11 @@ function initLeafletMap_() {
   });
 
   if (__PAGE_MODE__ === "PM10") {
-     updateMapDots_PM10_(); updatePosCards_PM10_();
+     updateMapDots_PM10_();
+     updatePosCards_PM10_();
   } else if (__PAGE_MODE__ === "BELT" && window.__LAST_DATA__) {
-     updateMapDots_(window.__LAST_DATA__); updatePosCards_(window.__LAST_DATA__);
+     updateMapDots_(window.__LAST_DATA__);
+     updatePosCards_(window.__LAST_DATA__);
   }
 }
 
@@ -2095,7 +2049,21 @@ function setPageMode(mode){
       var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
       
       if (isNewMapVisible) {
-        fitMapToActivePoints_();
+        var bounds = L.latLngBounds();
+        var hasPoints = false;
+        for (var i = 0; i < MAP_POINTS.length; i++) {
+          if (MAP_POINTS[i].modes && MAP_POINTS[i].modes.includes(mode)) {
+            bounds.extend([MAP_POINTS[i].lat, MAP_POINTS[i].lng]);
+            hasPoints = true;
+          }
+        }
+        
+        if (hasPoints) {
+          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
+          setTimeout(adjustCardPositions_, 300);
+        } else if (map.__lastCenter && map.__lastZoom) {
+          map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
+        }
       }
     }, 150);
   }
@@ -2313,7 +2281,6 @@ document.addEventListener("click", function(event) {
   }
 });
 
-var __resizeTimer = null;
 window.addEventListener("resize", function() {
   if (typeof MAP_POINTS === "undefined" || !MAP_POINTS || !MAP_POINTS.length) return;
   for (var i = 0; i < MAP_POINTS.length; i++) {
@@ -2329,15 +2296,8 @@ window.addEventListener("resize", function() {
       }
     }
   }
-  
   if (typeof map !== 'undefined' && map) {
-    if(__resizeTimer) clearTimeout(__resizeTimer);
-    __resizeTimer = setTimeout(function() {
-      map.invalidateSize(true);
-      if (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH") {
-        fitMapToActivePoints_();
-      }
-    }, 250); 
+    map.invalidateSize();
   }
 });
 
@@ -2780,10 +2740,6 @@ function updateGlobalLeftAlarms_() {
       } else {
         p.classList.add("collapsed"); icon.textContent = "➕"; 
         window.__ALARM_PANEL_COLLAPSED__ = true;
-      }
-      
-      if (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH") {
-        setTimeout(fitMapToActivePoints_, 300);
       }
     };
   }
