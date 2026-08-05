@@ -40,8 +40,6 @@ async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) 
 
     const options = {
       method: method,
-      // ถ้าเป็น POST ให้ระบุโหมด no-cors หรือ cors ตามการตั้งค่า แต่ GAS ส่วนใหญ่รองรับ Content-Type text/plain สำหรับ CORS
-      // ในที่นี้แนะนำให้ส่งเป็น text/plain ฝั่งหน้าบ้าน แล้วฝั่ง GAS parseJSON กลับเอาครับ
     };
 
     if (method === 'POST' && bodyData) {
@@ -727,6 +725,7 @@ function refreshVibStatus_(){
         }
       }
       if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
+      setTimeout(adjustCardPositions_, 100);
     })
     .catch(err => console.error("Vib Fetch Error:", err));
 }
@@ -1171,6 +1170,42 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 // =========================================================
 // 11. MAP & POPUP RENDERERS
 // =========================================================
+
+// =========================================================
+// เพิ่มฟังก์ชันจัดตำแหน่ง posCard ไม่ให้ล้นขอบจอ
+// =========================================================
+function adjustCardPositions_() {
+  var canvas = document.getElementById("mapCanvas");
+  if (!canvas || typeof map === 'undefined' || !map) return;
+  
+  var cr = canvas.getBoundingClientRect();
+  var currentZoom = map.getZoom();
+  var BASE_ZOOM = map.__BASE_ZOOM || 17.5;
+  var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
+
+  for (var i = 0; i < MAP_POINTS.length; i++) {
+    var p = MAP_POINTS[i];
+    if (p.__card && p.__card.style.display !== "none") {
+      var dx = p.labelDx || 0;
+      var dy = p.labelDy || 0;
+      p.__card.style.transform = "translate(" + dx + "px," + dy + "px)";
+      
+      var rect = p.__card.getBoundingClientRect();
+      var shiftX = 0;
+      var shiftY = 0;
+      
+      if (rect.left < cr.left + 12) shiftX = (cr.left + 12 - rect.left) / scaleFactor;
+      if (rect.right > cr.right - 12) shiftX = (cr.right - 12 - rect.right) / scaleFactor;
+      if (rect.top < cr.top + 12) shiftY = (cr.top + 12 - rect.top) / scaleFactor;
+      if (rect.bottom > cr.bottom - 12) shiftY = (cr.bottom - 12 - rect.bottom) / scaleFactor;
+      
+      if (shiftX !== 0 || shiftY !== 0) {
+         p.__card.style.transform = "translate(" + (dx + shiftX) + "px," + (dy + shiftY) + "px)";
+      }
+    }
+  }
+}
+
 function ensureMapPopup_(){
   var canvas=$id("mapCanvas");
   if(!canvas) return null;
@@ -1298,6 +1333,8 @@ function initLeafletMap_() {
     map.setView([14.5, 100.5], BASE_ZOOM);
   }
   
+  map.__BASE_ZOOM = BASE_ZOOM; 
+  
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 22,
     maxNativeZoom: 17
@@ -1372,8 +1409,11 @@ function initLeafletMap_() {
     for(var w = 0; w < markerWrappers.length; w++) {
       markerWrappers[w].style.transform = "scale(" + scaleFactor + ")";
     }
+    adjustCardPositions_(); 
   });
   map.fire('zoom');
+
+  map.on('move', adjustCardPositions_); 
 
   map.on('click', function() {
     if(window.innerWidth <= 768) {
@@ -1795,6 +1835,7 @@ function updatePosCards_(data){
     var sumEl=$id("posSum_"+p.pos+"_BELT"); if(sumEl) sumEl.textContent=posSummaryText_(worst);
     var bodyEl=$id("posBody_"+p.pos+"_BELT"); if(bodyEl) bodyEl.innerHTML=bodyHtml;
   }
+  setTimeout(adjustCardPositions_, 100);
 }
 function updatePosCards_PM10_(){
   for(var j=0;j<MAP_POINTS.length;j++){
@@ -1820,6 +1861,7 @@ function updatePosCards_PM10_(){
     sumEl.textContent=sevTxt;
     bodyEl.innerHTML='<div class="posLine '+lineCls+'"><div class="posLeft"><span class="posChip"></span><span>PM10</span></div><div class="posRight mono"><span>'+esc(v.toFixed(0))+' µg</span><span style="opacity:.6">'+esc(ageTxt)+'</span></div></div>';
   }
+  setTimeout(adjustCardPositions_, 100);
 }
 
 function isAllStopNoAlarm_(arr){
@@ -2005,8 +2047,23 @@ function setPageMode(mode){
     setTimeout(function() {
       map.invalidateSize(true);
       var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
-      if (isNewMapVisible && map.__lastCenter && map.__lastZoom) {
-        map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
+      
+      if (isNewMapVisible) {
+        var bounds = L.latLngBounds();
+        var hasPoints = false;
+        for (var i = 0; i < MAP_POINTS.length; i++) {
+          if (MAP_POINTS[i].modes && MAP_POINTS[i].modes.includes(mode)) {
+            bounds.extend([MAP_POINTS[i].lat, MAP_POINTS[i].lng]);
+            hasPoints = true;
+          }
+        }
+        
+        if (hasPoints) {
+          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
+          setTimeout(adjustCardPositions_, 300);
+        } else if (map.__lastCenter && map.__lastZoom) {
+          map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
+        }
       }
     }, 150);
   }
