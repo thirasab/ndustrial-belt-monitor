@@ -1308,20 +1308,13 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  var allBounds = L.latLngBounds();
-  var modeBounds = L.latLngBounds();
-  var hasAnyPoints = false;
-  var hasModePoints = false;
-
+  var bounds = L.latLngBounds();
+  var hasPoints = false;
   for (var i = 0; i < MAP_POINTS.length; i++) {
     var p = MAP_POINTS[i];
-    if (p.lat && p.lng) {
-      allBounds.extend([p.lat, p.lng]);
-      hasAnyPoints = true;
-      if (p.modes && p.modes.includes(__PAGE_MODE__)) {
-        modeBounds.extend([p.lat, p.lng]);
-        hasModePoints = true;
-      }
+    if (p.modes && p.modes.includes(__PAGE_MODE__)) {
+      bounds.extend([p.lat, p.lng]);
+      hasPoints = true;
     }
   }
 
@@ -1333,17 +1326,9 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
-  // บันทึกขอบเขตพื้นที่โรงงานเอาไว้เป็นตัวสำรอง
-  if (hasAnyPoints) {
-    map.__factoryBounds = allBounds;
-  }
-
-  if (hasModePoints) {
-    map.fitBounds(modeBounds, { padding: [80, 80], maxZoom: 18 }); 
+  if (hasPoints) {
+    map.fitBounds(bounds, { padding: [80, 80] }); 
     BASE_ZOOM = map.getZoom(); 
-  } else if (hasAnyPoints) {
-    map.fitBounds(allBounds, { padding: [80, 80], maxZoom: 18 });
-    BASE_ZOOM = map.getZoom();
   } else {
     map.setView([14.5, 100.5], BASE_ZOOM);
   }
@@ -2040,10 +2025,6 @@ function setLegendForMode_(){
   }
 }
 
-
-
-
-
 function setPageMode(mode){
   var isCurrentMapVisible = (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH");
   if (isCurrentMapVisible && typeof map !== 'undefined' && map) {
@@ -2079,11 +2060,10 @@ function setPageMode(mode){
         
         if (hasPoints) {
           map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
-        } else if (map.__factoryBounds) {
-          // ถ้าโหมดใหม่ไม่มีข้อมูลจุดเลย ให้ซูมกลับไปที่ภาพรวมของโรงงาน
-          map.fitBounds(map.__factoryBounds, { padding: [60, 60], maxZoom: 18 });
+          setTimeout(adjustCardPositions_, 300);
+        } else if (map.__lastCenter && map.__lastZoom) {
+          map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
         }
-        setTimeout(adjustCardPositions_, 300);
       }
     }, 150);
   }
