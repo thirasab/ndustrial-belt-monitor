@@ -272,7 +272,6 @@ function handleBeepFromData(data){
 });
 document.addEventListener("click",function(){ ensureAudio(); if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume().catch(function(){}); },{once:true});
 
-
 // =========================================================
 // 6. UI RENDER HELPERS
 // =========================================================
@@ -322,7 +321,6 @@ function closeModal(){
 var c=$id("closeBtn"); if(c) c.addEventListener("click",closeModal);
 var ov=$id("overlay"); if(ov) ov.addEventListener("click",function(e){ if(e.target&&e.target.id==="overlay") closeModal(); });
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
-
 
 // =========================================================
 // 7. AI ENGINE
@@ -1183,7 +1181,7 @@ function adjustCardPositions_() {
       if(cr.width === 0 || cr.height === 0) return; 
       
       var currentZoom = map.getZoom();
-      var BASE_ZOOM = map.__BASE_ZOOM || 16.5;
+      var BASE_ZOOM = map.__BASE_ZOOM || 15.8;
       var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
 
       var isMobile = window.innerWidth <= 768;
@@ -1216,31 +1214,30 @@ function adjustCardPositions_() {
   } catch(e) { console.warn("Card adjustment skipped:", e); }
 }
 
+// =========================================================
+// จัดกรอบแผนที่ให้เห็นภาพรวมอัตโนมัติ
+// =========================================================
 function fitMapToActivePoints_() {
   if (typeof map === 'undefined' || !map) return;
-  var bounds = L.latLngBounds();
-  var hasPoints = false;
-  
-  for (var i = 0; i < MAP_POINTS.length; i++) {
-    if (MAP_POINTS[i].modes && MAP_POINTS[i].modes.includes(__PAGE_MODE__)) {
-      bounds.extend([MAP_POINTS[i].lat, MAP_POINTS[i].lng]);
-      hasPoints = true;
-    }
-  }
   
   var isMobile = window.innerWidth <= 768;
   var leftPad = isMobile ? 15 : getMapLeftPadding_();
   var topPad = isMobile ? 15 : 40;
   var rightPad = isMobile ? 15 : 40;
   var bottomPad = isMobile ? 15 : 40;
-  var MAX_Z = 16.5; 
+  
+  // ลดระยะการซูมสูงสุดลง ให้เห็นภาพรวมโรงงานมากขึ้น
+  var MAX_Z = 15.8; 
   
   try {
-    if (hasPoints && bounds.isValid()) {
-      map.fitBounds(bounds, { paddingTopLeft: [leftPad, topPad], paddingBottomRight: [rightPad, bottomPad], maxZoom: MAX_Z });
+    // บังคับใช้ __factoryBounds เสมอ เพื่อให้เห็นทั้งโรงงานแม้จะเปลี่ยนโหมด
+    if (map.__factoryBounds && map.__factoryBounds.isValid()) {
+      map.fitBounds(map.__factoryBounds, { 
+        paddingTopLeft: [leftPad, topPad], 
+        paddingBottomRight: [rightPad, bottomPad], 
+        maxZoom: MAX_Z 
+      });
       setTimeout(adjustCardPositions_, 300);
-    } else if (map.__factoryBounds && map.__factoryBounds.isValid()) {
-      map.fitBounds(map.__factoryBounds, { paddingTopLeft: [leftPad, topPad], paddingBottomRight: [rightPad, bottomPad], maxZoom: MAX_Z });
     }
   } catch(e) {
     console.warn("fitMapToActivePoints_ error:", e);
@@ -1350,23 +1347,17 @@ function buildMapDotsOnce_() {
 
 function initLeafletMap_() {
   var allBounds = L.latLngBounds();
-  var modeBounds = L.latLngBounds();
   var hasAnyPoints = false;
-  var hasModePoints = false;
 
   for (var i = 0; i < MAP_POINTS.length; i++) {
     var p = MAP_POINTS[i];
     if (p.lat && p.lng) {
       allBounds.extend([p.lat, p.lng]);
       hasAnyPoints = true;
-      if (p.modes && p.modes.includes(__PAGE_MODE__)) {
-        modeBounds.extend([p.lat, p.lng]);
-        hasModePoints = true;
-      }
     }
   }
 
-  var BASE_ZOOM = 16.5; 
+  var BASE_ZOOM = 15.8; 
   map = L.map('mapCanvas', {
     zoomControl: false, 
     attributionControl: false,
@@ -1381,23 +1372,22 @@ function initLeafletMap_() {
   var topPad = isMobile ? 15 : 40;
   var rightPad = isMobile ? 15 : 40;
   var bottomPad = isMobile ? 15 : 40;
-  var MAX_Z = 16.5;
+  
+  var MAX_Z = 15.8;
 
   try {
-    if (hasModePoints && modeBounds.isValid()) {
-      map.fitBounds(modeBounds, { paddingTopLeft: [leftPad, topPad], paddingBottomRight: [rightPad, bottomPad], maxZoom: MAX_Z }); 
-      BASE_ZOOM = map.getZoom(); 
-    } else if (hasAnyPoints && allBounds.isValid()) {
+    // บังคับให้ fitBounds ไปที่ allBounds เสมอ เพื่อไม่ให้มันซูมลึกเกินไป
+    if (hasAnyPoints && allBounds.isValid()) {
       map.fitBounds(allBounds, { paddingTopLeft: [leftPad, topPad], paddingBottomRight: [rightPad, bottomPad], maxZoom: MAX_Z });
       BASE_ZOOM = map.getZoom();
     } else {
-      map.setView([14.5, 100.5], 16.5);
+      map.setView([14.5, 100.5], 15.8);
     }
   } catch (e) {
-    map.setView([14.5, 100.5], 16.5);
+    map.setView([14.5, 100.5], 15.8);
   }
   
-  map.__BASE_ZOOM = BASE_ZOOM || 16.5; 
+  map.__BASE_ZOOM = BASE_ZOOM || 15.8; 
   
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 22,
