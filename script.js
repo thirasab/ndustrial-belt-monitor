@@ -1308,13 +1308,20 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  var bounds = L.latLngBounds();
-  var hasPoints = false;
+  var allBounds = L.latLngBounds();
+  var modeBounds = L.latLngBounds();
+  var hasAnyPoints = false;
+  var hasModePoints = false;
+
   for (var i = 0; i < MAP_POINTS.length; i++) {
     var p = MAP_POINTS[i];
-    if (p.modes && p.modes.includes(__PAGE_MODE__)) {
-      bounds.extend([p.lat, p.lng]);
-      hasPoints = true;
+    if (p.lat && p.lng) {
+      allBounds.extend([p.lat, p.lng]);
+      hasAnyPoints = true;
+      if (p.modes && p.modes.includes(__PAGE_MODE__)) {
+        modeBounds.extend([p.lat, p.lng]);
+        hasModePoints = true;
+      }
     }
   }
 
@@ -1326,9 +1333,17 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
-  if (hasPoints) {
-    map.fitBounds(bounds, { padding: [80, 80] }); 
+  // บันทึกขอบเขตพื้นที่โรงงานเอาไว้เป็นตัวสำรอง
+  if (hasAnyPoints) {
+    map.__factoryBounds = allBounds;
+  }
+
+  if (hasModePoints) {
+    map.fitBounds(modeBounds, { padding: [80, 80], maxZoom: 18 }); 
     BASE_ZOOM = map.getZoom(); 
+  } else if (hasAnyPoints) {
+    map.fitBounds(allBounds, { padding: [80, 80], maxZoom: 18 });
+    BASE_ZOOM = map.getZoom();
   } else {
     map.setView([14.5, 100.5], BASE_ZOOM);
   }
