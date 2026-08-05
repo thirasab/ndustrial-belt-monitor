@@ -2040,6 +2040,10 @@ function setLegendForMode_(){
   }
 }
 
+
+
+
+
 function setPageMode(mode){
   var isCurrentMapVisible = (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH");
   if (isCurrentMapVisible && typeof map !== 'undefined' && map) {
@@ -2075,10 +2079,11 @@ function setPageMode(mode){
         
         if (hasPoints) {
           map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
-          setTimeout(adjustCardPositions_, 300);
-        } else if (map.__lastCenter && map.__lastZoom) {
-          map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
+        } else if (map.__factoryBounds) {
+          // ถ้าโหมดใหม่ไม่มีข้อมูลจุดเลย ให้ซูมกลับไปที่ภาพรวมของโรงงาน
+          map.fitBounds(map.__factoryBounds, { padding: [60, 60], maxZoom: 18 });
         }
+        setTimeout(adjustCardPositions_, 300);
       }
     }, 150);
   }
