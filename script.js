@@ -1171,6 +1171,16 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 // 11. MAP & POPUP RENDERERS
 // =========================================================
 
+// คำนวณขอบซ้ายเผื่อให้กล่อง Alarm
+function getMapLeftPadding_() {
+  if (window.innerWidth <= 768) return 50; 
+  var panel = document.getElementById("leftAlarmPanel");
+  if (panel && panel.style.display !== "none" && !panel.classList.contains("collapsed")) {
+    return 250; 
+  }
+  return 60; 
+}
+
 // =========================================================
 // เพิ่มฟังก์ชันจัดตำแหน่ง posCard ไม่ให้ล้นขอบจอ
 // =========================================================
@@ -1183,6 +1193,8 @@ function adjustCardPositions_() {
   var BASE_ZOOM = map.__BASE_ZOOM || 17.5;
   var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
 
+  var leftOffset = getMapLeftPadding_(); 
+
   for (var i = 0; i < MAP_POINTS.length; i++) {
     var p = MAP_POINTS[i];
     if (p.__card && p.__card.style.display !== "none") {
@@ -1194,7 +1206,7 @@ function adjustCardPositions_() {
       var shiftX = 0;
       var shiftY = 0;
       
-      if (rect.left < cr.left + 12) shiftX = (cr.left + 12 - rect.left) / scaleFactor;
+      if (rect.left < cr.left + leftOffset) shiftX = (cr.left + leftOffset - rect.left) / scaleFactor;
       if (rect.right > cr.right - 12) shiftX = (cr.right - 12 - rect.right) / scaleFactor;
       if (rect.top < cr.top + 12) shiftY = (cr.top + 12 - rect.top) / scaleFactor;
       if (rect.bottom > cr.bottom - 12) shiftY = (cr.bottom - 12 - rect.bottom) / scaleFactor;
@@ -1203,6 +1215,32 @@ function adjustCardPositions_() {
          p.__card.style.transform = "translate(" + (dx + shiftX) + "px," + (dy + shiftY) + "px)";
       }
     }
+  }
+}
+
+// =========================================================
+// เพิ่มฟังก์ชันสำหรับจัดกรอบแผนที่ให้เห็น POS ครบทุกจุดอัตโนมัติ
+// =========================================================
+function fitMapToActivePoints_() {
+  if (typeof map === 'undefined' || !map) return;
+  var bounds = L.latLngBounds();
+  var hasPoints = false;
+  
+  for (var i = 0; i < MAP_POINTS.length; i++) {
+    if (MAP_POINTS[i].modes && MAP_POINTS[i].modes.includes(__PAGE_MODE__)) {
+      bounds.extend([MAP_POINTS[i].lat, MAP_POINTS[i].lng]);
+      hasPoints = true;
+    }
+  }
+  
+  var leftPad = getMapLeftPadding_();
+  var MAX_Z = 16.8; 
+  
+  if (hasPoints) {
+    map.fitBounds(bounds, { paddingTopLeft: [leftPad, 60], paddingBottomRight: [60, 60], maxZoom: MAX_Z });
+    setTimeout(adjustCardPositions_, 300);
+  } else if (map.__factoryBounds) {
+    map.fitBounds(map.__factoryBounds, { paddingTopLeft: [leftPad, 60], paddingBottomRight: [60, 60], maxZoom: MAX_Z });
   }
 }
 
@@ -1308,17 +1346,24 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  var bounds = L.latLngBounds();
-  var hasPoints = false;
+  var allBounds = L.latLngBounds();
+  var modeBounds = L.latLngBounds();
+  var hasAnyPoints = false;
+  var hasModePoints = false;
+
   for (var i = 0; i < MAP_POINTS.length; i++) {
     var p = MAP_POINTS[i];
-    if (p.modes && p.modes.includes(__PAGE_MODE__)) {
-      bounds.extend([p.lat, p.lng]);
-      hasPoints = true;
+    if (p.lat && p.lng) {
+      allBounds.extend([p.lat, p.lng]);
+      hasAnyPoints = true;
+      if (p.modes && p.modes.includes(__PAGE_MODE__)) {
+        modeBounds.extend([p.lat, p.lng]);
+        hasModePoints = true;
+      }
     }
   }
 
-  var BASE_ZOOM = 17.5; 
+  var BASE_ZOOM = 16.5; 
   map = L.map('mapCanvas', {
     zoomControl: false, 
     attributionControl: false,
@@ -1326,11 +1371,19 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
-  if (hasPoints) {
-    map.fitBounds(bounds, { padding: [80, 80] }); 
+  if (hasAnyPoints) { map.__factoryBounds = allBounds; }
+
+  var leftPad = getMapLeftPadding_();
+  var MAX_Z = 16.8;
+
+  if (hasModePoints) {
+    map.fitBounds(modeBounds, { paddingTopLeft: [leftPad, 60], paddingBottomRight: [60, 60], maxZoom: MAX_Z }); 
     BASE_ZOOM = map.getZoom(); 
+  } else if (hasAnyPoints) {
+    map.fitBounds(allBounds, { paddingTopLeft: [leftPad, 60], paddingBottomRight: [60, 60], maxZoom: MAX_Z });
+    BASE_ZOOM = map.getZoom();
   } else {
-    map.setView([14.5, 100.5], BASE_ZOOM);
+    map.setView([14.5, 100.5], 16.5);
   }
   
   map.__BASE_ZOOM = BASE_ZOOM; 
@@ -1389,15 +1442,9 @@ function initLeafletMap_() {
         if (__PAGE_MODE__ === "PM10") {
           p.__card.style.display = "none";
         } else {
-          if (window.innerWidth <= 768) {
-            p.__card.style.display = "none";
-          } else {
-            p.__card.style.display = "block";
-          }
+          p.__card.style.display = (window.innerWidth <= 768) ? "none" : "block";
         }
-      } else {
-        p.__card.style.display = "none";
-      }
+      } else { p.__card.style.display = "none"; }
 
       markerWrappers.push(wrapper);
     })(MAP_POINTS[i]);
@@ -1412,7 +1459,6 @@ function initLeafletMap_() {
     adjustCardPositions_(); 
   });
   map.fire('zoom');
-
   map.on('move', adjustCardPositions_); 
 
   map.on('click', function() {
@@ -1424,11 +1470,9 @@ function initLeafletMap_() {
   });
 
   if (__PAGE_MODE__ === "PM10") {
-     updateMapDots_PM10_();
-     updatePosCards_PM10_();
+     updateMapDots_PM10_(); updatePosCards_PM10_();
   } else if (__PAGE_MODE__ === "BELT" && window.__LAST_DATA__) {
-     updateMapDots_(window.__LAST_DATA__);
-     updatePosCards_(window.__LAST_DATA__);
+     updateMapDots_(window.__LAST_DATA__); updatePosCards_(window.__LAST_DATA__);
   }
 }
 
@@ -2049,21 +2093,7 @@ function setPageMode(mode){
       var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
       
       if (isNewMapVisible) {
-        var bounds = L.latLngBounds();
-        var hasPoints = false;
-        for (var i = 0; i < MAP_POINTS.length; i++) {
-          if (MAP_POINTS[i].modes && MAP_POINTS[i].modes.includes(mode)) {
-            bounds.extend([MAP_POINTS[i].lat, MAP_POINTS[i].lng]);
-            hasPoints = true;
-          }
-        }
-        
-        if (hasPoints) {
-          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
-          setTimeout(adjustCardPositions_, 300);
-        } else if (map.__lastCenter && map.__lastZoom) {
-          map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
-        }
+        fitMapToActivePoints_();
       }
     }, 150);
   }
@@ -2281,6 +2311,7 @@ document.addEventListener("click", function(event) {
   }
 });
 
+var __resizeTimer = null;
 window.addEventListener("resize", function() {
   if (typeof MAP_POINTS === "undefined" || !MAP_POINTS || !MAP_POINTS.length) return;
   for (var i = 0; i < MAP_POINTS.length; i++) {
@@ -2296,8 +2327,15 @@ window.addEventListener("resize", function() {
       }
     }
   }
+  
   if (typeof map !== 'undefined' && map) {
-    map.invalidateSize();
+    if(__resizeTimer) clearTimeout(__resizeTimer);
+    __resizeTimer = setTimeout(function() {
+      map.invalidateSize(true);
+      if (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH") {
+        fitMapToActivePoints_();
+      }
+    }, 250); 
   }
 });
 
@@ -2740,6 +2778,10 @@ function updateGlobalLeftAlarms_() {
       } else {
         p.classList.add("collapsed"); icon.textContent = "➕"; 
         window.__ALARM_PANEL_COLLAPSED__ = true;
+      }
+      
+      if (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH") {
+        setTimeout(fitMapToActivePoints_, 300);
       }
     };
   }
