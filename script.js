@@ -1327,7 +1327,14 @@ function initLeafletMap_() {
   });
 
   if (hasPoints) {
-    map.fitBounds(bounds, { padding: [100, 100] }); 
+    // 💡 เทคนิค 1: Dynamic Padding แยกคอมพ์กับมือถือ
+    var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
+    map.fitBounds(bounds, { padding: mapPadding }); 
+    
+    // 💡 เทคนิค 2: ล็อกหน้าจอ (Max Bounds) ไม่ให้ผู้ใช้ไถออกไปไกลเกิน
+    map.setMaxBounds(bounds.pad(0.3));
+    map.options.minZoom = map.getZoom() - 1;
+
     BASE_ZOOM = map.getZoom(); 
   } else {
     map.setView([14.5, 100.5], BASE_ZOOM);
@@ -2059,7 +2066,19 @@ function setPageMode(mode){
         }
         
         if (hasPoints) {
-          map.fitBounds(bounds, { padding: [100, 100], maxZoom: 18 });
+          // 💡 เทคนิค 1, 2, 3 รวมกัน: ใช้ Dynamic Padding, ล็อก Bounds และใช้ flyToBounds เพื่อให้สมูท
+          var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
+          map.flyToBounds(bounds, { 
+            padding: mapPadding, 
+            maxZoom: 18, 
+            duration: 1.2, 
+            easeLinearity: 0.25 
+          });
+
+          // อัปเดต Max Bounds ตามหมุดชุดใหม่
+          map.setMaxBounds(bounds.pad(0.3));
+          map.options.minZoom = map.getZoom() - 1;
+
           setTimeout(adjustCardPositions_, 300);
         } else if (map.__lastCenter && map.__lastZoom) {
           map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
