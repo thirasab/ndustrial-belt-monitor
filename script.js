@@ -1327,7 +1327,7 @@ function initLeafletMap_() {
   });
 
   if (hasPoints) {
-    map.fitBounds(bounds, { padding: [80, 80] }); 
+    map.fitBounds(bounds, { padding: [200, 200] }); 
     BASE_ZOOM = map.getZoom(); 
   } else {
     map.setView([14.5, 100.5], BASE_ZOOM);
