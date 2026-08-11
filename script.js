@@ -2059,7 +2059,7 @@ function setPageMode(mode){
         }
         
         if (hasPoints) {
-          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
+          map.fitBounds(bounds, { padding: [150, 150], maxZoom: 18 });
           setTimeout(adjustCardPositions_, 300);
         } else if (map.__lastCenter && map.__lastZoom) {
           map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
