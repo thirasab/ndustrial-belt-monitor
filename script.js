@@ -278,7 +278,6 @@ function handleBeepFromData(data){
 });
 document.addEventListener("click",function(){ ensureAudio(); if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume().catch(function(){}); },{once:true});
 
-
 // =========================================================
 // 6. UI RENDER HELPERS
 // =========================================================
@@ -328,7 +327,6 @@ function closeModal(){
 var c=$id("closeBtn"); if(c) c.addEventListener("click",closeModal);
 var ov=$id("overlay"); if(ov) ov.addEventListener("click",function(e){ if(e.target&&e.target.id==="overlay") closeModal(); });
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
-
 
 // =========================================================
 // 7. AI ENGINE
@@ -652,78 +650,6 @@ function refreshVibStatus_(){
       if(timeRange === "5d") window.__TREND_VIB_DATA__ = res;
       window.__LAST_VIB_DATA__ = res; 
 
-      for(var i=0; i<MAP_POINTS.length; i++){
-        var p = MAP_POINTS[i];
-        if(p.modes && p.modes.includes("VIB") && p.__el && __PAGE_MODE__ === "VIB") {
-          var posData = res[p.pos];
-          if(!posData) continue; 
-
-          var d18 = posData.data18 || [];
-          var d20 = posData.data20 || [];
-          var name18 = posData.name18;
-          var name20 = posData.name20;
-          
-          var latest18 = d18.length > 0 ? d18[d18.length-1] : null;
-          var latest20 = d20.length > 0 ? d20[d20.length-1] : null;
-
-          var v18 = latest18 ? (Number(latest18.acc) || 0) : 0;
-          var v20 = latest20 ? (Number(latest20.acc) || 0) : 0;
-          var warnLimit = p.vibWarn || 30;
-          var dangerLimit = p.vibDanger || 60;
-
-          var lv18 = "NORMAL";
-          if (v18 > dangerLimit) lv18 = "DANGER";
-          else if (v18 > warnLimit) lv18 = "WARN";
-
-          var lv20 = "NORMAL";
-          if (v20 > dangerLimit) lv20 = "DANGER";
-          else if (v20 > warnLimit) lv20 = "WARN";
-
-          var now = Date.now();
-          if(latest18 && (now - latest18.ts > 1200000)) lv18 = "OFFLINE";
-          if(latest20 && (now - latest20.ts > 1200000)) lv20 = "OFFLINE";
-
-          var worst = "NORMAL";
-          if(lv18 === "DANGER" || lv20 === "DANGER") worst = "DANGER";
-          else if(lv18 === "WARN" || lv20 === "WARN") worst = "WARN";
-          
-          if(name20) {
-            if(lv18 === "OFFLINE" && lv20 === "OFFLINE") worst = "OFFLINE";
-          } else {
-            if(lv18 === "OFFLINE") worst = "OFFLINE";
-          }
-
-          var acc18Str = latest18 ? Number(latest18.acc || 0).toFixed(2) + " mm/s" : "-";
-          var acc20Str = latest20 ? Number(latest20.acc || 0).toFixed(2) + " mm/s" : "-";
-
-          var cls = (worst === "DANGER") ? "open" : (worst === "WARN" ? "stuck" : (worst === "OFFLINE" ? "stale" : "ok"));
-          applyMapDotState_(p.__el, "VIB", cls, true);
-
-          var sumEl = $id("posSum_" + p.pos + "_VIB");
-          if(sumEl) sumEl.textContent = worst;
-
-          var bodyEl = $id("posBody_" + p.pos + "_VIB");
-          if(bodyEl) {
-            var lineCls18 = (lv18 === "DANGER") ? "pos-open" : (lv18 === "WARN" ? "pos-stuck" : (lv18 === "OFFLINE" ? "pos-stale" : "pos-ok"));
-            var lineCls20 = (lv20 === "DANGER") ? "pos-open" : (lv20 === "WARN" ? "pos-stuck" : (lv20 === "OFFLINE" ? "pos-stale" : "pos-ok"));
-            
-            var cardHtml = 
-              '<div class="posLine ' + lineCls18 + '">' +
-                '<div class="posLeft"><span class="posChip"></span><span>' + name18 + '</span></div>' +
-                '<div class="posRight mono"><span>' + acc18Str + '</span></div>' +
-              '</div>';
-              
-            if(name20) {
-              cardHtml += 
-              '<div class="posLine ' + lineCls20 + '" style="border-top:1px solid rgba(255,255,255,0.07); padding-top:3px; margin-top:3px;">' +
-                '<div class="posLeft"><span class="posChip"></span><span>' + name20 + '</span></div>' +
-                '<div class="posRight mono"><span>' + acc20Str + '</span></div>' +
-              '</div>';
-            }
-            bodyEl.innerHTML = cardHtml;
-          }
-        }
-      }
       if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
       setTimeout(adjustCardPositions_, 100);
     })
@@ -890,7 +816,7 @@ function fetchStatus(){
      fetchPm10SnapshotAll_();
   }
 
-  if(__PAGE_MODE__==="VIB" || __PAGE_MODE__==="AI") refreshVibStatus_();
+  if(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
 
   callGasAPI('getStatusAll')
     .then(data => {
@@ -1171,9 +1097,6 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 // 11. MAP & POPUP RENDERERS
 // =========================================================
 
-// =========================================================
-// เพิ่มฟังก์ชันจัดตำแหน่ง posCard ไม่ให้ล้นขอบจอ
-// =========================================================
 function adjustCardPositions_() {
   var canvas = document.getElementById("mapCanvas");
   if (!canvas || typeof map === 'undefined' || !map) return;
@@ -1245,7 +1168,6 @@ function buildMiniCardHtml_(item){
 
 function showPosCards_(pos, anchorEl) {
   if (__PAGE_MODE__ === "PM10") { hideMapPopup_(); fetchPm10ForPos_(pos); return; }
-  if (__PAGE_MODE__ === "VIB") { hideMapPopup_(); fetchVibData("6h", pos); return; }
 
   var pop = ensureMapPopup_();
   if (!pop) return;
@@ -1327,11 +1249,8 @@ function initLeafletMap_() {
   });
 
   if (hasPoints) {
-    // 💡 เทคนิค 1: Dynamic Padding แยกคอมพ์กับมือถือ
     var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
     map.fitBounds(bounds, { padding: mapPadding }); 
-    
-    // 💡 เทคนิค 2: ล็อกหน้าจอ (Max Bounds) ไม่ให้ผู้ใช้ไถออกไปไกลเกิน
     map.setMaxBounds(bounds.pad(0.3));
     map.options.minZoom = map.getZoom() - 1;
 
@@ -1885,7 +1804,7 @@ function isAllStopNoAlarm_(arr){
 function updateMapDots_(data){
   buildMapDotsOnce_();
   if(!data || !data.belts) return;
-  if(__PAGE_MODE__==="PM10" || __PAGE_MODE__==="VIB") return;
+  if(__PAGE_MODE__==="PM10") return;
 
   var map={};
   for(var i=0;i<data.belts.length;i++){
@@ -1983,10 +1902,6 @@ function render(data){
     setText("title","Monitor");
     setText("subtitle","PM10 Monitor");
     updatePosCards_PM10_();
-  }else if(__PAGE_MODE__==="VIB"){
-    setText("title","Monitor");
-    setText("subtitle","Vibration Gear-Motor");
-    setText("mapHint","Click POS on map to view vibration graphs"); 
   }else{
     handleBeepFromData(data);
     setText("title","Monitor");
@@ -1996,7 +1911,7 @@ function render(data){
 
 function setModeButtons_(){
   var b1=$id("modeBeltBtn"),b2=$id("modePm10Btn"),b3=$id("modeBeltBtn2"),b4=$id("modePm10Btn2"),b5=$id("modeAiBtn"),b6=$id("modeAiBtn2");
-  var b7=$id("modeVibBtn"),b8=$id("modeVibBtn2"), b9=$id("modeVibDashBtn"), b10=$id("modeVibDashBtn2"); 
+  var b9=$id("modeVibDashBtn"), b10=$id("modeVibDashBtn2"); 
 
   if(b1) b1.classList.toggle("primary",__PAGE_MODE__==="BELT");
   if(b2) b2.classList.toggle("primary",__PAGE_MODE__==="PM10");
@@ -2004,12 +1919,11 @@ function setModeButtons_(){
   if(b4) b4.classList.toggle("primary",__PAGE_MODE__==="PM10");
   if(b5) b5.classList.toggle("primary",__PAGE_MODE__==="AI");
   if(b6) b6.classList.toggle("primary",__PAGE_MODE__==="AI");
-  if(b7) b7.classList.toggle("primary",__PAGE_MODE__==="VIB");
-  if(b8) b8.classList.toggle("primary",__PAGE_MODE__==="VIB");
   
   if(b9) b9.classList.toggle("primary",__PAGE_MODE__==="VIB_DASH");
   if(b10) b10.classList.toggle("primary",__PAGE_MODE__==="VIB_DASH");
 }
+
 function setLegendForMode_(){
   if(__PAGE_MODE__==="PM10"){
     setHTML("legendPill",'<span class="lg pmok">PM OK</span> • <span class="lg pmwarn">PM WARN</span> • <span class="lg pmbad">PM BAD</span>');
@@ -2017,14 +1931,10 @@ function setLegendForMode_(){
     setText("mapHint","Click dot/card to open PM10");
   }else if(__PAGE_MODE__==="AI"){
     setHTML("legendPill",'<span class="lg open">CRITICAL</span> • <span class="lg stuck">HIGH</span> • <span class="lg pmbad">ACTION</span>');
-  }else if(__PAGE_MODE__==="VIB"){
-    setHTML("legendPill",'<span class="lg pmok">NORMAL</span> • <span class="lg stuck">WARN</span> • <span class="lg open">DANGER</span>');
-    setText("mapTitle","Plant Map • Vibration Gear-Motor");
-    setText("mapHint","Click POS 7 to view vibration graphs");
   }else if(__PAGE_MODE__==="VIB_DASH"){
     setHTML("legendPill",'<span class="lg pmok">DASHBOARD</span>');
     setText("mapTitle","External Dashboard");
-    setText("mapHint","Vibration Gear-Motor Live Data");
+    setText("mapHint","Vibration Gear-Motor Live Dashboard");
   }else{
     setHTML("legendPill",'<span class="lg open">OPEN</span> • <span class="lg stuck">STUCK</span> • <span class="lg stale">STALE</span>');
     setText("mapTitle","Plant Map • หัวสายพานชำรุด Check Points");
@@ -2066,7 +1976,6 @@ function setPageMode(mode){
         }
         
         if (hasPoints) {
-          // 💡 เทคนิค 1, 2, 3 รวมกัน: ใช้ Dynamic Padding, ล็อก Bounds และใช้ flyToBounds เพื่อให้สมูท
           var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
           map.flyToBounds(bounds, { 
             padding: mapPadding, 
@@ -2075,7 +1984,6 @@ function setPageMode(mode){
             easeLinearity: 0.25 
           });
 
-          // อัปเดต Max Bounds ตามหมุดชุดใหม่
           map.setMaxBounds(bounds.pad(0.3));
           map.options.minZoom = map.getZoom() - 1;
 
@@ -2109,19 +2017,6 @@ function setPageMode(mode){
             }
           }
         }
-        
-        if(mode === "VIB") {
-          applyMapDotState_(p.__el, "VIB", "stale", true);
-          var sumEl = $id("posSum_" + p.pos + "_" + p.modes[0]); 
-          if(sumEl) sumEl.textContent = "WAIT";
-          var bodyEl = $id("posBody_" + p.pos + "_" + p.modes[0]);
-          if(bodyEl) {
-            var waitName = (p.pos == 2) ? "6532.18 / 6532.20" : 
-                           (p.pos == 3) ? "542.22" : 
-                           (p.pos == 4) ? "6413.03" : "6522.18 / 6522.20";
-            bodyEl.innerHTML = '<div class="posLine pos-stale"><div class="posLeft"><span class="posChip"></span><span>' + waitName + '</span></div><div class="posRight mono"><span>Loading...</span></div></div>';
-          }
-        }
       } else {
         map.removeLayer(p.__marker);
         if(p.__card) p.__card.style.display = "none";
@@ -2140,10 +2035,6 @@ function setPageMode(mode){
     setText("subtitle", "AI Analysis Monitor");
     if(window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
     refreshVibStatus_(); 
-  } else if(mode === "VIB"){
-    setText("title", "Monitor");
-    setText("subtitle", "Vibration Gear-Motor");
-    refreshVibStatus_();
   } else if(mode === "VIB_DASH"){
     setText("title", "Monitor");
     setText("subtitle", "Vibration Dashboard");
@@ -2202,7 +2093,7 @@ function autoSwitchTick_(){
   
   if(__AUTO_SWITCH_REMAINING__ <= 0){
     __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC;
-    var seq=["BELT","PM10","VIB","VIB_DASH","AI"];
+    var seq=["BELT","PM10","VIB_DASH","AI"];
     var idx=seq.indexOf(__PAGE_MODE__);
     if(idx<0) idx=0;
     setPageMode(seq[(idx+1)%seq.length]);
@@ -2227,7 +2118,6 @@ function setAutoSwitchEnabled_(on){
 (function(){
   ["modeBeltBtn","modeBeltBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("BELT");});});
   ["modePm10Btn","modePm10Btn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("PM10");});});
-  ["modeVibBtn","modeVibBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("VIB");});});
   ["modeAiBtn","modeAiBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("AI");});});
   ["modeVibDashBtn","modeVibDashBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("VIB_DASH");});}); 
   ["autoSwitchBtn","autoSwitchBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setAutoSwitchEnabled_(!__AUTO_SWITCH_ENABLED__);});}); 
