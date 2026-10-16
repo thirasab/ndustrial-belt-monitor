@@ -2620,7 +2620,7 @@ function reportRefresh_(){
 })();
 
 // =========================================================
-// 18. LEFT ALARM PANEL
+// 18. LEFT ALARM PANEL & LIVE TICKER
 // =========================================================
 function updateGlobalLeftAlarms_() {
   if (!window.__LAST_DATA__) return; 
@@ -2630,9 +2630,8 @@ function updateGlobalLeftAlarms_() {
   if (!panel) {
     panel = document.createElement("div");
     panel.id = "leftAlarmPanel";
-    
     panel.innerHTML = `
-      <div id="alarmPanelHeader" style="display:none;" onclick="toggleLeftAlarmPanel_()">
+      <div id="alarmPanelHeader" onclick="toggleLeftAlarmPanel_()">
         <span id="alarmHeaderTitle">🚨 Alarms</span>
         <span id="alarmHeaderIcon">➖</span>
       </div>
@@ -2662,18 +2661,42 @@ function updateGlobalLeftAlarms_() {
   var header = document.getElementById("alarmPanelHeader");
   var list = document.getElementById("alarmPanelList");
 
+  // อัปเดตแถบข้อความวิ่ง (Live Ticker)
+  var ticker = document.getElementById("liveTickerContent");
+  if (ticker) {
+    var tickerHtml = '<span>';
+    if (activeAlarms.length === 0) {
+      tickerHtml += '✅ [' + new Date().toLocaleTimeString('th-TH') + '] SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.';
+    } else {
+      var msgs = activeAlarms.map(a => '⚠️ ' + a.belt + ': ' + (a.alarmMsg || a.alarmType));
+      tickerHtml += msgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ');
+    }
+    tickerHtml += '</span>';
+    ticker.innerHTML = tickerHtml;
+  }
+
+  // ป้องกันเมนูหายไปเมื่อไม่มี Alarm (เปลี่ยนเป็นสีเขียว Normal แทน)
   if (activeAlarms.length === 0) {
-    header.style.display = "none";
-    list.innerHTML = "";
+    header.style.display = "flex";
+    header.style.background = "rgba(31, 210, 122, 0.15)";
+    header.style.borderColor = "rgba(31, 210, 122, 0.4)";
+    document.getElementById("alarmHeaderTitle").innerHTML = "✅ Normal (0)";
+    list.innerHTML = '<div style="background:rgba(15,20,30,0.85); padding:6px 10px; border-radius:6px; color:var(--ok); font-size:11px; text-align:center; border: 1px solid rgba(255,255,255,0.05);">No active alarms</div>';
     return;
   }
 
+  // กรณีมี Alarm ให้กลับมาเป็นสีแดง
   header.style.display = "flex";
+  header.style.background = "rgba(255, 59, 48, 0.15)"; 
+  header.style.borderColor = "rgba(255, 59, 48, 0.4)";
   document.getElementById("alarmHeaderTitle").innerHTML = "🚨 Alarms (" + activeAlarms.length + ")";
 
   if (window.__ALARM_PANEL_COLLAPSED__) {
     panel.classList.add("collapsed");
     document.getElementById("alarmHeaderIcon").textContent = "➕";
+  } else {
+    panel.classList.remove("collapsed");
+    document.getElementById("alarmHeaderIcon").textContent = "➖";
   }
 
   var html = "";
@@ -2684,7 +2707,6 @@ function updateGlobalLeftAlarms_() {
 
     html += '<div style="background:'+bgColor+'; padding:6px 10px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.6); pointer-events:auto; animation:alarmSlideIn 0.2s ease-out; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border: 1px solid rgba(255,255,255,0.05); border-left:4px solid '+borderColor+';">';
     html += '<div style="font-size:12px; font-weight:bold; color:#fff; line-height:1.3; word-break:break-word;">' + esc(r.belt) + '</div>';
-    
     var shortMsg = r.alarmMsg ? r.alarmMsg : r.alarmType;
     html += '<div style="font-size:10px; color:'+borderColor+'; margin-top:3px; font-weight:bold;">⚠️ ' + esc(shortMsg) + '</div>';
     html += '</div>';
