@@ -727,7 +727,7 @@ table th, .aiTable th {
   font-size: 12px; background: rgba(255,255,255,.04); color: var(--text); outline: none; transition: border-color .15s;
 }
 .rInput:focus, .rText:focus { border-color: rgba(0,224,255,.45); }
-[data-theme="day"] .rInput, [data-theme="day"] .rText { background: rgba(10,18,32,.04); }
+[data-theme="day"] .rInput, .rText { background: rgba(10,18,32,.04); }
 .rText { min-height: 86px; resize: vertical; }
 .rActions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
 
@@ -874,7 +874,7 @@ table th, .aiTable th {
 .sev4 { color: var(--open); }
 
 /* ========================================================= */
-/* 12. DYNAMIC LEFT ALARM PANEL (Moved from JS) */
+/* 12. DYNAMIC LEFT ALARM PANEL */
 /* ========================================================= */
 @keyframes alarmSlideIn { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
