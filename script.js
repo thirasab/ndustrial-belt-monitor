@@ -1050,6 +1050,7 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
   if (globalMinVib === Infinity) globalMinVib = 0;
   if (globalMinSound === Infinity) globalMinSound = 40;
 
+  // ตั้งค่ากราฟความสั่นสะเทือนขั้นต่ำ 10 mm/s
   let targetMaxVib = Math.max(10, globalMaxVib * 1.1);       
   let targetMaxSound = Math.max(90, globalMaxSound + 5);   
   let targetMinVib = Math.max(0, globalMinVib - 0.5); 
@@ -1246,7 +1247,7 @@ function initLeafletMap_() {
 
   var BASE_ZOOM = 17.5; 
   map = L.map('mapCanvas', {
-    zoomControl: false, // เอาปุ่มซูมเริ่มต้นออกเพื่อจัดตำแหน่งใหม่
+    zoomControl: false, // 📌 เอาปุ่มซูมมุมซ้ายบนออก
     attributionControl: false,
     zoomSnap: 0.5,       
     wheelPxPerZoomLevel: 120 
@@ -1256,40 +1257,45 @@ function initLeafletMap_() {
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
   // 📌 2. สร้างกล่องแสดงพิกัด (Coordinates Overlay) มุมซ้ายล่าง
-  var coordControl = L.control({position: 'bottomleft'});
+  var coordControl = L.control({ position: 'bottomleft' });
+
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
-    this._div.style.background = 'rgba(0,0,0,0.65)';
+    this._div.style.background = 'rgba(0,0,0,0.75)';
     this._div.style.color = '#00e0ff'; 
-    this._div.style.padding = '4px 8px';
-    this._div.style.borderRadius = '6px';
+    this._div.style.padding = '5px 10px';
+    this._div.style.borderRadius = '8px';
     this._div.style.fontSize = '11px';
     this._div.style.fontWeight = 'bold';
-    this._div.style.border = '1px solid rgba(0,224,255,0.3)';
+    this._div.style.border = '1px solid rgba(0,224,255,0.4)';
     this._div.style.backdropFilter = 'blur(4px)';
-    this._div.innerHTML = 'Lat: -, Lng: -';
+    this._div.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)';
+    this._div.style.pointerEvents = 'none'; // ไม่บล็อกการสัมผัส
+    this._div.style.zIndex = '9999';
+    
+    var center = map.getCenter();
+    this.update(center);
     return this._div;
   };
-  var coordContainer = coordControl.addTo(map).getContainer();
 
-  // 📌 3. อัปเดตพิกัดเมื่อเลื่อนเมาส์หรือคลิกบนแผนที่
-  map.on('mousemove', function(e) {
-    if (coordContainer) {
-      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
+  coordControl.update = function(latlng) {
+    if (this._div && latlng) {
+      this._div.innerHTML = 'Lat: ' + latlng.lat.toFixed(5) + '<br>Lng: ' + latlng.lng.toFixed(5);
     }
-  });
-  map.on('click', function(e) {
-    if (coordContainer) {
-      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
-    }
-  });
+  };
+  coordControl.addTo(map);
+
+  // 📌 3. อัปเดตพิกัดเรียลไทม์
+  map.on('mousemove', function(e) { coordControl.update(e.latlng); });
+  map.on('move', function() { coordControl.update(map.getCenter()); });
 
   if (hasPoints) {
-    var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
-    map.fitBounds(bounds, { padding: mapPadding }); 
-    map.setMaxBounds(bounds.pad(0.3));
-    map.options.minZoom = map.getZoom() - 1;
-
+    // 📌 ปลดล็อก Auto-Zoom ให้กางออกจนเห็นครบทุกจุด
+    var mapPadding = window.innerWidth <= 768 ? [30, 30] : [80, 80];
+    map.fitBounds(bounds, { 
+      padding: mapPadding, 
+      maxZoom: 18 
+    }); 
     BASE_ZOOM = map.getZoom(); 
   } else {
     map.setView([14.5, 100.5], BASE_ZOOM);
@@ -1629,6 +1635,7 @@ function drawPm10Chart_(rows) {
     }; 
   });
   
+  // 📌 ใช้ rawLabel เป็นแกนเวลา (จากคอลัมน์ A ตรงๆ)
   var labels = clean.map(function(r) { return r.rawLabel; });
   var data = clean.map(function(r) { return r.v; });
   var pointBg = data.map(function(v) { 
@@ -1662,10 +1669,10 @@ function drawPm10Chart_(rows) {
         datasets: [{
           label: "PM10 (µg/m³)",
           data: data,
-          tension: 0.2, // 📌 Clean curves
+          tension: 0.2, // 📌 กราฟโค้งมนเล็กน้อยแต่ดูกระชับ (Clean Line)
           borderWidth: 2,
-          pointRadius: 0, // 📌 Clean lines (hide points unless hovered)
-          pointHoverRadius: 5,
+          pointRadius: 0, // 📌 ซ่อนจุดเพื่อให้เส้นกราฟสะอาดตา
+          pointHoverRadius: 5, // 📌 โชว์จุดเฉพาะตอนเอาเมาส์ชี้
           pointHoverBorderWidth: 2,
           pointHoverBackgroundColor: pointBg,
           pointHoverBorderColor: "#ffffff",
@@ -1691,7 +1698,7 @@ function drawPm10Chart_(rows) {
         responsive: true,
         maintainAspectRatio: false,
         animation: isMobile ? false : { duration: 400 },
-        interaction: { mode: "index", intersect: false },
+        interaction: { mode: "index", intersect: false }, // 📌 Crosshair effect แบบ Industrial
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -1721,22 +1728,22 @@ function drawPm10Chart_(rows) {
             ticks: { 
               color: textColor, 
               font: { size: 10, family: "ui-monospace, monospace" },
-              maxRotation: 0, // 📌 บังคับข้อความแนวนอนเสมอ
+              maxRotation: 0, // 📌 บังคับข้อความแนวนอนไม่อ่านยาก
               autoSkip: true, 
               maxTicksLimit: isMobile ? 6 : 10 
             }, 
-            grid: { display: false } // 📌 ซ่อนเส้น Grid แนวตั้ง
+            grid: { display: false } // 📌 ซ่อนเส้น Grid แนวตั้ง ลดความรก
           },
           y: {
             beginAtZero: true,
-            suggestedMax: 150,
+            suggestedMax: 150, // 📌 เผื่อที่ด้านบนให้สวยงาม
             ticks: { 
               color: textColor, 
               font: { size: 10, family: "ui-monospace, monospace" }, 
-              stepSize: 50 // 📌 เพิ่มทีละ 50
+              stepSize: 50
             },
             grid: { color: gridColor, borderDash: [4, 4] },
-            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; } // 📌 เผื่อที่ด้านบน 15% เสมอ
+            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; } // 📌 เผื่อที่ด้านบนกราฟ 15% เสมอ
           }
         }
       },
@@ -2045,16 +2052,14 @@ function setPageMode(mode){
         }
         
         if (hasPoints) {
-          var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
+          // 📌 ปลดล็อก Auto-zoom กางออกให้พอดีทุกจุด
+          var mapPadding = window.innerWidth <= 768 ? [30, 30] : [80, 80];
           map.flyToBounds(bounds, { 
             padding: mapPadding, 
             maxZoom: 18, 
             duration: 1.2, 
             easeLinearity: 0.25 
           });
-
-          map.setMaxBounds(bounds.pad(0.3));
-          map.options.minZoom = map.getZoom() - 1;
 
           setTimeout(adjustCardPositions_, 300);
         } else if (map.__lastCenter && map.__lastZoom) {
@@ -2124,7 +2129,7 @@ function isShown_(el){
   if(el.classList && el.classList.contains("open")) return true;
   var st=window.getComputedStyle?getComputedStyle(el):null;
   if(!st) return false;
-  return st.display!=none && st.visibility!=hidden && st.opacity!=0;
+  return st.display!=="none" && st.visibility!=="hidden" && st.opacity!=="0";
 }
 function shouldPauseAutoSwitch_(){
   return isShown_($id("overlay")) ||
@@ -2544,6 +2549,7 @@ async function reportSave_(){
     var filesEl=$id("r_files");
     var fileArr=(filesEl&&filesEl.files&&filesEl.files.length)?Array.from(filesEl.files):[];
     
+    // 📌 บังคับแนบรูปก่อนบันทึกใหม่
     if(!__REPORT_EDIT_ID__ && fileArr.length === 0){
       showToast("Missing image","warn","บังคับให้ต้องแนบรูปก่อนบันทึกงาน");
       return;
