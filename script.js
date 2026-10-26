@@ -2121,7 +2121,7 @@ function isShown_(el){
   if(el.classList && el.classList.contains("open")) return true;
   var st=window.getComputedStyle?getComputedStyle(el):null;
   if(!st) return false;
-  return st.display!=none && st.visibility!=hidden && st.opacity!=0;
+  return st.display !== "none" && st.visibility !== "hidden" && st.opacity !== "0"; // ✅ ใส่ Quotes ถูกต้อง
 }
 function shouldPauseAutoSwitch_(){
   return isShown_($id("overlay")) ||
