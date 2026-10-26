@@ -2792,3 +2792,35 @@ function updateGlobalLeftAlarms_() {
 
   if(list.innerHTML !== html) { list.innerHTML = html; }
 }
+// =========================================================
+// 19. AUTO FULLSCREEN (เต็มจออัตโนมัติเมื่อสัมผัสจอครั้งแรก)
+// =========================================================
+(function setupAutoFullscreen() {
+  function goFullscreen() {
+    var doc = window.document;
+    var docEl = doc.documentElement;
+    // รองรับทุกเบราว์เซอร์
+    var requestFS = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+
+    // เช็คว่ายังไม่ได้เปิดเต็มจอ
+    if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+      if (requestFS) {
+        requestFS.call(docEl).catch(function(err) {
+          console.log("Auto-fullscreen blocked by browser:", err.message);
+        });
+      }
+    }
+  }
+
+  // ฟังก์ชันดักการสัมผัสหน้าจอครั้งแรก
+  function onFirstInteraction() {
+    goFullscreen();
+    // เมื่อทำคำสั่งเสร็จ ให้ลบการดักจับทิ้งไป เพื่อไม่ให้รบกวนการทำงานอื่น
+    document.removeEventListener('click', onFirstInteraction);
+    document.removeEventListener('touchstart', onFirstInteraction);
+  }
+
+  // รอให้ผู้ใช้คลิกหรือแตะหน้าจอครั้งแรก (เบราว์เซอร์บังคับให้ต้องมี User Interaction)
+  document.addEventListener('click', onFirstInteraction, { once: true });
+  document.addEventListener('touchstart', onFirstInteraction, { once: true, passive: true });
+})();
