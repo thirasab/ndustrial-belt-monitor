@@ -1247,15 +1247,17 @@ function initLeafletMap_() {
 
   var BASE_ZOOM = 17.5; 
   map = L.map('mapCanvas', {
-    zoomControl: false, // 📌 เอาปุ่มซูมมุมซ้ายบนออก
+    zoomControl: false, 
     attributionControl: false,
     zoomSnap: 0.5,       
     wheelPxPerZoomLevel: 120 
   });
 
-// 📌 2. สร้างกล่องแสดงพิกัดและระยะซูม (มุมซ้ายล่าง)
-  var coordControl = L.control({ position: 'bottomleft' });
+  // 📌 1. ปุ่ม Zoom ขวาล่าง
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+  // 📌 2. กล่องแสดงพิกัดและระยะซูม ซ้ายล่าง
+  var coordControl = L.control({ position: 'bottomleft' });
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
     this._div.style.background = 'rgba(0,0,0,0.75)';
@@ -1269,13 +1271,11 @@ function initLeafletMap_() {
     this._div.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)';
     this._div.style.pointerEvents = 'none';
     this._div.style.zIndex = '9999';
-    this._div.style.lineHeight = '1.4'; // ปรับบรรทัดให้อ่านง่าย
+    this._div.style.lineHeight = '1.4';
     
     this.update(map.getCenter(), map.getZoom());
     return this._div;
   };
-
-  // ฟังก์ชันอัปเดตข้อความ Lat, Lng และ Zoom
   coordControl.update = function(latlng, zoom) {
     if (this._div && latlng && zoom !== undefined) {
       this._div.innerHTML = 'Lat: ' + latlng.lat.toFixed(5) + ' | Lng: ' + latlng.lng.toFixed(5) +
@@ -1284,17 +1284,15 @@ function initLeafletMap_() {
   };
   coordControl.addTo(map);
 
-  // 📌 3. อัปเดตพิกัดและ Zoom เรียลไทม์
+  // 📌 อัปเดตพิกัดและ Zoom เรียลไทม์
   map.on('mousemove', function(e) { coordControl.update(e.latlng, map.getZoom()); });
   map.on('move', function() { coordControl.update(map.getCenter(), map.getZoom()); });
-  map.on('zoomend', function() { coordControl.update(map.getCenter(), map.getZoom()); }); // อัปเดตตอนซูมเสร็จ
+  map.on('zoomend', function() { coordControl.update(map.getCenter(), map.getZoom()); });
 
   if (hasPoints) {
-    // 📌 ปลดล็อก Auto-Zoom ให้กางออกจนเห็นครบทุกจุด
-map.fitBounds(bounds, { 
-   padding: [120, 120], // ระยะขอบ (ยิ่งเยอะ ยิ่งซูมออกให้เห็นกว้างขึ้น)
-   maxZoom: 18        // ล็อกระยะซูมเข้าสูงสุด (ยิ่งเลขเยอะ ยิ่งซูมได้ลึก)
-}); 
+    // 📌 ปลดล็อกขีดจำกัดแผนที่ ให้ Auto-zoom กางออกเห็นครอบทุกจุดเสมอ
+    var mapPadding = window.innerWidth <= 768 ? [30, 30] : [80, 80];
+    map.fitBounds(bounds, { padding: mapPadding, maxZoom: 18 }); 
     BASE_ZOOM = map.getZoom(); 
   } else {
     map.setView([14.5, 100.5], BASE_ZOOM);
@@ -1564,6 +1562,7 @@ function renderPm10Modal_(pos, res, currentDays){
 
   var html='<div style="display:flex;flex-direction:column;gap:10px;">';
 
+  // 📌 ตัวเลือกจำนวนวัน
   html+='<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); padding:10px 12px; border-radius:10px; border:1px solid var(--border);">';
   html+='<div style="font-weight:900; font-size:13px;">📈 เลือกช่วงเวลาดูแนวโน้ม</div>';
   html+='<select style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-weight:bold; cursor:pointer; outline:none;" onchange="fetchPm10ForPos_(' + pos + ', true, this.value)">';
@@ -1668,10 +1667,10 @@ function drawPm10Chart_(rows) {
         datasets: [{
           label: "PM10 (µg/m³)",
           data: data,
-          tension: 0.2, // 📌 กราฟโค้งมนเล็กน้อยแต่ดูกระชับ (Clean Line)
+          tension: 0.2, // 📌 Clean curves
           borderWidth: 2,
-          pointRadius: 0, // 📌 ซ่อนจุดเพื่อให้เส้นกราฟสะอาดตา
-          pointHoverRadius: 5, // 📌 โชว์จุดเฉพาะตอนเอาเมาส์ชี้
+          pointRadius: 0, // 📌 Clean lines (hide points unless hovered)
+          pointHoverRadius: 5,
           pointHoverBorderWidth: 2,
           pointHoverBackgroundColor: pointBg,
           pointHoverBorderColor: "#ffffff",
