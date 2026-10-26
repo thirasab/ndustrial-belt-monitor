@@ -31,7 +31,6 @@ async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) 
     let url = new URL(GAS_URL);
     url.searchParams.append('action', action);
     
-    // แนบพารามิเตอร์อื่นๆ ในกรณี GET
     if (method === 'GET') {
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.append(key, value);
@@ -720,73 +719,59 @@ function fetchPm10SnapshotAll_() {
     .catch(err => console.error("PM10 Batch Fetch error: ", err));
 }
 
-function fetchPm10History_(pos, days) {
-  if (days === "50") { fetchPm10ForPos_(pos, true); return; }
+// 📌 ฟังก์ชันรองรับการดึงข้อมูลย้อนหลังตามจำนวนวัน (2, 5, 7 วัน)
+function fetchPm10ForPos_(pos, forceRefresh, days){
+  var currentDays = days || window.__PM10_CURRENT_DAYS__ || 2;
+  window.__PM10_CURRENT_DAYS__ = currentDays;
   
-  destroyAllModalCharts_();
-  setHTML("modalBody","<div class='skeleton' style='height:80px;margin-bottom:8px;'></div><div class='skeleton' style='height:240px;'></div>");
-  
-  callGasAPI('getPm10History', {pos: pos, days: days})
-    .then(res => {
-      if(!res || res.ok === false){
-        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
-        return;
-      }
-      res.selectedRange = days;
-      renderPm10Modal_(pos, res);
-      
-      var selects = document.querySelectorAll("#modalBody select");
-      if(selects.length > 0) selects[0].value = days;
-    })
-    .catch(err => {
-      setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
-    });
-}
-
-function fetchPm10ForPos_(pos,forceRefresh){
-  var hasCache=hasUsablePm10Series_(pos);
-  var canUseCache=hasCache&&!forceRefresh&&isFreshPm10SeriesCache_(pos);
+  var cacheKey = pos + "_" + currentDays;
+  var hasCache = hasUsablePm10Series_(cacheKey);
+  var canUseCache = hasCache && !forceRefresh && isFreshPm10SeriesCache_(cacheKey);
 
   setText("modalTitle","PM10 • POS "+pos);
   if(canUseCache){
-    renderPm10Modal_(pos,{ok:true,rows:__PM10_SERIES__[pos]||[]});
+    renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
     openModal();
     return;
   }
 
-  if(__PM_FETCH_LOCK__&&hasCache){
-    renderPm10Modal_(pos,{ok:true,rows:__PM10_SERIES__[pos]||[]});
+  if(__PM_FETCH_LOCK__ && hasCache){
+    renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
     openModal();
     return;
   }
   if(__PM_FETCH_LOCK__){showToast("PM10 busy","warn","please wait…");return;}
 
-  __PM_FETCH_LOCK__=true;
+  __PM_FETCH_LOCK__ = true;
   destroyAllModalCharts_();
   setHTML("modalBody","<div class='skeleton' style='height:80px;margin-bottom:8px;'></div><div class='skeleton' style='height:240px;'></div>");
   openModal();
 
-  callGasAPI('getPm10Latest100', {pos: pos})
+  callGasAPI('getPm10Latest100', { pos: pos, days: currentDays })
     .then(res => {
       __PM_FETCH_LOCK__=false;
       if(!res||res.ok===false){
         if(hasCache){
-          renderPm10Modal_(pos,{ok:true,rows:__PM10_SERIES__[pos]||[]});
+          renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
           showToast("PM10 cached","warn","showing cached data");
           return;
         }
         setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
         return;
       }
-      cachePm10Series_(pos,res.rows||[]);
+      
+      cachePm10Series_(cacheKey, res.rows || []);
+      var latest = pickLatestPm10Row_(res.rows);
+      if(latest) setPm10Latest_(pos, latest);
       updateMapDotPm10_(pos);
       if(__PAGE_MODE__==="PM10") updatePosCards_PM10_();
-      renderPm10Modal_(pos,res);
+      
+      renderPm10Modal_(pos, res, currentDays);
     })
     .catch(err => {
       __PM_FETCH_LOCK__=false;
       if(hasCache){
-        renderPm10Modal_(pos,{ok:true,rows:__PM10_SERIES__[pos]||[]});
+        renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
         showToast("PM10 cached","warn","showing cached data");
         return;
       }
@@ -1069,7 +1054,8 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
   if (globalMinVib === Infinity) globalMinVib = 0;
   if (globalMinSound === Infinity) globalMinSound = 40;
 
-  let targetMaxVib = Math.max(3, globalMaxVib * 1.1);       
+  // 📌 อัปเดต Limit กราฟความสั่นสะเทือนขั้นต่ำที่ 10 mm/s
+  let targetMaxVib = Math.max(10, globalMaxVib * 1.1);       
   let targetMaxSound = Math.max(90, globalMaxSound + 5);   
   let targetMinVib = Math.max(0, globalMinVib - 0.5); 
   let targetMinSound = Math.max(0, globalMinSound - 5);
@@ -1430,16 +1416,16 @@ function setPm10Latest_(pos, row) {
     delete __PM10_LATEST__[pos]; 
   } 
 }
-function cachePm10Series_(pos,rows){
-  __PM10_SERIES__[pos]=Array.isArray(rows)?rows:[];
-  __PM10_SERIES_FETCHED_AT__[pos]=Date.now();
-  setPm10Latest_(pos,pickLatestPm10Row_(__PM10_SERIES__[pos]));
+function cachePm10Series_(cacheKey, rows){
+  __PM10_SERIES__[cacheKey] = Array.isArray(rows) ? rows : [];
+  __PM10_SERIES_FETCHED_AT__[cacheKey] = Date.now();
+  // setPm10Latest ถูกเรียกใช้งานแยกต่างหากใน fetchPm10ForPos_
 }
-function hasUsablePm10Series_(pos){
-  return Array.isArray(__PM10_SERIES__[pos])&&__PM10_SERIES__[pos].length>0;
+function hasUsablePm10Series_(cacheKey){
+  return Array.isArray(__PM10_SERIES__[cacheKey])&&__PM10_SERIES__[cacheKey].length>0;
 }
-function isFreshPm10SeriesCache_(pos){
-  var fetchedAt=Number(__PM10_SERIES_FETCHED_AT__[pos]||0);
+function isFreshPm10SeriesCache_(cacheKey){
+  var fetchedAt=Number(__PM10_SERIES_FETCHED_AT__[cacheKey]||0);
   return fetchedAt>0&&(Date.now()-fetchedAt)<=PM10_MODAL_CACHE_TTL_MS;
 }
 function applyMapDotState_(el, mode, cls, pulse){
@@ -1515,7 +1501,9 @@ function updateMapDots_PM10_(){
   }
 }
 
-function renderPm10Modal_(pos,res){
+// 📌 อัปเดต Modal PM10 ให้รับ currentDays เพื่อวาด Dropdown เลือกวัน
+function renderPm10Modal_(pos, res, currentDays){
+  currentDays = currentDays || 2;
   var rows=(res&&res.rows)?res.rows:[];
   var tzNote=(res&&res.tz)?String(res.tz):"";
   function num_(x){ var n=Number(x); return isFinite(n)?n:null; }
@@ -1545,6 +1533,17 @@ function renderPm10Modal_(pos,res){
   var barColor=latestVal==null?"var(--muted)":latestVal>=PM10_BAD?"var(--open)":latestVal>=PM10_WARN?"var(--stuck)":"var(--ok)";
 
   var html='<div style="display:flex;flex-direction:column;gap:10px;">';
+
+  // 📌 เพิ่ม Dropdown ตัวเลือกจำนวนวัน
+  html+='<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); padding:10px 12px; border-radius:10px; border:1px solid var(--border);">';
+  html+='<div style="font-weight:900; font-size:13px;">📈 เลือกช่วงเวลาดูแนวโน้ม</div>';
+  html+='<select style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-weight:bold; cursor:pointer; outline:none;" onchange="fetchPm10ForPos_(' + pos + ', true, this.value)">';
+  html+='<option value="2" '+(currentDays==2?"selected":"")+'>2 วันย้อนหลัง (~192 รายการ)</option>';
+  html+='<option value="5" '+(currentDays==5?"selected":"")+'>5 วันย้อนหลัง (~480 รายการ)</option>';
+  html+='<option value="7" '+(currentDays==7?"selected":"")+'>7 วันย้อนหลัง (~672 รายการ)</option>';
+  html+='</select>';
+  html+='</div>';
+
   html+='<div class="rCard">';
   html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">';
   html+='<div><div class="mono" style="font-size:26px;font-weight:800;color:'+sev.color+';">'+esc(fmt_(latestVal))+' <span style="font-size:13px;color:var(--muted);">µg/m³</span></div>';
@@ -1562,17 +1561,8 @@ function renderPm10Modal_(pos,res){
   html+='<div class="pm10StatCard"><div class="pm10StatVal mono">'+esc(fmt_(maxV))+'</div><div class="pm10StatLbl">MAX</div></div>';
   html+='</div>';
   html+='</div>';
-  
   html+='<div class="rCard" style="padding:10px;">';
-  html+='<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">';
-  html+='<div class="mono" style="color:var(--muted);font-size:11px;">PM10 trend ('+rows.length+' records)</div>';
-  html+='<select onchange="fetchPm10History_('+pos+', this.value)" style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer; outline:none;">';
-  html+='<option value="50" '+(res.selectedRange=="50"||!res.selectedRange?"selected":"")+'>ค่าเริ่มต้น (50 ล่าสุด)</option>';
-  html+='<option value="1" '+(res.selectedRange=="1"?"selected":"")+'>ย้อนหลัง 1 วัน</option>';
-  html+='<option value="3" '+(res.selectedRange=="3"?"selected":"")+'>ย้อนหลัง 3 วัน</option>';
-  html+='<option value="7" '+(res.selectedRange=="7"?"selected":"")+'>ย้อนหลัง 7 วัน</option>';
-  html+='</select>';
-  html+='</div>';
+  html+='<div class="mono" style="color:var(--muted);margin-bottom:6px;font-size:11px;">PM10 trend — last '+rows.length+' readings</div>';
   html+='<div style="height:240px;width:100%;"><canvas id="pm10Chart"></canvas></div>';
   html+='</div>';
 
@@ -1589,8 +1579,6 @@ function renderPm10Modal_(pos,res){
 
   setText("modalTitle", "PM10 • " + (res.location || "POS " + pos));
   setHTML("modalBody",html);
-  
-  rows.selectedRange = res.selectedRange;
   try{drawPm10Chart_(rows);}catch(e){console.log("chart err:",e);}
 }
 
@@ -1610,26 +1598,16 @@ function drawPm10Chart_(rows) {
     return { time: String(r.time || ""), v: Number(r.v) }; 
   });
   
-  // ลดจุดกราฟไม่ให้เกิน 300 จุด เพื่อความลื่นไหล
-  var MAX_CHART_POINTS = 300;
-  if (clean.length > MAX_CHART_POINTS) {
-    var step = Math.ceil(clean.length / MAX_CHART_POINTS);
-    var downsampled = [];
-    for (var i = 0; i < clean.length; i += step) {
-      var chunk = clean.slice(i, i + step);
-      // หาค่าสูงสุด (Max) ในกลุ่ม เพื่อให้เห็นจังหวะที่ค่าฝุ่นพุ่งสูง
-      var maxObj = chunk.reduce(function(prev, curr) { return (curr.v > prev.v ? curr : prev); }, chunk[0]);
-      downsampled.push(maxObj);
-    }
-    clean = downsampled;
-  } else if (clean.length > 50 && rows.selectedRange == null) {
-    // โหมดเริ่มต้น ให้แสดงแค่ 50 ล่าสุด
-    clean = clean.slice(clean.length - 50);
-  }
+  // 📌 ปลดล็อกการตัด 50 ค่า เพื่อแสดงข้อมูลเต็มตามจำนวนวันที่เลือก
+  // if (clean.length > 50) clean = clean.slice(clean.length - 50); 
   
   var labels = clean.map(function(r) {
     var t = r.time; 
-    if (t.indexOf(" ") >= 0) t = t.split(" ").pop().slice(0, 5); 
+    // 📌 ย่อรูปแบบเวลาเป็น DD/MM HH:MM
+    if (t.indexOf(" ") >= 0) {
+      var parts = t.split(" ");
+      return parts[0].substring(0, 5) + " " + parts[1].substring(0, 5); 
+    }
     return t;
   });
   
@@ -2520,8 +2498,15 @@ async function reportSave_(){
     function parseDatetimeLocalToMs_(s){var m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);if(!m) return NaN;return new Date(+m[1],(+m[2])-1,+m[3],+m[4],+m[5],0,0).getTime();}
     var checkMs=parseDatetimeLocalToMs_(checkStr);
     if(!isFinite(checkMs)){showToast("Invalid time","err","เลือกเวลาใหม่");return;}
+    
     var filesEl=$id("r_files");
     var fileArr=(filesEl&&filesEl.files&&filesEl.files.length)?Array.from(filesEl.files):[];
+    
+    // 📌 บังคับให้ต้องแนบรูป (ตามการตั้งค่า)
+    if(!__REPORT_EDIT_ID__ && fileArr.length === 0){
+      showToast("Missing image","warn","บังคับให้ต้องแนบรูปก่อนบันทึกงาน");
+      return;
+    }
     if(fileArr.length>4){showToast("Too many images","warn","เลือกได้สูงสุด 4 รูป");return;}
 
     var imgUrls=null;
@@ -2724,7 +2709,6 @@ function updateGlobalLeftAlarms_() {
     ticker.innerHTML = tickerHtml;
   }
 
-  // ป้องกันเมนูหายไปเมื่อไม่มี Alarm (เปลี่ยนเป็นสีเขียว Normal แทน)
   if (activeAlarms.length === 0) {
     header.style.display = "flex";
     header.style.background = "rgba(31, 210, 122, 0.15)";
@@ -2734,7 +2718,6 @@ function updateGlobalLeftAlarms_() {
     return;
   }
 
-  // กรณีมี Alarm ให้กลับมาเป็นสีแดง
   header.style.display = "flex";
   header.style.background = "rgba(255, 59, 48, 0.15)"; 
   header.style.borderColor = "rgba(255, 59, 48, 0.4)";
