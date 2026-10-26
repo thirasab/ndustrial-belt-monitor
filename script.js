@@ -1050,6 +1050,7 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
   if (globalMinVib === Infinity) globalMinVib = 0;
   if (globalMinSound === Infinity) globalMinSound = 40;
 
+  // ตั้งค่ากราฟความสั่นสะเทือนขั้นต่ำ 10 mm/s
   let targetMaxVib = Math.max(10, globalMaxVib * 1.1);       
   let targetMaxSound = Math.max(90, globalMaxSound + 5);   
   let targetMinVib = Math.max(0, globalMinVib - 0.5); 
@@ -1252,7 +1253,7 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
-  // 📌 1. ย้ายการตั้งค่า Center & Zoom มาไว้ตรงนี้ทันที (ก่อน Add Control ใดๆ)
+  // 📌 ย้ายการตั้งค่า Center & Zoom มาไว้ตรงนี้ (ก่อน Add Control)
   if (hasPoints) {
     var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
     map.fitBounds(bounds, { padding: mapPadding }); 
@@ -1264,7 +1265,7 @@ function initLeafletMap_() {
   }
   map.__BASE_ZOOM = BASE_ZOOM; 
 
-  // 📌 2. จากนั้นค่อยเพิ่มปุ่มซูมและกล่องพิกัด
+  // 📌 เพิ่มปุ่ม Zoom & กล่อง Coordinates
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
   var coordControl = L.control({position: 'bottomleft'});
@@ -1592,7 +1593,6 @@ function renderPm10Modal_(pos, res, currentDays){
   html+='<table><thead><tr><th>Time</th><th style="text-align:right;">PM10 (µg/m³)</th><th>Status</th></tr></thead><tbody>';
   for(var r=rows.length-1;r>=0;r--){
     var row = rows[r] || {};
-    // 📌 ดึง rawLabel จากคอลัมน์ A โดยตรง
     var tv = String(row.rawLabel || row.time || "-");
     var vv2 = num_(row.v);
     var rs = sev_(vv2);
@@ -1659,9 +1659,9 @@ function drawPm10Chart_(rows) {
         datasets: [{
           label: "PM10 (µg/m³)",
           data: data,
-          tension: 0.2, // 📌 Clean curves
+          tension: 0.2, 
           borderWidth: 2,
-          pointRadius: 0, // 📌 Clean lines (hide points unless hovered)
+          pointRadius: 0, 
           pointHoverRadius: 5,
           pointHoverBorderWidth: 2,
           pointHoverBackgroundColor: pointBg,
@@ -1718,11 +1718,11 @@ function drawPm10Chart_(rows) {
             ticks: { 
               color: textColor, 
               font: { size: 10, family: "ui-monospace, monospace" },
-              maxRotation: 0, // 📌 บังคับข้อความแนวนอนเสมอ
+              maxRotation: 0,
               autoSkip: true, 
               maxTicksLimit: isMobile ? 6 : 10 
             }, 
-            grid: { display: false } // 📌 ซ่อนเส้น Grid แนวตั้ง
+            grid: { display: false } 
           },
           y: {
             beginAtZero: true,
@@ -1730,10 +1730,10 @@ function drawPm10Chart_(rows) {
             ticks: { 
               color: textColor, 
               font: { size: 10, family: "ui-monospace, monospace" }, 
-              stepSize: 50 // 📌 เพิ่มทีละ 50
+              stepSize: 50
             },
             grid: { color: gridColor, borderDash: [4, 4] },
-            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; } // 📌 เผื่อที่ด้านบน 15% เสมอ
+            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; }
           }
         }
       },
@@ -1868,7 +1868,6 @@ function isAllStopNoAlarm_(arr){
 }
 
 function updateMapDots_(data){
-  buildMapDotsOnce_();
   if(!data || !data.belts) return;
   if(__PAGE_MODE__==="PM10") return;
 
@@ -2121,8 +2120,9 @@ function isShown_(el){
   if(el.classList && el.classList.contains("open")) return true;
   var st=window.getComputedStyle?getComputedStyle(el):null;
   if(!st) return false;
-  return st.display!=none && st.visibility!=hidden && st.opacity!=0;
+  return st.display !== "none" && st.visibility !== "hidden" && st.opacity !== "0";
 }
+
 function shouldPauseAutoSwitch_(){
   return isShown_($id("overlay")) ||
          isShown_($id("reportOverlay")) ||
@@ -2274,38 +2274,6 @@ window.addEventListener("resize", function() {
   if (typeof map !== 'undefined' && map) {
     map.invalidateSize();
   }
-});
-
-// =========================================================
-// 15. INITIALIZATION
-// =========================================================
-// 📌 นำคำสั่งตั้งค่าเริ่มต้น มาใส่ไว้ใน DOMContentLoaded เพื่อรอให้ HTML โหลดเสร็จก่อน 100%
-document.addEventListener("DOMContentLoaded", function() {
-  refreshOperatorPill();
-  updateMuteBtn();
-  loadLogo(); 
-  
-  var canvas = document.getElementById("mapCanvas");
-  if(canvas) {
-    buildMapDotsOnce_();
-  } else {
-    console.warn("Waiting for map container...");
-    setTimeout(buildMapDotsOnce_, 500); // สำรองการรอ
-  }
-
-  var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
-  setPageMode(savedMode);
-  setAutoSwitchButtons_();
-  if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
-});
-
-window.addEventListener("load", function(){
-  setTimeout(function(){
-    fetchStatus(); 
-    refreshVibStatus_(); 
-    startPolling();
-    // (auto switch ทำงานแล้วใน DOMContentLoaded ไม่ต้องเรียกซ้ำตรงนี้)
-  }, 50);
 });
 
 // =========================================================
@@ -2793,3 +2761,33 @@ function updateGlobalLeftAlarms_() {
 
   if(list.innerHTML !== html) { list.innerHTML = html; }
 }
+
+// =========================================================
+// 15. INITIALIZATION (ย้ายมาไว้ล่างสุด)
+// =========================================================
+document.addEventListener("DOMContentLoaded", function() {
+  refreshOperatorPill();
+  updateMuteBtn();
+  loadLogo(); 
+  
+  var canvas = document.getElementById("mapCanvas");
+  if(canvas) {
+    buildMapDotsOnce_();
+  } else {
+    console.warn("Waiting for map container...");
+    setTimeout(buildMapDotsOnce_, 500); 
+  }
+
+  var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
+  setPageMode(savedMode);
+  setAutoSwitchButtons_();
+  if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
+});
+
+window.addEventListener("load", function(){
+  setTimeout(function(){
+    fetchStatus(); 
+    refreshVibStatus_(); 
+    startPolling();
+  }, 50);
+});
