@@ -1252,53 +1252,7 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
-// 📌 1. ย้ายปุ่ม Zoom มาไว้มุมขวาล่าง
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  // 📌 2. สร้างกล่องแสดงพิกัด (Coordinates Overlay) มุมซ้ายล่าง
-  var coordControl = L.control({ position: 'bottomleft' });
-
-  coordControl.onAdd = function(map) {
-    this._div = L.DomUtil.create('div', 'map-coords mono');
-    // ตกแต่ง CSS ให้สวยและลอยอยู่บนสุด
-    this._div.style.background = 'rgba(0,0,0,0.75)';
-    this._div.style.color = '#00e0ff'; 
-    this._div.style.padding = '5px 10px';
-    this._div.style.borderRadius = '8px';
-    this._div.style.fontSize = '11px';
-    this._div.style.fontWeight = 'bold';
-    this._div.style.border = '1px solid rgba(0,224,255,0.4)';
-    this._div.style.backdropFilter = 'blur(4px)';
-    this._div.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)';
-    this._div.style.pointerEvents = 'none'; // เพื่อไม่ให้กล่องนี้บล็อกการทัชแผนที่
-    this._div.style.zIndex = '9999'; // บังคับให้อยู่บนสุด
-    
-    // ตั้งค่าเริ่มต้น
-    var center = map.getCenter();
-    this.update(center);
-    return this._div;
-  };
-
-  // ฟังก์ชันย่อยสำหรับอัปเดตข้อความ
-  coordControl.update = function(latlng) {
-    if (this._div && latlng) {
-      this._div.innerHTML = 'Lat: ' + latlng.lat.toFixed(5) + '<br>Lng: ' + latlng.lng.toFixed(5);
-    }
-  };
-
-  coordControl.addTo(map);
-
-  // 📌 3. อัปเดตพิกัดแบบเรียลไทม์ (รองรับทั้ง Desktop และ Mobile)
-  
-  // สำหรับ PC: เมื่อขยับเมาส์
-  map.on('mousemove', function(e) {
-    coordControl.update(e.latlng);
-  });
-  
-  // สำหรับ Mobile: เมื่อใช้นิ้วลาก/แพนแผนที่ (จะแสดงพิกัดกึ่งกลางจอ)
-  map.on('move', function() {
-    coordControl.update(map.getCenter());
-  });
   map.on('click', function(e) {
     if (coordContainer) {
       coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
@@ -1313,7 +1267,7 @@ function initLeafletMap_() {
 
     BASE_ZOOM = map.getZoom(); 
   } else {
-    map.setView([8.1, 99.6], BASE_ZOOM);
+    map.setView([14.5, 100.5], BASE_ZOOM);
   }
   
   map.__BASE_ZOOM = BASE_ZOOM; 
