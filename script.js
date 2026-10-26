@@ -2121,7 +2121,7 @@ function isShown_(el){
   if(el.classList && el.classList.contains("open")) return true;
   var st=window.getComputedStyle?getComputedStyle(el):null;
   if(!st) return false;
-  return st.display !== "none" && st.visibility !== "hidden" && st.opacity !== "0"; // ✅ ใส่ Quotes ถูกต้อง
+  return st.display!=none && st.visibility!=hidden && st.opacity!=0;
 }
 function shouldPauseAutoSwitch_(){
   return isShown_($id("overlay")) ||
@@ -2279,23 +2279,33 @@ window.addEventListener("resize", function() {
 // =========================================================
 // 15. INITIALIZATION
 // =========================================================
-refreshOperatorPill();
-updateMuteBtn();
-loadLogo(); 
-buildMapDotsOnce_();
+// 📌 นำคำสั่งตั้งค่าเริ่มต้น มาใส่ไว้ใน DOMContentLoaded เพื่อรอให้ HTML โหลดเสร็จก่อน 100%
+document.addEventListener("DOMContentLoaded", function() {
+  refreshOperatorPill();
+  updateMuteBtn();
+  loadLogo(); 
+  
+  var canvas = document.getElementById("mapCanvas");
+  if(canvas) {
+    buildMapDotsOnce_();
+  } else {
+    console.warn("Waiting for map container...");
+    setTimeout(buildMapDotsOnce_, 500); // สำรองการรอ
+  }
 
-var savedMode=localStorage.getItem("scada_page_mode")||"PM10";
-setPageMode(savedMode);
-setAutoSwitchButtons_();
-if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
+  var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
+  setPageMode(savedMode);
+  setAutoSwitchButtons_();
+  if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
+});
 
-window.addEventListener("load",function(){
+window.addEventListener("load", function(){
   setTimeout(function(){
     fetchStatus(); 
     refreshVibStatus_(); 
     startPolling();
-    if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
-  },50);
+    // (auto switch ทำงานแล้วใน DOMContentLoaded ไม่ต้องเรียกซ้ำตรงนี้)
+  }, 50);
 });
 
 // =========================================================
