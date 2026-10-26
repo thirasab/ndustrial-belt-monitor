@@ -23,9 +23,6 @@ let __AI_ROWS__ = [];
 // =========================================================
 // 2. HELPER API CALLER (แทนที่ google.script.run)
 // =========================================================
-/**
- * ฟังก์ชันกลางสำหรับเรียกข้อมูลจาก GAS
- */
 async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) {
   try {
     let url = new URL(GAS_URL);
@@ -719,7 +716,6 @@ function fetchPm10SnapshotAll_() {
     .catch(err => console.error("PM10 Batch Fetch error: ", err));
 }
 
-// 📌 ฟังก์ชันรองรับการดึงข้อมูลย้อนหลังตามจำนวนวัน (2, 5, 7 วัน)
 function fetchPm10ForPos_(pos, forceRefresh, days){
   var currentDays = days || window.__PM10_CURRENT_DAYS__ || 2;
   window.__PM10_CURRENT_DAYS__ = currentDays;
@@ -1054,7 +1050,7 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
   if (globalMinVib === Infinity) globalMinVib = 0;
   if (globalMinSound === Infinity) globalMinSound = 40;
 
-  // 📌 อัปเดต Limit กราฟความสั่นสะเทือนขั้นต่ำที่ 10 mm/s
+  // ตั้งค่ากราฟความสั่นสะเทือนขั้นต่ำ 10 mm/s
   let targetMaxVib = Math.max(10, globalMaxVib * 1.1);       
   let targetMaxSound = Math.max(90, globalMaxSound + 5);   
   let targetMinVib = Math.max(0, globalMinVib - 0.5); 
@@ -1419,7 +1415,6 @@ function setPm10Latest_(pos, row) {
 function cachePm10Series_(cacheKey, rows){
   __PM10_SERIES__[cacheKey] = Array.isArray(rows) ? rows : [];
   __PM10_SERIES_FETCHED_AT__[cacheKey] = Date.now();
-  // setPm10Latest ถูกเรียกใช้งานแยกต่างหากใน fetchPm10ForPos_
 }
 function hasUsablePm10Series_(cacheKey){
   return Array.isArray(__PM10_SERIES__[cacheKey])&&__PM10_SERIES__[cacheKey].length>0;
@@ -1501,7 +1496,6 @@ function updateMapDots_PM10_(){
   }
 }
 
-// 📌 อัปเดต Modal PM10 ให้รับ currentDays เพื่อวาด Dropdown เลือกวัน
 function renderPm10Modal_(pos, res, currentDays){
   currentDays = currentDays || 2;
   var rows=(res&&res.rows)?res.rows:[];
@@ -1534,7 +1528,6 @@ function renderPm10Modal_(pos, res, currentDays){
 
   var html='<div style="display:flex;flex-direction:column;gap:10px;">';
 
-  // 📌 เพิ่ม Dropdown ตัวเลือกจำนวนวัน
   html+='<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); padding:10px 12px; border-radius:10px; border:1px solid var(--border);">';
   html+='<div style="font-weight:900; font-size:13px;">📈 เลือกช่วงเวลาดูแนวโน้ม</div>';
   html+='<select style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-weight:bold; cursor:pointer; outline:none;" onchange="fetchPm10ForPos_(' + pos + ', true, this.value)">';
@@ -1569,10 +1562,11 @@ function renderPm10Modal_(pos, res, currentDays){
   html+='<div class="rCard" style="padding:10px;">';
   html+='<div style="overflow:auto;max-height:320px;">';
   html+='<table><thead><tr><th>Time</th><th style="text-align:right;">PM10 (µg/m³)</th><th>Status</th></tr></thead><tbody>';
-for(var r=rows.length-1;r>=0;r--){
-    // 📌 ปรับให้ตารางแสดงผลตรงกับคอลัมน์ A เช่นเดียวกัน
-    var row=rows[r]||{}, tv=String(row.rawLabel || row.time || "-"), vv2=num_(row.v);
-    var rs=sev_(vv2);
+  for(var r=rows.length-1;r>=0;r--){
+    var row = rows[r] || {};
+    var tv = String(row.rawLabel || row.time || "-");
+    var vv2 = num_(row.v);
+    var rs = sev_(vv2);
     html+='<tr><td class="mono">'+esc(tv)+'</td><td class="mono" style="text-align:right;font-weight:900;color:'+rs.color+';">'+esc(fmt_(vv2))+'</td><td class="'+esc(rs.cls)+'">'+esc(rs.txt)+'</td></tr>';
   }
   html+='</tbody></table></div></div>';
@@ -1593,21 +1587,17 @@ function drawPm10Chart_(rows) {
     __PM10_CHART__ = null;
   }
 
-var clean = (rows || []).filter(function(r) { 
+  var clean = (rows || []).filter(function(r) { 
     return r && r.v != null && isFinite(Number(r.v)); 
   }).map(function(r) { 
     return { 
       time: String(r.time || ""), 
-      rawLabel: (r.rawLabel !== undefined && r.rawLabel !== "") ? r.rawLabel : String(r.time || ""), 
+      rawLabel: (r.rawLabel !== undefined && r.rawLabel !== "") ? r.rawLabel : String(r.time || ""),
       v: Number(r.v) 
     }; 
   });
   
-  var labels = clean.map(function(r) {
-    // 📌 ดึงค่าข้อความคอลัมน์ A ตรงๆ มาใช้เป็น Label แกน X
-    return r.rawLabel; 
-  });
-  
+  var labels = clean.map(function(r) { return r.rawLabel; });
   var data = clean.map(function(r) { return r.v; });
   var pointBg = data.map(function(v) { 
     return v >= PM10_BAD ? "#ff3b30" : v >= PM10_WARN ? "#ff9f0a" : "#1fd27a"; 
@@ -1621,12 +1611,10 @@ var clean = (rows || []).filter(function(r) {
   if (__PM10_CHART__) {
     __PM10_CHART__.data.labels = labels;
     __PM10_CHART__.data.datasets[0].data = data;
-    __PM10_CHART__.data.datasets[0].pointBackgroundColor = pointBg;
-    __PM10_CHART__.data.datasets[0].pointBorderColor = pointBg;
+    __PM10_CHART__.data.datasets[0].pointHoverBackgroundColor = pointBg;
     
     if (__PM10_CHART__.options.scales.x && __PM10_CHART__.options.scales.y) {
       __PM10_CHART__.options.scales.x.ticks.color = textColor;
-      __PM10_CHART__.options.scales.x.grid.color = gridColor;
       __PM10_CHART__.options.scales.y.ticks.color = textColor;
       __PM10_CHART__.options.scales.y.grid.color = gridColor;
     }
@@ -1640,12 +1628,13 @@ var clean = (rows || []).filter(function(r) {
         datasets: [{
           label: "PM10 (µg/m³)",
           data: data,
-          tension: 0.3,
-          pointRadius: isMobile ? 1.5 : 3,
-          pointHoverRadius: isMobile ? 2 : 5,
+          tension: 0.2,
           borderWidth: 2,
-          pointBackgroundColor: pointBg,
-          pointBorderColor: pointBg,
+          pointRadius: 0, 
+          pointHoverRadius: 5,
+          pointHoverBorderWidth: 2,
+          pointHoverBackgroundColor: pointBg,
+          pointHoverBorderColor: "#ffffff",
           segment: {
             borderColor: function(ctx) {
               var v = data[ctx.p1DataIndex];
@@ -1668,16 +1657,19 @@ var clean = (rows || []).filter(function(r) {
         responsive: true,
         maintainAspectRatio: false,
         animation: isMobile ? false : { duration: 400 },
+        interaction: { mode: "index", intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
-            mode: "index",
-            intersect: false,
+            backgroundColor: "rgba(10, 18, 32, 0.9)",
+            titleFont: { size: 13, family: "ui-monospace, monospace" },
+            bodyFont: { size: 12, weight: "bold" },
+            padding: 10,
             callbacks: {
               label: function(ctx) {
                 var v = ctx.parsed.y;
                 var s = v >= PM10_BAD ? "⚠ BAD" : v >= PM10_WARN ? "▲ WARN" : "✓ OK";
-                return " " + v.toFixed(1) + " µg/m³ (" + s + ")";
+                return " PM10: " + v.toFixed(1) + " µg/m³ (" + s + ")";
               }
             }
           },
@@ -1686,17 +1678,27 @@ var clean = (rows || []).filter(function(r) {
             zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
           }
         },
-        interaction: { mode: "index", intersect: false },
         scales: {
           x: { 
-            ticks: { maxRotation: 0, autoSkip: true, color: textColor, font: { size: 10 } }, 
-            grid: { color: gridColor } 
+            ticks: { 
+              color: textColor, 
+              font: { size: 10, family: "ui-monospace, monospace" },
+              maxRotation: 0,
+              autoSkip: true, 
+              maxTicksLimit: isMobile ? 6 : 12 
+            }, 
+            grid: { display: false } 
           },
           y: {
             beginAtZero: true,
-            ticks: { color: textColor, font: { size: 10 }, callback: function(v) { return v + " µg"; } },
-            grid: { color: gridColor },
-            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150); }
+            suggestedMax: 150,
+            ticks: { 
+              color: textColor, 
+              font: { size: 10, family: "ui-monospace, monospace" }, 
+              stepSize: 50
+            },
+            grid: { color: gridColor, borderDash: [4, 4] },
+            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; }
           }
         }
       },
@@ -1719,6 +1721,11 @@ var clean = (rows || []).filter(function(r) {
             ctx2.stroke();
             ctx2.setLineDash([]);
             ctx2.globalAlpha = 0.85;
+            
+            var textWidth = ctx2.measureText(label).width;
+            ctx2.fillStyle = isDark ? "rgba(10,18,32,0.8)" : "rgba(255,255,255,0.8)";
+            ctx2.fillRect(area.left + 2, y - 12, textWidth + 4, 11);
+            
             ctx2.fillStyle = color; 
             ctx2.font = "bold 10px ui-monospace,monospace";
             ctx2.fillText(label, area.left + 4, y - 3);
@@ -2499,7 +2506,6 @@ async function reportSave_(){
     var filesEl=$id("r_files");
     var fileArr=(filesEl&&filesEl.files&&filesEl.files.length)?Array.from(filesEl.files):[];
     
-    // 📌 บังคับให้ต้องแนบรูป (ตามการตั้งค่า)
     if(!__REPORT_EDIT_ID__ && fileArr.length === 0){
       showToast("Missing image","warn","บังคับให้ต้องแนบรูปก่อนบันทึกงาน");
       return;
@@ -2692,7 +2698,6 @@ function updateGlobalLeftAlarms_() {
   var header = document.getElementById("alarmPanelHeader");
   var list = document.getElementById("alarmPanelList");
 
-  // อัปเดตแถบข้อความวิ่ง (Live Ticker)
   var ticker = document.getElementById("liveTickerContent");
   if (ticker) {
     var tickerHtml = '<span>';
