@@ -1246,16 +1246,27 @@ function initLeafletMap_() {
 
   var BASE_ZOOM = 17.5; 
   map = L.map('mapCanvas', {
-    zoomControl: false, // เอาปุ่มซูมเริ่มต้นออกเพื่อจัดตำแหน่งใหม่
+    zoomControl: false, 
     attributionControl: false,
     zoomSnap: 0.5,       
     wheelPxPerZoomLevel: 120 
   });
 
-  // 📌 1. ย้ายปุ่ม Zoom มาไว้มุมขวาล่าง
+  // 📌 1. ย้ายการตั้งค่า Center & Zoom มาไว้ตรงนี้ทันที (ก่อน Add Control ใดๆ)
+  if (hasPoints) {
+    var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
+    map.fitBounds(bounds, { padding: mapPadding }); 
+    map.setMaxBounds(bounds.pad(0.3));
+    map.options.minZoom = map.getZoom() - 1;
+    BASE_ZOOM = map.getZoom(); 
+  } else {
+    map.setView([14.5, 100.5], BASE_ZOOM);
+  }
+  map.__BASE_ZOOM = BASE_ZOOM; 
+
+  // 📌 2. จากนั้นค่อยเพิ่มปุ่มซูมและกล่องพิกัด
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  // 📌 2. สร้างกล่องแสดงพิกัด (Coordinates Overlay) มุมซ้ายล่าง
   var coordControl = L.control({position: 'bottomleft'});
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
@@ -1272,7 +1283,6 @@ function initLeafletMap_() {
   };
   var coordContainer = coordControl.addTo(map).getContainer();
 
-  // 📌 3. อัปเดตพิกัดเมื่อเลื่อนเมาส์หรือคลิกบนแผนที่
   map.on('mousemove', function(e) {
     if (coordContainer) {
       coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
@@ -1284,19 +1294,6 @@ function initLeafletMap_() {
     }
   });
 
-  if (hasPoints) {
-    var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
-    map.fitBounds(bounds, { padding: mapPadding }); 
-    map.setMaxBounds(bounds.pad(0.3));
-    map.options.minZoom = map.getZoom() - 1;
-
-    BASE_ZOOM = map.getZoom(); 
-  } else {
-    map.setView([14.5, 100.5], BASE_ZOOM);
-  }
-  
-  map.__BASE_ZOOM = BASE_ZOOM; 
-  
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 22,
     maxNativeZoom: 17
