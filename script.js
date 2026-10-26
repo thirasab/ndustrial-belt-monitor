@@ -1253,10 +1253,7 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
-  // 📌 1. ย้ายปุ่ม Zoom มาไว้มุมขวาล่าง
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-  // 📌 2. สร้างกล่องแสดงพิกัด (Coordinates Overlay) มุมซ้ายล่าง
+// 📌 2. สร้างกล่องแสดงพิกัดและระยะซูม (มุมซ้ายล่าง)
   var coordControl = L.control({ position: 'bottomleft' });
 
   coordControl.onAdd = function(map) {
@@ -1270,32 +1267,34 @@ function initLeafletMap_() {
     this._div.style.border = '1px solid rgba(0,224,255,0.4)';
     this._div.style.backdropFilter = 'blur(4px)';
     this._div.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)';
-    this._div.style.pointerEvents = 'none'; // ไม่บล็อกการสัมผัส
+    this._div.style.pointerEvents = 'none';
     this._div.style.zIndex = '9999';
+    this._div.style.lineHeight = '1.4'; // ปรับบรรทัดให้อ่านง่าย
     
-    var center = map.getCenter();
-    this.update(center);
+    this.update(map.getCenter(), map.getZoom());
     return this._div;
   };
 
-  coordControl.update = function(latlng) {
-    if (this._div && latlng) {
-      this._div.innerHTML = 'Lat: ' + latlng.lat.toFixed(5) + '<br>Lng: ' + latlng.lng.toFixed(5);
+  // ฟังก์ชันอัปเดตข้อความ Lat, Lng และ Zoom
+  coordControl.update = function(latlng, zoom) {
+    if (this._div && latlng && zoom !== undefined) {
+      this._div.innerHTML = 'Lat: ' + latlng.lat.toFixed(5) + ' | Lng: ' + latlng.lng.toFixed(5) +
+                            '<br>Zoom: ' + zoom.toFixed(1) + 'x';
     }
   };
   coordControl.addTo(map);
 
-  // 📌 3. อัปเดตพิกัดเรียลไทม์
-  map.on('mousemove', function(e) { coordControl.update(e.latlng); });
-  map.on('move', function() { coordControl.update(map.getCenter()); });
+  // 📌 3. อัปเดตพิกัดและ Zoom เรียลไทม์
+  map.on('mousemove', function(e) { coordControl.update(e.latlng, map.getZoom()); });
+  map.on('move', function() { coordControl.update(map.getCenter(), map.getZoom()); });
+  map.on('zoomend', function() { coordControl.update(map.getCenter(), map.getZoom()); }); // อัปเดตตอนซูมเสร็จ
 
   if (hasPoints) {
     // 📌 ปลดล็อก Auto-Zoom ให้กางออกจนเห็นครบทุกจุด
-    var mapPadding = window.innerWidth <= 768 ? [30, 30] : [80, 80];
-    map.fitBounds(bounds, { 
-      padding: mapPadding, 
-      maxZoom: 18 
-    }); 
+map.fitBounds(bounds, { 
+   padding: [120, 120], // ระยะขอบ (ยิ่งเยอะ ยิ่งซูมออกให้เห็นกว้างขึ้น)
+   maxZoom: 18        // ล็อกระยะซูมเข้าสูงสุด (ยิ่งเลขเยอะ ยิ่งซูมได้ลึก)
+}); 
     BASE_ZOOM = map.getZoom(); 
   } else {
     map.setView([14.5, 100.5], BASE_ZOOM);
