@@ -1569,8 +1569,9 @@ function renderPm10Modal_(pos, res, currentDays){
   html+='<div class="rCard" style="padding:10px;">';
   html+='<div style="overflow:auto;max-height:320px;">';
   html+='<table><thead><tr><th>Time</th><th style="text-align:right;">PM10 (µg/m³)</th><th>Status</th></tr></thead><tbody>';
-  for(var r=rows.length-1;r>=0;r--){
-    var row=rows[r]||{},tv=String(row.time||""),vv2=num_(row.v);
+for(var r=rows.length-1;r>=0;r--){
+    // 📌 ปรับให้ตารางแสดงผลตรงกับคอลัมน์ A เช่นเดียวกัน
+    var row=rows[r]||{}, tv=String(row.rawLabel || row.time || "-"), vv2=num_(row.v);
     var rs=sev_(vv2);
     html+='<tr><td class="mono">'+esc(tv)+'</td><td class="mono" style="text-align:right;font-weight:900;color:'+rs.color+';">'+esc(fmt_(vv2))+'</td><td class="'+esc(rs.cls)+'">'+esc(rs.txt)+'</td></tr>';
   }
@@ -1592,23 +1593,19 @@ function drawPm10Chart_(rows) {
     __PM10_CHART__ = null;
   }
 
-  var clean = (rows || []).filter(function(r) { 
+var clean = (rows || []).filter(function(r) { 
     return r && r.v != null && isFinite(Number(r.v)); 
   }).map(function(r) { 
-    return { time: String(r.time || ""), v: Number(r.v) }; 
+    return { 
+      time: String(r.time || ""), 
+      rawLabel: (r.rawLabel !== undefined && r.rawLabel !== "") ? r.rawLabel : String(r.time || ""), 
+      v: Number(r.v) 
+    }; 
   });
   
-  // 📌 ปลดล็อกการตัด 50 ค่า เพื่อแสดงข้อมูลเต็มตามจำนวนวันที่เลือก
-  // if (clean.length > 50) clean = clean.slice(clean.length - 50); 
-  
   var labels = clean.map(function(r) {
-    var t = r.time; 
-    // 📌 ย่อรูปแบบเวลาเป็น DD/MM HH:MM
-    if (t.indexOf(" ") >= 0) {
-      var parts = t.split(" ");
-      return parts[0].substring(0, 5) + " " + parts[1].substring(0, 5); 
-    }
-    return t;
+    // 📌 ดึงค่าข้อความคอลัมน์ A ตรงๆ มาใช้เป็น Label แกน X
+    return r.rawLabel; 
   });
   
   var data = clean.map(function(r) { return r.v; });
