@@ -1313,7 +1313,7 @@ function initLeafletMap_() {
 
     BASE_ZOOM = map.getZoom(); 
   } else {
-    map.setView([8.10507, 99.67441], BASE_ZOOM);
+    map.setView([8.1, 99.6], BASE_ZOOM);
   }
   
   map.__BASE_ZOOM = BASE_ZOOM; 
