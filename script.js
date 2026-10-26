@@ -1597,6 +1597,7 @@ function drawPm10Chart_(rows) {
     }; 
   });
   
+  // ใช้ rawLabel สำหรับระบุบนแกนเวลา (จากคอลัมน์ A โดยตรง)
   var labels = clean.map(function(r) { return r.rawLabel; });
   var data = clean.map(function(r) { return r.v; });
   var pointBg = data.map(function(v) { 
@@ -1606,6 +1607,8 @@ function drawPm10Chart_(rows) {
   var isDark = (document.body.getAttribute("data-theme") || "night") !== "day";
   var gridColor = isDark ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)";
   var textColor = isDark ? "#9fb2c9" : "#4b5b70";
+  var tooltipBg = isDark ? "rgba(10, 18, 32, 0.9)" : "rgba(255, 255, 255, 0.95)";
+  var tooltipText = isDark ? "#ffffff" : "#000000";
   var isMobile = window.innerWidth <= 768;
 
   if (__PM10_CHART__) {
@@ -1628,9 +1631,9 @@ function drawPm10Chart_(rows) {
         datasets: [{
           label: "PM10 (µg/m³)",
           data: data,
-          tension: 0.2,
+          tension: 0.2, // Clean curves
           borderWidth: 2,
-          pointRadius: 0, 
+          pointRadius: 0, // Clean lines (hide points unless hovered)
           pointHoverRadius: 5,
           pointHoverBorderWidth: 2,
           pointHoverBackgroundColor: pointBg,
@@ -1657,14 +1660,18 @@ function drawPm10Chart_(rows) {
         responsive: true,
         maintainAspectRatio: false,
         animation: isMobile ? false : { duration: 400 },
-        interaction: { mode: "index", intersect: false },
+        interaction: { mode: "index", intersect: false }, // Crosshair feeling
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "rgba(10, 18, 32, 0.9)",
+            backgroundColor: tooltipBg,
+            titleColor: tooltipText,
+            bodyColor: tooltipText,
             titleFont: { size: 13, family: "ui-monospace, monospace" },
             bodyFont: { size: 12, weight: "bold" },
             padding: 10,
+            borderWidth: 1,
+            borderColor: gridColor,
             callbacks: {
               label: function(ctx) {
                 var v = ctx.parsed.y;
@@ -1683,11 +1690,11 @@ function drawPm10Chart_(rows) {
             ticks: { 
               color: textColor, 
               font: { size: 10, family: "ui-monospace, monospace" },
-              maxRotation: 0,
+              maxRotation: 0, // Keep text horizontal
               autoSkip: true, 
-              maxTicksLimit: isMobile ? 6 : 12 
+              maxTicksLimit: isMobile ? 6 : 10 
             }, 
-            grid: { display: false } 
+            grid: { display: false } // Hide vertical grid for cleaner look
           },
           y: {
             beginAtZero: true,
@@ -1697,8 +1704,8 @@ function drawPm10Chart_(rows) {
               font: { size: 10, family: "ui-monospace, monospace" }, 
               stepSize: 50
             },
-            grid: { color: gridColor, borderDash: [4, 4] },
-            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; }
+            grid: { color: gridColor, borderDash: [4, 4] }, // Dashed horizontal lines
+            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; } // Always leave top padding
           }
         }
       },
