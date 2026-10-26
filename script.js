@@ -1050,7 +1050,6 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
   if (globalMinVib === Infinity) globalMinVib = 0;
   if (globalMinSound === Infinity) globalMinSound = 40;
 
-  // ตั้งค่ากราฟความสั่นสะเทือนขั้นต่ำ 10 mm/s
   let targetMaxVib = Math.max(10, globalMaxVib * 1.1);       
   let targetMaxSound = Math.max(90, globalMaxSound + 5);   
   let targetMinVib = Math.max(0, globalMinVib - 0.5); 
@@ -1247,10 +1246,42 @@ function initLeafletMap_() {
 
   var BASE_ZOOM = 17.5; 
   map = L.map('mapCanvas', {
-    zoomControl: false, 
+    zoomControl: false, // เอาปุ่มซูมเริ่มต้นออกเพื่อจัดตำแหน่งใหม่
     attributionControl: false,
     zoomSnap: 0.5,       
     wheelPxPerZoomLevel: 120 
+  });
+
+  // 📌 1. ย้ายปุ่ม Zoom มาไว้มุมขวาล่าง
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  // 📌 2. สร้างกล่องแสดงพิกัด (Coordinates Overlay) มุมซ้ายล่าง
+  var coordControl = L.control({position: 'bottomleft'});
+  coordControl.onAdd = function(map) {
+    this._div = L.DomUtil.create('div', 'map-coords mono');
+    this._div.style.background = 'rgba(0,0,0,0.65)';
+    this._div.style.color = '#00e0ff'; 
+    this._div.style.padding = '4px 8px';
+    this._div.style.borderRadius = '6px';
+    this._div.style.fontSize = '11px';
+    this._div.style.fontWeight = 'bold';
+    this._div.style.border = '1px solid rgba(0,224,255,0.3)';
+    this._div.style.backdropFilter = 'blur(4px)';
+    this._div.innerHTML = 'Lat: -, Lng: -';
+    return this._div;
+  };
+  var coordContainer = coordControl.addTo(map).getContainer();
+
+  // 📌 3. อัปเดตพิกัดเมื่อเลื่อนเมาส์หรือคลิกบนแผนที่
+  map.on('mousemove', function(e) {
+    if (coordContainer) {
+      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
+    }
+  });
+  map.on('click', function(e) {
+    if (coordContainer) {
+      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
+    }
   });
 
   if (hasPoints) {
@@ -1564,6 +1595,7 @@ function renderPm10Modal_(pos, res, currentDays){
   html+='<table><thead><tr><th>Time</th><th style="text-align:right;">PM10 (µg/m³)</th><th>Status</th></tr></thead><tbody>';
   for(var r=rows.length-1;r>=0;r--){
     var row = rows[r] || {};
+    // 📌 ดึง rawLabel จากคอลัมน์ A โดยตรง
     var tv = String(row.rawLabel || row.time || "-");
     var vv2 = num_(row.v);
     var rs = sev_(vv2);
@@ -1597,7 +1629,6 @@ function drawPm10Chart_(rows) {
     }; 
   });
   
-  // ใช้ rawLabel สำหรับระบุบนแกนเวลา (จากคอลัมน์ A โดยตรง)
   var labels = clean.map(function(r) { return r.rawLabel; });
   var data = clean.map(function(r) { return r.v; });
   var pointBg = data.map(function(v) { 
@@ -1631,9 +1662,9 @@ function drawPm10Chart_(rows) {
         datasets: [{
           label: "PM10 (µg/m³)",
           data: data,
-          tension: 0.2, // Clean curves
+          tension: 0.2, // 📌 Clean curves
           borderWidth: 2,
-          pointRadius: 0, // Clean lines (hide points unless hovered)
+          pointRadius: 0, // 📌 Clean lines (hide points unless hovered)
           pointHoverRadius: 5,
           pointHoverBorderWidth: 2,
           pointHoverBackgroundColor: pointBg,
@@ -1660,7 +1691,7 @@ function drawPm10Chart_(rows) {
         responsive: true,
         maintainAspectRatio: false,
         animation: isMobile ? false : { duration: 400 },
-        interaction: { mode: "index", intersect: false }, // Crosshair feeling
+        interaction: { mode: "index", intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -1690,11 +1721,11 @@ function drawPm10Chart_(rows) {
             ticks: { 
               color: textColor, 
               font: { size: 10, family: "ui-monospace, monospace" },
-              maxRotation: 0, // Keep text horizontal
+              maxRotation: 0, // 📌 บังคับข้อความแนวนอนเสมอ
               autoSkip: true, 
               maxTicksLimit: isMobile ? 6 : 10 
             }, 
-            grid: { display: false } // Hide vertical grid for cleaner look
+            grid: { display: false } // 📌 ซ่อนเส้น Grid แนวตั้ง
           },
           y: {
             beginAtZero: true,
@@ -1702,10 +1733,10 @@ function drawPm10Chart_(rows) {
             ticks: { 
               color: textColor, 
               font: { size: 10, family: "ui-monospace, monospace" }, 
-              stepSize: 50
+              stepSize: 50 // 📌 เพิ่มทีละ 50
             },
-            grid: { color: gridColor, borderDash: [4, 4] }, // Dashed horizontal lines
-            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; } // Always leave top padding
+            grid: { color: gridColor, borderDash: [4, 4] },
+            afterDataLimits: function(axis) { axis.max = Math.max(axis.max || 0, 150) * 1.15; } // 📌 เผื่อที่ด้านบน 15% เสมอ
           }
         }
       },
@@ -2093,7 +2124,7 @@ function isShown_(el){
   if(el.classList && el.classList.contains("open")) return true;
   var st=window.getComputedStyle?getComputedStyle(el):null;
   if(!st) return false;
-  return st.display!=="none" && st.visibility!=="hidden" && st.opacity!=="0";
+  return st.display!=none && st.visibility!=hidden && st.opacity!=0;
 }
 function shouldPauseAutoSwitch_(){
   return isShown_($id("overlay")) ||
