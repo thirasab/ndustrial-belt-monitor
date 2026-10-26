@@ -23,15 +23,11 @@ let __AI_ROWS__ = [];
 // =========================================================
 // 2. HELPER API CALLER (แทนที่ google.script.run)
 // =========================================================
-/**
- * ฟังก์ชันกลางสำหรับเรียกข้อมูลจาก GAS
- */
 async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) {
   try {
     let url = new URL(GAS_URL);
     url.searchParams.append('action', action);
     
-    // แนบพารามิเตอร์อื่นๆ ในกรณี GET
     if (method === 'GET') {
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.append(key, value);
@@ -720,56 +716,76 @@ function fetchPm10SnapshotAll_() {
     .catch(err => console.error("PM10 Batch Fetch error: ", err));
 }
 
-function fetchPm10ForPos_(pos,forceRefresh){
-  var hasCache=hasUsablePm10Series_(pos);
-  var canUseCache=hasCache&&!forceRefresh&&isFreshPm10SeriesCache_(pos);
+// ================= PM10 CACHE & FETCH REVISED =================
+function cachePm10Series_(pos, rows, rangeKey) {
+  var key = rangeKey ? (pos + "_" + rangeKey) : pos;
+  __PM10_SERIES__[key] = Array.isArray(rows) ? rows : [];
+  __PM10_SERIES_FETCHED_AT__[key] = Date.now();
+  setPm10Latest_(pos, pickLatestPm10Row_(__PM10_SERIES__[key]));
+}
+function hasUsablePm10Series_(pos, rangeKey) {
+  var key = rangeKey ? (pos + "_" + rangeKey) : pos;
+  return Array.isArray(__PM10_SERIES__[key]) && __PM10_SERIES__[key].length > 0;
+}
+function isFreshPm10SeriesCache_(pos, rangeKey) {
+  var key = rangeKey ? (pos + "_" + rangeKey) : pos;
+  var fetchedAt = Number(__PM10_SERIES_FETCHED_AT__[key] || 0);
+  return fetchedAt > 0 && (Date.now() - fetchedAt) <= PM10_MODAL_CACHE_TTL_MS;
+}
 
-  setText("modalTitle","PM10 • POS "+pos);
-  if(canUseCache){
-    renderPm10Modal_(pos,{ok:true,rows:__PM10_SERIES__[pos]||[]});
+function fetchPm10ForPos_(pos, forceRefresh, rangeKey) {
+  rangeKey = rangeKey || "2d"; 
+  var hasCache = hasUsablePm10Series_(pos, rangeKey);
+  var canUseCache = hasCache && !forceRefresh && isFreshPm10SeriesCache_(pos, rangeKey);
+  var cacheKey = pos + "_" + rangeKey;
+
+  setText("modalTitle", "PM10 • POS " + pos);
+  if (canUseCache) {
+    renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, rangeKey);
     openModal();
     return;
   }
 
-  if(__PM_FETCH_LOCK__&&hasCache){
-    renderPm10Modal_(pos,{ok:true,rows:__PM10_SERIES__[pos]||[]});
+  if (__PM_FETCH_LOCK__ && hasCache) {
+    renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, rangeKey);
     openModal();
     return;
   }
-  if(__PM_FETCH_LOCK__){showToast("PM10 busy","warn","please wait…");return;}
+  if (__PM_FETCH_LOCK__) { showToast("PM10 busy", "warn", "please wait…"); return; }
 
-  __PM_FETCH_LOCK__=true;
+  __PM_FETCH_LOCK__ = true;
   destroyAllModalCharts_();
-  setHTML("modalBody","<div class='skeleton' style='height:80px;margin-bottom:8px;'></div><div class='skeleton' style='height:240px;'></div>");
+  setHTML("modalBody", "<div class='skeleton' style='height:80px;margin-bottom:8px;'></div><div class='skeleton' style='height:240px;'></div>");
   openModal();
 
-  callGasAPI('getPm10Latest100', {pos: pos})
+  callGasAPI('getPm10Latest100', { pos: pos, rangeKey: rangeKey })
     .then(res => {
-      __PM_FETCH_LOCK__=false;
-      if(!res||res.ok===false){
-        if(hasCache){
-          renderPm10Modal_(pos,{ok:true,rows:__PM10_SERIES__[pos]||[]});
-          showToast("PM10 cached","warn","showing cached data");
+      __PM_FETCH_LOCK__ = false;
+      if (!res || res.ok === false) {
+        if (hasCache) {
+          renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, rangeKey);
+          showToast("PM10 cached", "warn", "showing cached data");
           return;
         }
-        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
+        setHTML("modalBody", '<div class="mono" style="color:var(--other);font-weight:900;">ERROR: ' + esc((res && res.error) ? res.error : "unknown") + '</div>');
         return;
       }
-      cachePm10Series_(pos,res.rows||[]);
+      cachePm10Series_(pos, res.rows || [], rangeKey);
       updateMapDotPm10_(pos);
-      if(__PAGE_MODE__==="PM10") updatePosCards_PM10_();
-      renderPm10Modal_(pos,res);
+      if (__PAGE_MODE__ === "PM10") updatePosCards_PM10_();
+      renderPm10Modal_(pos, res, rangeKey);
     })
     .catch(err => {
-      __PM_FETCH_LOCK__=false;
-      if(hasCache){
-        renderPm10Modal_(pos,{ok:true,rows:__PM10_SERIES__[pos]||[]});
-        showToast("PM10 cached","warn","showing cached data");
+      __PM_FETCH_LOCK__ = false;
+      if (hasCache) {
+        renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, rangeKey);
+        showToast("PM10 cached", "warn", "showing cached data");
         return;
       }
-      setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
+      setHTML("modalBody", '<div class="mono" style="color:var(--other);font-weight:900;">ERROR: ' + esc(String(err)) + '</div>');
     });
 }
+// =========================================================
 
 function loadLogo(){
   var img=$id("logoImg"); if(!img) return;
@@ -1407,18 +1423,7 @@ function setPm10Latest_(pos, row) {
     delete __PM10_LATEST__[pos]; 
   } 
 }
-function cachePm10Series_(pos,rows){
-  __PM10_SERIES__[pos]=Array.isArray(rows)?rows:[];
-  __PM10_SERIES_FETCHED_AT__[pos]=Date.now();
-  setPm10Latest_(pos,pickLatestPm10Row_(__PM10_SERIES__[pos]));
-}
-function hasUsablePm10Series_(pos){
-  return Array.isArray(__PM10_SERIES__[pos])&&__PM10_SERIES__[pos].length>0;
-}
-function isFreshPm10SeriesCache_(pos){
-  var fetchedAt=Number(__PM10_SERIES_FETCHED_AT__[pos]||0);
-  return fetchedAt>0&&(Date.now()-fetchedAt)<=PM10_MODAL_CACHE_TTL_MS;
-}
+
 function applyMapDotState_(el, mode, cls, pulse){
   if(!el) return;
   el.className = "mapDot " + cls + (pulse ? (" " + (mode === "PM10" ? "pmPulse" : "beltPulse")) : "");
@@ -1492,72 +1497,82 @@ function updateMapDots_PM10_(){
   }
 }
 
-function renderPm10Modal_(pos,res){
-  var rows=(res&&res.rows)?res.rows:[];
-  var tzNote=(res&&res.tz)?String(res.tz):"";
-  function num_(x){ var n=Number(x); return isFinite(n)?n:null; }
-  function sev_(v){
-    if(v==null) return{txt:"-",cls:"sev0",color:"var(--muted)"};
-    if(v>=151) return{txt:"อันตราย ⚠",cls:"sev4",color:"var(--open)"};
-    if(v>=91)  return{txt:"ไม่ดีมาก",cls:"sev3",color:"#ff7a00"};
-    if(v>=51)  return{txt:"เริ่มมีผล",cls:"sev2",color:"var(--stuck)"};
-    if(v>=26)  return{txt:"ปานกลาง",cls:"sev1",color:"#a8d8a8"};
-    return{txt:"ดี ✓",cls:"sev0",color:"var(--ok)"};
+// ================= PM10 UI RENDERER REVISED =================
+function renderPm10Modal_(pos, res, currentRange) {
+  currentRange = currentRange || "2d";
+  var rows = (res && res.rows) ? res.rows : [];
+  var tzNote = (res && res.tz) ? String(res.tz) : "";
+  function num_(x) { var n = Number(x); return isFinite(n) ? n : null; }
+  function sev_(v) {
+    if (v == null) return { txt: "-", cls: "sev0", color: "var(--muted)" };
+    if (v >= 151) return { txt: "อันตราย ⚠", cls: "sev4", color: "var(--open)" };
+    if (v >= 91) return { txt: "ไม่ดีมาก", cls: "sev3", color: "#ff7a00" };
+    if (v >= 51) return { txt: "เริ่มมีผล", cls: "sev2", color: "var(--stuck)" };
+    if (v >= 26) return { txt: "ปานกลาง", cls: "sev1", color: "#a8d8a8" };
+    return { txt: "ดี ✓", cls: "sev0", color: "var(--ok)" };
   }
-  function fmt_(v){ if(v==null) return "-"; return(Math.round(v*10)/10).toString(); }
+  function fmt_(v) { if (v == null) return "-"; return (Math.round(v * 10) / 10).toString(); }
 
-  var latest=null;
-  for(var i=rows.length-1;i>=0;i--){
-    var vv=num_(rows[i]&&rows[i].v);
-    if(vv!=null){latest={time:String(rows[i].time||""),v:vv};break;}
+  var latest = null;
+  for (var i = rows.length - 1; i >= 0; i--) {
+    var vv = num_(rows[i] && rows[i].v);
+    if (vv != null) { latest = { time: String(rows[i].time || ""), v: vv }; break; }
   }
-  var latestVal=latest?latest.v:null;
-  var latestTime=latest?latest.time:(rows.length?String((rows[rows.length-1]||{}).time||""):"");
-  var sev=sev_(latestVal);
-  var vals=rows.map(function(r){return num_(r&&r.v);}).filter(function(v){return v!=null;});
-  var minV=vals.length?Math.min.apply(null,vals):null;
-  var maxV=vals.length?Math.max.apply(null,vals):null;
-  var avgV=vals.length?(vals.reduce(function(a,b){return a+b;},0)/vals.length):null;
-  var barPct=latestVal!=null?Math.min(100,(latestVal/200)*100):0;
-  var barColor=latestVal==null?"var(--muted)":latestVal>=PM10_BAD?"var(--open)":latestVal>=PM10_WARN?"var(--stuck)":"var(--ok)";
+  var latestVal = latest ? latest.v : null;
+  var latestTime = latest ? latest.time : (rows.length ? String((rows[rows.length - 1] || {}).time || "") : "");
+  var sev = sev_(latestVal);
+  var vals = rows.map(function (r) { return num_(r && r.v); }).filter(function (v) { return v != null; });
+  var minV = vals.length ? Math.min.apply(null, vals) : null;
+  var maxV = vals.length ? Math.max.apply(null, vals) : null;
+  var avgV = vals.length ? (vals.reduce(function (a, b) { return a + b; }, 0) / vals.length) : null;
+  var barPct = latestVal != null ? Math.min(100, (latestVal / 200) * 100) : 0;
+  var barColor = latestVal == null ? "var(--muted)" : latestVal >= PM10_BAD ? "var(--open)" : latestVal >= PM10_WARN ? "var(--stuck)" : "var(--ok)";
 
-  var html='<div style="display:flex;flex-direction:column;gap:10px;">';
-  html+='<div class="rCard">';
-  html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">';
-  html+='<div><div class="mono" style="font-size:26px;font-weight:800;color:'+sev.color+';">'+esc(fmt_(latestVal))+' <span style="font-size:13px;color:var(--muted);">µg/m³</span></div>';
-  html+='<div class="mono" style="color:var(--muted);margin-top:3px;font-size:11px;">'+esc(latestTime||"-")+(tzNote?" • "+esc(tzNote):"")+'</div></div>';
-  html+='<div class="'+esc(sev.cls)+'" style="font-size:14px;font-weight:900;white-space:nowrap;">'+esc(sev.txt)+'</div></div>';
-  html+='<div class="pm10LevelBar"><div class="pm10LevelFill" style="width:'+barPct+'%;background:'+barColor+';"></div></div>';
-  html+='<div class="pm10Legend">';
-  html+='<div class="pm10LegItem"><div class="pm10LegDot" style="background:var(--ok)"></div><span>OK <50</span></div>';
-  html+='<div class="pm10LegItem"><div class="pm10LegDot" style="background:var(--stuck)"></div><span>WARN 50-120</span></div>';
-  html+='<div class="pm10LegItem"><div class="pm10LegDot" style="background:var(--open)"></div><span>BAD >120</span></div>';
-  html+='</div>';
-  html+='<div class="pm10Summary">';
-  html+='<div class="pm10StatCard"><div class="pm10StatVal mono">'+esc(fmt_(minV))+'</div><div class="pm10StatLbl">MIN</div></div>';
-  html+='<div class="pm10StatCard"><div class="pm10StatVal mono">'+esc(fmt_(avgV?Math.round(avgV*10)/10:null))+'</div><div class="pm10StatLbl">AVG</div></div>';
-  html+='<div class="pm10StatCard"><div class="pm10StatVal mono">'+esc(fmt_(maxV))+'</div><div class="pm10StatLbl">MAX</div></div>';
-  html+='</div>';
-  html+='</div>';
-  html+='<div class="rCard" style="padding:10px;">';
-  html+='<div class="mono" style="color:var(--muted);margin-bottom:6px;font-size:11px;">PM10 trend — last '+rows.length+' readings</div>';
-  html+='<div style="height:240px;width:100%;"><canvas id="pm10Chart"></canvas></div>';
-  html+='</div>';
+  var html = '<div style="display:flex;flex-direction:column;gap:10px;">';
+  html += '<div class="rCard">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">';
+  html += '<div><div class="mono" style="font-size:26px;font-weight:800;color:' + sev.color + ';">' + esc(fmt_(latestVal)) + ' <span style="font-size:13px;color:var(--muted);">µg/m³</span></div>';
+  html += '<div class="mono" style="color:var(--muted);margin-top:3px;font-size:11px;">' + esc(latestTime || "-") + (tzNote ? " • " + esc(tzNote) : "") + '</div></div>';
+  html += '<div class="' + esc(sev.cls) + '" style="font-size:14px;font-weight:900;white-space:nowrap;">' + esc(sev.txt) + '</div></div>';
+  html += '<div class="pm10LevelBar"><div class="pm10LevelFill" style="width:' + barPct + '%;background:' + barColor + ';"></div></div>';
+  html += '<div class="pm10Legend">';
+  html += '<div class="pm10LegItem"><div class="pm10LegDot" style="background:var(--ok)"></div><span>OK <50</span></div>';
+  html += '<div class="pm10LegItem"><div class="pm10LegDot" style="background:var(--stuck)"></div><span>WARN 50-120</span></div>';
+  html += '<div class="pm10LegItem"><div class="pm10LegDot" style="background:var(--open)"></div><span>BAD >120</span></div>';
+  html += '</div>';
+  html += '<div class="pm10Summary">';
+  html += '<div class="pm10StatCard"><div class="pm10StatVal mono">' + esc(fmt_(minV)) + '</div><div class="pm10StatLbl">MIN</div></div>';
+  html += '<div class="pm10StatCard"><div class="pm10StatVal mono">' + esc(fmt_(avgV ? Math.round(avgV * 10) / 10 : null)) + '</div><div class="pm10StatLbl">AVG</div></div>';
+  html += '<div class="pm10StatCard"><div class="pm10StatVal mono">' + esc(fmt_(maxV)) + '</div><div class="pm10StatLbl">MAX</div></div>';
+  html += '</div>';
+  html += '</div>';
 
-  html+='<div class="rCard" style="padding:10px;">';
-  html+='<div style="overflow:auto;max-height:320px;">';
-  html+='<table><thead><tr><th>Time</th><th style="text-align:right;">PM10 (µg/m³)</th><th>Status</th></tr></thead><tbody>';
-  for(var r=rows.length-1;r>=0;r--){
-    var row=rows[r]||{},tv=String(row.time||""),vv2=num_(row.v);
-    var rs=sev_(vv2);
-    html+='<tr><td class="mono">'+esc(tv)+'</td><td class="mono" style="text-align:right;font-weight:900;color:'+rs.color+';">'+esc(fmt_(vv2))+'</td><td class="'+esc(rs.cls)+'">'+esc(rs.txt)+'</td></tr>';
+  html += '<div class="rCard" style="padding:10px;">';
+  html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">';
+  html += '<div class="mono" style="color:var(--muted);font-size:11px;">PM10 trend — ' + rows.length + ' readings</div>';
+  html += '<select style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer;" onchange="fetchPm10ForPos_(' + pos + ', true, this.value)">';
+  html += '<option value="2d" ' + (currentRange === "2d" ? "selected" : "") + '>2 วันย้อนหลัง</option>';
+  html += '<option value="5d" ' + (currentRange === "5d" ? "selected" : "") + '>5 วันย้อนหลัง</option>';
+  html += '<option value="7d" ' + (currentRange === "7d" ? "selected" : "") + '>7 วันย้อนหลัง</option>';
+  html += '</select>';
+  html += '</div>';
+  html += '<div style="height:240px;width:100%;"><canvas id="pm10Chart"></canvas></div>';
+  html += '</div>';
+
+  html += '<div class="rCard" style="padding:10px;">';
+  html += '<div style="overflow:auto;max-height:320px;">';
+  html += '<table><thead><tr><th>Time</th><th style="text-align:right;">PM10 (µg/m³)</th><th>Status</th></tr></thead><tbody>';
+  for (var r = rows.length - 1; r >= 0; r--) {
+    var row = rows[r] || {}, tv = String(row.time || ""), vv2 = num_(row.v);
+    var rs = sev_(vv2);
+    html += '<tr><td class="mono">' + esc(tv) + '</td><td class="mono" style="text-align:right;font-weight:900;color:' + rs.color + ';">' + esc(fmt_(vv2)) + '</td><td class="' + esc(rs.cls) + '">' + esc(rs.txt) + '</td></tr>';
   }
-  html+='</tbody></table></div></div>';
-  html+='</div>';
+  html += '</tbody></table></div></div>';
+  html += '</div>';
 
   setText("modalTitle", "PM10 • " + (res.location || "POS " + pos));
-  setHTML("modalBody",html);
-  try{drawPm10Chart_(rows);}catch(e){console.log("chart err:",e);}
+  setHTML("modalBody", html);
+  try { drawPm10Chart_(rows); } catch (e) { console.log("chart err:", e); }
 }
 
 var __PM10_CHART__ = null;
@@ -1576,7 +1591,7 @@ function drawPm10Chart_(rows) {
     return { time: String(r.time || ""), v: Number(r.v) }; 
   });
   
-  if (clean.length > 50) clean = clean.slice(clean.length - 50);
+  if (clean.length > 500) clean = clean.slice(clean.length - 500); // ขยายขีดจำกัดจาก 50 เป็น 500 สำหรับ 7 วัน
   
   var labels = clean.map(function(r) {
     var t = r.time; 
