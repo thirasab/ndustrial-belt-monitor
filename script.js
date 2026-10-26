@@ -1252,7 +1252,32 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
+  // 📌 1. ย้ายปุ่ม Zoom มาไว้มุมขวาล่าง
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+  // 📌 2. สร้างกล่องแสดงพิกัด (Coordinates Overlay) มุมซ้ายล่าง
+  var coordControl = L.control({position: 'bottomleft'});
+  coordControl.onAdd = function(map) {
+    this._div = L.DomUtil.create('div', 'map-coords mono');
+    this._div.style.background = 'rgba(0,0,0,0.65)';
+    this._div.style.color = '#00e0ff'; 
+    this._div.style.padding = '4px 8px';
+    this._div.style.borderRadius = '6px';
+    this._div.style.fontSize = '11px';
+    this._div.style.fontWeight = 'bold';
+    this._div.style.border = '1px solid rgba(0,224,255,0.3)';
+    this._div.style.backdropFilter = 'blur(4px)';
+    this._div.innerHTML = 'Lat: -, Lng: -';
+    return this._div;
+  };
+  var coordContainer = coordControl.addTo(map).getContainer();
+
+  // 📌 3. อัปเดตพิกัดเมื่อเลื่อนเมาส์หรือคลิกบนแผนที่
+  map.on('mousemove', function(e) {
+    if (coordContainer) {
+      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
+    }
+  });
   map.on('click', function(e) {
     if (coordContainer) {
       coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
