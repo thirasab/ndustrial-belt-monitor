@@ -1953,7 +1953,7 @@ function render(data){
   window.__LAST_DATA__=data;
   setText("sheetLast",data.sheetLastUpdate||"-");
   setText("sleepLast",data.lastSleepTime||"-");
-  renderAiAnalysis_(data);
+// renderAiAnalysis_(data);
   if (typeof updateGlobalLeftAlarms_ === "function") {
     updateGlobalLeftAlarms_();
   }
