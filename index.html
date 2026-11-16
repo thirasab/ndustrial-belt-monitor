@@ -54,7 +54,7 @@
       <button class="btn modeBtn headBtn primary" id="modeBeltBtn">Damaged belt</button>
       <button class="btn modeBtn pmBtn" id="modePm10Btn">PM10</button>
       <button class="btn modeBtn vibBtn" id="modeVibDashBtn" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button>
-      <button class="btn modeBtn aiBtn" id="modeAiBtn">AI Analysis</button>
+      <button class="btn modeBtn aiBtn" id="modeAiBtn">Noise Sensor</button>
 
       <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .5px;">🔄 Auto: ON 30s</button>
       <button class="btn" id="qrBtn" style="font-weight: 1000; letter-spacing: .5px; border-color: rgba(255,255,255,0.3);">📱 QR code webapp</button>
@@ -91,7 +91,7 @@
         <button class="btn modeBtn headBtn primary" id="modeBeltBtn2">Head-Open</button>
         <button class="btn modeBtn pmBtn" id="modePm10Btn2">PM10</button>
         <button class="btn modeBtn vibBtn" id="modeVibDashBtn2" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button> 
-        <button class="btn modeBtn aiBtn" id="modeAiBtn2">AI Analysis</button>
+        <button class="btn modeBtn aiBtn" id="modeAiBtn2">Noise Sensor</button>
       </div>
       
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
@@ -124,80 +124,17 @@
     </div>
   </div>
 
-  <!-- ================= AI ANALYSIS SECTION ================= -->
-  <div class="section aiSection" id="aiSection">
+  <!-- ================= NOISE SENSOR SECTION ================= -->
+  <div class="section aiSection" id="aiSection" style="height: calc(100vh - 120px);">
     <div class="secHead">
       <div class="secTitle">
         <span class="dot ok"></span>
-        <span id="aiTitle">AI Analysis • ภาพรวมการแจ้งเตือน</span>
+        <span id="aiTitle">Noise Sensor Analysis</span>
       </div>
-      <div class="secMeta mono" id="aiHint">Priority • probable cause • action</div>
+      <div class="secMeta mono" id="aiHint">Live Dashboard from External Source</div>
     </div>
-    <div class="aiWrap">
-      <div class="aiGrid">
-        <div class="aiCard kpi-critical">
-          <div class="aiKicker">Critical</div>
-          <div class="aiValue mono" id="aiKpiCritical">0</div>
-          <div class="aiSub" id="aiKpiCriticalSub">ต้องแจ้งทันที</div>
-        </div>
-        <div class="aiCard kpi-high">
-          <div class="aiKicker">High</div>
-          <div class="aiValue mono" id="aiKpiHigh">0</div>
-          <div class="aiSub" id="aiKpiHighSub">เฝ้าระวังสูง</div>
-        </div>
-        <div class="aiCard kpi-medium">
-          <div class="aiKicker">Medium</div>
-          <div class="aiValue mono" id="aiKpiMedium">0</div>
-          <div class="aiSub" id="aiKpiMediumSub">ควรติดตาม</div>
-        </div>
-        <div class="aiCard kpi-watch">
-          <div class="aiKicker">Watch / Offline</div>
-          <div class="aiValue mono" id="aiKpiWatch">0</div>
-          <div class="aiSub" id="aiKpiWatchSub">สัญญาณหายหรือเริ่มผิดปกติ</div>
-        </div>
-        <div class="aiCard kpi-normal">
-          <div class="aiKicker">Normal</div>
-          <div class="aiValue mono" id="aiKpiNormal">0</div>
-          <div class="aiSub" id="aiKpiNormalSub">ไม่มีความเสี่ยงเด่น</div>
-        </div>
-      </div>
-
-      <div class="aiMain">
-        <div class="aiPanel">
-          <div class="aiPanelHead">
-            <div class="aiPanelTitle">AI Priority Table</div>
-            <div class="aiPanelMeta" id="aiGeneratedAt">-</div>
-          </div>
-          <div class="aiTableWrap">
-            <table class="aiTable">
-              <thead>
-                <tr>
-                  <th style="width:74px;">Score</th>
-                  <th style="width:92px;">Level</th>
-                  <th style="width:110px;">Belt</th>
-                  <th style="width:86px;">Run</th>
-                  <th style="width:96px;">Alarm</th>
-                  <th>Probable cause</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="aiTbody">
-                <tr><td colspan="7" class="rMut">Waiting for data...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="aiPanel">
-          <div class="aiPanelHead">
-            <div class="aiPanelTitle">AI Observations</div>
-            <div class="aiPanelMeta">Top 5 current findings</div>
-          </div>
-          <div class="aiReasonList" id="aiReasonList">
-            <div class="aiEmpty">Waiting for data...</div>
-          </div>
-        </div>
-      </div>
+    <div style="width: 100%; height: 100%; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); margin-top: 10px;">
+      <iframe src="https://thirasab.github.io/-noisesensor/" style="width: 100%; height: 100%; border: none;"></iframe>
     </div>
   </div>
 
