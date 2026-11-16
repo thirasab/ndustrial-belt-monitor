@@ -1970,7 +1970,7 @@ function render(data){
   }else{
     handleBeepFromData(data);
     setText("title","Monitor");
-    setText("subtitle","AI Analysis Monitor");
+    setText("subtitle","Noise Sensor");
   }
 }
 
@@ -1995,7 +1995,7 @@ function setLegendForMode_(){
     setText("mapTitle","Plant Map • PM10 (µg/m³)");
     setText("mapHint","Click dot/card to open PM10");
   }else if(__PAGE_MODE__==="AI"){
-    setHTML("legendPill",'<span class="lg open">CRITICAL</span> • <span class="lg stuck">HIGH</span> • <span class="lg pmbad">ACTION</span>');
+   setHTML("legendPill",'<span class="lg pmok">NOISE SENSOR</span>');
   }else if(__PAGE_MODE__==="VIB_DASH"){
     setHTML("legendPill",'<span class="lg pmok">DASHBOARD</span>');
     setText("mapTitle","External Dashboard");
@@ -2097,7 +2097,7 @@ function setPageMode(mode){
     fetchPm10SnapshotAll_();
   } else if(mode === "AI"){
     setText("title", "Monitor");
-    setText("subtitle", "AI Analysis Monitor");
+    setText("subtitle", "Noise Sensor");
     if(window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
     refreshVibStatus_(); 
   } else if(mode === "VIB_DASH"){
