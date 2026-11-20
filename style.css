@@ -1065,3 +1065,22 @@ body[data-mode="AI"] .aiSection .secHead {
 .posRight {
   gap: 3px !important;
 }
+/* ซ่อนการ์ด POS เฉพาะตอนอยู่โหมด PM10 */
+body[data-mode="PM10"] .posCard {
+  display: none !important;
+}
+
+body:not([data-mode="PM10"]) .posCard {
+  display: block !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(10, 15, 23, 0.90) !important;
+  min-width: 115px !important;
+  max-width: 165px !important;
+  padding: 4px 6px !important;
+  border-radius: 8px !important;
+}
+
+[data-theme="day"] body:not([data-mode="PM10"]) .posCard {
+  background: rgba(255, 255, 255, 0.88) !important;
+}
