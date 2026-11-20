@@ -60,7 +60,7 @@
 
       <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .5px;">🔄 Auto: ON 30s</button>
       <button class="btn" id="qrBtn" style="font-weight: 1000; letter-spacing: .5px; border-color: rgba(255,255,255,0.3);">📱 QR code webapp</button>
-
+      
       <!-- ปุ่ม Fullscreen สำหรับเปิดบนจอ TV -->
       <button class="btn" id="tvFullscreenBtn" style="font-weight: 1000; border-color: rgba(0,224,255,0.4);">🖥️ Fullscreen</button>
 
@@ -133,17 +133,17 @@
 
   <!-- ================= NOISE SENSOR SECTION ================= -->
   <!-- คง id="aiSection" ไว้ เพื่อให้ script.js จัดการแสดงผลได้ถูกต้อง -->
-  <div class="section aiSection" id="aiSection" style="height: calc(100vh - 102px); margin-top: 6px; padding: 0;">
-    <div class="secHead" style="padding: 5px 10px;">
+  <div class="section aiSection" id="aiSection" style="height: calc(100vh - 120px);">
+    <div class="secHead">
       <div class="secTitle">
         <span class="dot ok"></span>
         <span id="aiTitle">Noise Sensor Analysis</span>
       </div>
       <div class="secMeta mono" id="aiHint">Live Dashboard from External Source</div>
     </div>
-    <div style="width: 100%; height: calc(100% - 36px); border-radius: 0; overflow: hidden; border: none; margin-top: 0;">
+    <div style="width: 100%; height: 100%; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); margin-top: 10px;">
       <!-- ใส่ loading="lazy" ป้องกันการโหลดหนักตอนเริ่มเว็บ -->
-      <iframe src="https://thirasab.github.io/-noisesensor/" loading="lazy" style="width: 100%; height: 100%; border: none; display: block;"></iframe>
+      <iframe src="https://thirasab.github.io/-noisesensor/" loading="lazy" style="width: 100%; height: 100%; border: none;"></iframe>
     </div>
   </div>
 
