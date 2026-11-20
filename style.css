@@ -796,7 +796,6 @@ table th, .aiTable th {
     font-size: 8px !important; border-width: 1px !important;
   }
   .mapDot.pmFocus { min-width: 32px !important; padding: 0 4px !important; font-size: 7.5px !important; }
-  .posCard { display: none; }
   
   .overlay { padding: 6px; }
   .modal { width: 98vw !important; max-height: 94vh !important; border-radius: 12px; }
@@ -966,19 +965,11 @@ table th, .aiTable th {
 /* ========================================================= */
 /* 14. SMART TV & LARGE SCREEN OPTIMIZATION */
 /* ========================================================= */
-.top, .posCard, #alarmPanelHeader, .map-coords, .btn {
+.top, #alarmPanelHeader, .map-coords, .btn {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 .top { background: rgba(12, 18, 27, 0.95) !important; }
-.posCard {
-  background: rgba(10, 15, 23, 0.90) !important;
-  min-width: 190px;
-  padding: 10px 12px;
-}
-.posCardTitle .t, .posCardTitle .sum, .posLeft, .posRight {
-  font-size: 13px !important;
-}
 #leftAlarmPanel {
   width: 260px;
 }
@@ -1005,7 +996,6 @@ table th, .aiTable th {
   }
 }
 
-
 /* ขยายหน้า Noise Sensor ให้เต็มพื้นที่จอมากขึ้น */
 body[data-mode="AI"] .aiSection {
   margin-top: 4px !important;
@@ -1021,4 +1011,57 @@ body[data-mode="AI"] .aiSection .secHead {
   body[data-mode="AI"] .aiSection {
     height: calc(100vh - 92px) !important;
   }
+}
+
+/* ========================================================= */
+/* 15. UNIFIED COMPACT POS CARD (ALL SCREENS) */
+/* ========================================================= */
+.posCard {
+  display: block !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(10, 15, 23, 0.90) !important;
+  min-width: 115px !important;
+  max-width: 165px !important;
+  padding: 4px 6px !important;
+  border-radius: 8px !important;
+}
+
+[data-theme="day"] .posCard {
+  background: rgba(255, 255, 255, 0.88) !important;
+}
+
+.posCardTitle {
+  gap: 4px !important;
+  margin-bottom: 2px !important;
+}
+
+.posCardTitle .t,
+.posCardTitle .sum,
+.posLeft,
+.posRight {
+  font-size: 9px !important;
+  line-height: 1.15 !important;
+}
+
+.posCardTitle .sum {
+  padding: 1px 4px !important;
+}
+
+.posLine {
+  gap: 4px !important;
+  padding: 1.5px 0 !important;
+}
+
+.posLeft {
+  gap: 4px !important;
+}
+
+.posChip {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.posRight {
+  gap: 3px !important;
 }
