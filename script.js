@@ -1234,42 +1234,41 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
+  var TV_INIT_LAT = 8.10115;
+  var TV_INIT_LNG = 99.68546;
+  var TV_INIT_ZOOM = 17;
+
   var bounds = L.latLngBounds();
-  var hasPoints = false;
   for (var i = 0; i < MAP_POINTS.length; i++) {
     var p = MAP_POINTS[i];
     if (p.modes && p.modes.includes(__PAGE_MODE__)) {
       bounds.extend([p.lat, p.lng]);
-      hasPoints = true;
     }
   }
 
-  var BASE_ZOOM = 17.5; 
   map = L.map('mapCanvas', {
-    zoomControl: false, 
+    zoomControl: false,
     attributionControl: false,
-    zoomSnap: 0.5,       
-    wheelPxPerZoomLevel: 120 
+    zoomSnap: 0.5,
+    wheelPxPerZoomLevel: 120,
+    maxZoom: 22
   });
 
-  if (hasPoints) {
-    var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
-    map.fitBounds(bounds, { padding: mapPadding }); 
-    map.setMaxBounds(bounds.pad(0.3));
-    map.options.minZoom = map.getZoom() - 1;
-    BASE_ZOOM = map.getZoom(); 
-  } else {
-    map.setView([14.5, 100.5], BASE_ZOOM);
+  map.setView([TV_INIT_LAT, TV_INIT_LNG], TV_INIT_ZOOM);
+  map.__BASE_ZOOM = TV_INIT_ZOOM;
+
+  if (!bounds.isEmpty()) {
+    map.setMaxBounds(bounds.pad(0.5));
   }
-  map.__BASE_ZOOM = BASE_ZOOM; 
+  map.options.minZoom = TV_INIT_ZOOM - 2;
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  var coordControl = L.control({position: 'bottomleft'});
+  var coordControl = L.control({ position: 'bottomleft' });
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
     this._div.style.background = 'rgba(0,0,0,0.85)';
-    this._div.style.color = '#00e0ff'; 
+    this._div.style.color = '#00e0ff';
     this._div.style.padding = '4px 8px';
     this._div.style.borderRadius = '6px';
     this._div.style.fontSize = '11px';
@@ -1298,25 +1297,25 @@ function initLeafletMap_() {
 
   var markerWrappers = [];
 
-  for(var i=0; i<MAP_POINTS.length; i++) {
-    (function(p){
+  for (var i = 0; i < MAP_POINTS.length; i++) {
+    (function(p) {
       var wrapper = document.createElement('div');
       wrapper.style.position = 'relative';
       wrapper.style.transformOrigin = "0 0";
 
       var d = document.createElement("div");
-      d.className = "mapDot ok"; 
+      d.className = "mapDot ok";
       d.textContent = String(p.pos);
       p.__el = d;
 
       var card = document.createElement("div");
-      card.className = "posCard"; 
-      card.style.transform = "translate("+p.labelDx+"px,"+p.labelDy+"px)";
-      card.innerHTML = '<div class="posCardTitle"><div class="t">POS '+p.pos+'</div><div class="sum mono" id="posSum_'+p.pos+'_'+p.modes[0]+'">-</div></div><div class="posCardBody" id="posBody_'+p.pos+'_'+p.modes[0]+'"></div>';
+      card.className = "posCard";
+      card.style.transform = "translate(" + p.labelDx + "px," + p.labelDy + "px)";
+      card.innerHTML = '<div class="posCardTitle"><div class="t">POS ' + p.pos + '</div><div class="sum mono" id="posSum_' + p.pos + '_' + p.modes[0] + '">-</div></div><div class="posCardBody" id="posBody_' + p.pos + '_' + p.modes[0] + '"></div>';
       p.__card = card;
 
       d.addEventListener("click", function(ev) {
-        if(ev.stopPropagation) ev.stopPropagation();
+        if (ev.stopPropagation) ev.stopPropagation();
         if (window.innerWidth <= 768) {
           var isHidden = (card.style.display === "none" || !card.style.display);
           for (var m = 0; m < MAP_POINTS.length; m++) {
@@ -1329,13 +1328,13 @@ function initLeafletMap_() {
       });
 
       card.addEventListener("click", function(ev) {
-        if(ev.stopPropagation) ev.stopPropagation();
+        if (ev.stopPropagation) ev.stopPropagation();
         showPosCards_(p.pos, wrapper);
       });
 
       wrapper.appendChild(d);
       wrapper.appendChild(card);
-      
+
       p.__marker = L.marker([p.lat, p.lng], {
         icon: L.divIcon({ className: 'scada-leaflet-marker', html: wrapper, iconSize: [0, 0] })
       });
@@ -1361,18 +1360,18 @@ function initLeafletMap_() {
 
   map.on('zoom', function() {
     var currentZoom = map.getZoom();
-    var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
-    for(var w = 0; w < markerWrappers.length; w++) {
+    var scaleFactor = Math.pow(2, currentZoom - TV_INIT_ZOOM);
+    for (var w = 0; w < markerWrappers.length; w++) {
       markerWrappers[w].style.transform = "scale(" + scaleFactor + ")";
     }
-    adjustCardPositions_(); 
+    adjustCardPositions_();
   });
   map.fire('zoom');
 
-  map.on('move', adjustCardPositions_); 
+  map.on('move', adjustCardPositions_);
 
   map.on('click', function() {
-    if(window.innerWidth <= 768) {
+    if (window.innerWidth <= 768) {
       for (var m = 0; m < MAP_POINTS.length; m++) {
         if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.style.display = "none";
       }
@@ -1380,11 +1379,11 @@ function initLeafletMap_() {
   });
 
   if (__PAGE_MODE__ === "PM10") {
-     updateMapDots_PM10_();
-     updatePosCards_PM10_();
+    updateMapDots_PM10_();
+    updatePosCards_PM10_();
   } else if (__PAGE_MODE__ === "BELT" && window.__LAST_DATA__) {
-     updateMapDots_(window.__LAST_DATA__);
-     updatePosCards_(window.__LAST_DATA__);
+    updateMapDots_(window.__LAST_DATA__);
+    updatePosCards_(window.__LAST_DATA__);
   }
 }
 
@@ -2003,6 +2002,10 @@ function setLegendForMode_(){
 }
 
 function setPageMode(mode){
+  var TV_INIT_LAT = 8.10115;
+  var TV_INIT_LNG = 99.68546;
+  var TV_INIT_ZOOM = 17;
+
   var isCurrentMapVisible = (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH");
   if (isCurrentMapVisible && typeof map !== 'undefined' && map) {
     map.__lastCenter = map.getCenter();
@@ -2026,31 +2029,8 @@ function setPageMode(mode){
       var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
       
       if (isNewMapVisible) {
-        var bounds = L.latLngBounds();
-        var hasPoints = false;
-        for (var i = 0; i < MAP_POINTS.length; i++) {
-          if (MAP_POINTS[i].modes && MAP_POINTS[i].modes.includes(mode)) {
-            bounds.extend([MAP_POINTS[i].lat, MAP_POINTS[i].lng]);
-            hasPoints = true;
-          }
-        }
-        
-        if (hasPoints) {
-          var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
-          map.flyToBounds(bounds, { 
-            padding: mapPadding, 
-            maxZoom: 18, 
-            duration: 1.2, 
-            easeLinearity: 0.25 
-          });
-
-          map.setMaxBounds(bounds.pad(0.3));
-          map.options.minZoom = map.getZoom() - 1;
-
-          setTimeout(adjustCardPositions_, 300);
-        } else if (map.__lastCenter && map.__lastZoom) {
-          map.setView(map.__lastCenter, map.__lastZoom, { animate: false });
-        }
+        map.setView([TV_INIT_LAT, TV_INIT_LNG], TV_INIT_ZOOM, { animate: true });
+        setTimeout(adjustCardPositions_, 300);
       }
     }, 150);
   }
@@ -2109,7 +2089,6 @@ function setPageMode(mode){
 
   if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
 }
-
 function isShown_(el){
   if(!el) return false;
   if(el.classList && el.classList.contains("open")) return true;
