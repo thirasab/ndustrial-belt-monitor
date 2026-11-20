@@ -1263,6 +1263,131 @@ function initLeafletMap_() {
     map.setMaxBounds(bounds.pad(0.5));
   }
   map.options.minZoom = TV_INIT_ZOOM - 2;
+
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  var coordControl = L.control({ position: 'bottomleft' });
+  coordControl.onAdd = function(map) {
+    this._div = L.DomUtil.create('div', 'map-coords mono');
+    this._div.style.background = 'rgba(0,0,0,0.85)';
+    this._div.style.color = '#00e0ff';
+    this._div.style.padding = '4px 8px';
+    this._div.style.borderRadius = '6px';
+    this._div.style.fontSize = '11px';
+    this._div.style.fontWeight = 'bold';
+    this._div.style.border = '1px solid rgba(0,224,255,0.3)';
+    this._div.innerHTML = 'Lat: -, Lng: -';
+    return this._div;
+  };
+  var coordContainer = coordControl.addTo(map).getContainer();
+
+  map.on('mousemove', function(e) {
+    if (coordContainer) {
+      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
+    }
+  });
+  map.on('click', function(e) {
+    if (coordContainer) {
+      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
+    }
+  });
+
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 22,
+    maxNativeZoom: 17
+  }).addTo(map);
+
+  var markerWrappers = [];
+
+  for (var i = 0; i < MAP_POINTS.length; i++) {
+    (function(p) {
+      var wrapper = document.createElement('div');
+      wrapper.style.position = 'relative';
+      wrapper.style.transformOrigin = "0 0";
+
+      var d = document.createElement("div");
+      d.className = "mapDot ok";
+      d.textContent = String(p.pos);
+      p.__el = d;
+
+      var card = document.createElement("div");
+      card.className = "posCard";
+      card.style.transform = "translate(" + p.labelDx + "px," + p.labelDy + "px)";
+      card.innerHTML = '<div class="posCardTitle"><div class="t">POS ' + p.pos + '</div><div class="sum mono" id="posSum_' + p.pos + '_' + p.modes[0] + '">-</div></div><div class="posCardBody" id="posBody_' + p.pos + '_' + p.modes[0] + '"></div>';
+      p.__card = card;
+
+      d.addEventListener("click", function(ev) {
+        if (ev.stopPropagation) ev.stopPropagation();
+        if (window.innerWidth <= 768) {
+          var isHidden = (card.style.display === "none" || !card.style.display);
+          for (var m = 0; m < MAP_POINTS.length; m++) {
+            if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.style.display = "none";
+          }
+          card.style.display = isHidden ? "block" : "none";
+        } else {
+          showPosCards_(p.pos, wrapper);
+        }
+      });
+
+      card.addEventListener("click", function(ev) {
+        if (ev.stopPropagation) ev.stopPropagation();
+        showPosCards_(p.pos, wrapper);
+      });
+
+      wrapper.appendChild(d);
+      wrapper.appendChild(card);
+
+      p.__marker = L.marker([p.lat, p.lng], {
+        icon: L.divIcon({ className: 'scada-leaflet-marker', html: wrapper, iconSize: [0, 0] })
+      });
+
+      if (p.modes && p.modes.includes(__PAGE_MODE__)) {
+        p.__marker.addTo(map);
+        if (__PAGE_MODE__ === "PM10") {
+          p.__card.style.display = "none";
+        } else {
+          if (window.innerWidth <= 768) {
+            p.__card.style.display = "none";
+          } else {
+            p.__card.style.display = "block";
+          }
+        }
+      } else {
+        p.__card.style.display = "none";
+      }
+
+      markerWrappers.push(wrapper);
+    })(MAP_POINTS[i]);
+  }
+
+  map.on('zoom', function() {
+    var currentZoom = map.getZoom();
+    var scaleFactor = Math.pow(2, currentZoom - TV_INIT_ZOOM);
+    for (var w = 0; w < markerWrappers.length; w++) {
+      markerWrappers[w].style.transform = "scale(" + scaleFactor + ")";
+    }
+    adjustCardPositions_();
+  });
+  map.fire('zoom');
+
+  map.on('move', adjustCardPositions_);
+
+  map.on('click', function() {
+    if (window.innerWidth <= 768) {
+      for (var m = 0; m < MAP_POINTS.length; m++) {
+        if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.style.display = "none";
+      }
+    }
+  });
+
+  if (__PAGE_MODE__ === "PM10") {
+    updateMapDots_PM10_();
+    updatePosCards_PM10_();
+  } else if (__PAGE_MODE__ === "BELT" && window.__LAST_DATA__) {
+    updateMapDots_(window.__LAST_DATA__);
+    updatePosCards_(window.__LAST_DATA__);
+  }
+}
 // =========================================================
 // 12. PM10 LOGIC & CHARTS
 // =========================================================
