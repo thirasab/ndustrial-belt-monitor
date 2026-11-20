@@ -9,7 +9,7 @@ let MAP_POINTS = [];
 let mapCoords = {};
 let map;
 let __PAGE_MODE__ = "PM10";
-let AUTO_SWITCH_SEC = 30;
+let AUTO_SWITCH_SEC = 60;
 let __AUTO_SWITCH_ENABLED__ = (function(){
   try{ return localStorage.getItem("scada_auto_switch") !== "0"; }catch(e){ return true; }
 })();
@@ -792,7 +792,7 @@ function loadLogo(){
     .catch(err => console.error("Logo fetch error:", err));
 }
 
-var REFRESH_SECONDS=(window.innerWidth<=768)?45:30;
+var REFRESH_SECONDS = 45;
 var failStreak=0,reloading=false,fetchInFlight=false,pollTimer=null;
 function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 function startPolling(){stopPolling();pollTimer=setInterval(fetchStatus,REFRESH_SECONDS*1000);}
@@ -1050,7 +1050,6 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
   if (globalMinVib === Infinity) globalMinVib = 0;
   if (globalMinSound === Infinity) globalMinSound = 40;
 
-  // ตั้งค่ากราฟความสั่นสะเทือนขั้นต่ำ 10 mm/s
   let targetMaxVib = Math.max(10, globalMaxVib * 1.1);       
   let targetMaxSound = Math.max(90, globalMaxSound + 5);   
   let targetMinVib = Math.max(0, globalMinVib - 0.5); 
@@ -1253,7 +1252,6 @@ function initLeafletMap_() {
     wheelPxPerZoomLevel: 120 
   });
 
-  // 📌 ย้ายการตั้งค่า Center & Zoom มาไว้ตรงนี้ (ก่อน Add Control)
   if (hasPoints) {
     var mapPadding = window.innerWidth <= 768 ? [40, 40] : [150, 150];
     map.fitBounds(bounds, { padding: mapPadding }); 
@@ -1265,20 +1263,18 @@ function initLeafletMap_() {
   }
   map.__BASE_ZOOM = BASE_ZOOM; 
 
-  // 📌 เพิ่มปุ่ม Zoom & กล่อง Coordinates
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
   var coordControl = L.control({position: 'bottomleft'});
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
-    this._div.style.background = 'rgba(0,0,0,0.65)';
+    this._div.style.background = 'rgba(0,0,0,0.85)';
     this._div.style.color = '#00e0ff'; 
     this._div.style.padding = '4px 8px';
     this._div.style.borderRadius = '6px';
     this._div.style.fontSize = '11px';
     this._div.style.fontWeight = 'bold';
     this._div.style.border = '1px solid rgba(0,224,255,0.3)';
-    this._div.style.backdropFilter = 'blur(4px)';
     this._div.innerHTML = 'Lat: -, Lng: -';
     return this._div;
   };
@@ -1953,7 +1949,6 @@ function render(data){
   window.__LAST_DATA__=data;
   setText("sheetLast",data.sheetLastUpdate||"-");
   setText("sleepLast",data.lastSleepTime||"-");
-// renderAiAnalysis_(data);
   if (typeof updateGlobalLeftAlarms_ === "function") {
     updateGlobalLeftAlarms_();
   }
@@ -2729,7 +2724,7 @@ function updateGlobalLeftAlarms_() {
     header.style.background = "rgba(31, 210, 122, 0.15)";
     header.style.borderColor = "rgba(31, 210, 122, 0.4)";
     document.getElementById("alarmHeaderTitle").innerHTML = "✅ Normal (0)";
-    list.innerHTML = '<div style="background:rgba(15,20,30,0.85); padding:6px 10px; border-radius:6px; color:var(--ok); font-size:11px; text-align:center; border: 1px solid rgba(255,255,255,0.05);">No active alarms</div>';
+    list.innerHTML = '<div style="background:rgba(15,20,30,0.95); padding:6px 10px; border-radius:6px; color:var(--ok); font-size:11px; text-align:center; border: 1px solid rgba(255,255,255,0.05);">No active alarms</div>';
     return;
   }
 
@@ -2750,9 +2745,9 @@ function updateGlobalLeftAlarms_() {
   for (var i = 0; i < activeAlarms.length; i++) {
     var r = activeAlarms[i];
     var borderColor = r.level === "CRITICAL" ? "#ff3b30" : (r.level === "HIGH" ? "#ff9f0a" : "#f1c40f");
-    var bgColor = "rgba(15,20,30,0.85)";
+    var bgColor = "rgba(15,20,30,0.95)";
 
-    html += '<div style="background:'+bgColor+'; padding:6px 10px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.6); pointer-events:auto; animation:alarmSlideIn 0.2s ease-out; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border: 1px solid rgba(255,255,255,0.05); border-left:4px solid '+borderColor+';">';
+    html += '<div style="background:'+bgColor+'; padding:8px 12px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.6); pointer-events:auto; animation:alarmSlideIn 0.2s ease-out; border: 1px solid rgba(255,255,255,0.08); border-left:4px solid '+borderColor+';">';
     html += '<div style="font-size:12px; font-weight:bold; color:#fff; line-height:1.3; word-break:break-word;">' + esc(r.belt) + '</div>';
     var shortMsg = r.alarmMsg ? r.alarmMsg : r.alarmType;
     html += '<div style="font-size:10px; color:'+borderColor+'; margin-top:3px; font-weight:bold;">⚠️ ' + esc(shortMsg) + '</div>';
@@ -2794,3 +2789,36 @@ window.addEventListener("load", function(){
 
 // รีเฟรชหน้าอัตโนมัติทุก 6 ชั่วโมง ป้องกัน Smart TV แรมเต็ม
 setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
+
+// =========================================================
+// 19. TV FULLSCREEN MODE HANDLER
+// =========================================================
+(function() {
+  var fsBtn = document.getElementById("tvFullscreenBtn");
+  if (!fsBtn) return;
+
+  function updateFsButtonText() {
+    var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    fsBtn.textContent = isFs ? "🗗 Exit Full" : "🖥️ Fullscreen";
+    setTimeout(function() {
+      if (typeof map !== "undefined" && map) {
+        map.invalidateSize(true);
+        adjustCardPositions_();
+      }
+    }, 300);
+  }
+
+  fsBtn.addEventListener("click", function() {
+    var docEl = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (docEl.requestFullscreen) docEl.requestFullscreen();
+      else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+  });
+
+  document.addEventListener("fullscreenchange", updateFsButtonText);
+  document.addEventListener("webkitfullscreenchange", updateFsButtonText);
+})();
