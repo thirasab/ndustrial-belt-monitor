@@ -421,6 +421,7 @@ body {
 
 @keyframes posOfflineBlink { 0%, 100% { opacity: .35; transform: scale(.88); box-shadow: 0 0 0 rgba(124,136,152,0); } 50% { opacity: 1; transform: scale(1.18); box-shadow: 0 0 10px rgba(124,136,152,.55); } }
 .pos-stale .posChip { background: var(--offline); animation: posOfflineBlink .95s ease-in-out infinite; box-shadow: 0 0 10px rgba(124,136,152,.35); }
+
 /* ========================================================= */
 /* 7.5 MINI CARDS (POPUP DETAILS) & BADGES */
 /* ========================================================= */
@@ -497,6 +498,7 @@ body {
 .rpmRun{color:var(--ok);font-weight:900;}
 .rpmZero{color:var(--open);font-weight:900;}
 .rpmDash{color:var(--muted);}
+
 /* ========================================================= */
 /* 8. AI ANALYSIS SECTION */
 /* ========================================================= */
@@ -961,9 +963,9 @@ table th, .aiTable th {
 #leftAlarmPanel { top: 175px !important; }
 @media (max-width: 768px) { #leftAlarmPanel { top: 100px !important; } }
 
-
-
-/* โหมดประหยัดทรัพยากรสำหรับ Smart TV + ขยายตัวอักษร */
+/* ========================================================= */
+/* 14. SMART TV & LARGE SCREEN OPTIMIZATION */
+/* ========================================================= */
 .top, .posCard, #alarmPanelHeader, .map-coords, .btn {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -982,3 +984,23 @@ table th, .aiTable th {
 }
 .scada-ticker-wrap { height: 32px; }
 .scada-ticker-content { font-size: 13px; }
+
+@media (min-width: 1280px) {
+  body {
+    margin: 4px !important;
+  }
+  .top {
+    padding: 6px 12px !important;
+    top: 4px !important;
+  }
+  #logoImg {
+    height: 42px !important;
+  }
+  .mapOuter {
+    padding: 4px !important;
+  }
+  .mapCanvas {
+    aspect-ratio: auto !important;
+    height: calc(100vh - 115px) !important;
+  }
+}
