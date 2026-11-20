@@ -2791,3 +2791,6 @@ window.addEventListener("load", function(){
     startPolling();
   }, 50);
 });
+
+// รีเฟรชหน้าอัตโนมัติทุก 6 ชั่วโมง ป้องกัน Smart TV แรมเต็ม
+setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
