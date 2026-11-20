@@ -1004,19 +1004,4 @@ table th, .aiTable th {
     height: calc(100vh - 115px) !important;
   }
 }
-/* ขยายหน้า Noise Sensor ให้เต็มพื้นที่จอมากขึ้น */
-body[data-mode="AI"] .aiSection {
-  margin-top: 4px !important;
-  height: calc(100vh - 96px) !important;
-  border-radius: 10px;
-}
 
-body[data-mode="AI"] .aiSection .secHead {
-  padding: 4px 10px !important;
-}
-
-@media (min-width: 1280px) {
-  body[data-mode="AI"] .aiSection {
-    height: calc(100vh - 92px) !important;
-  }
-}
