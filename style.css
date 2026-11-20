@@ -960,3 +960,25 @@ table th, .aiTable th {
 /* ปรับตำแหน่งแผงซ้ายมือให้หลบแถบวิ่ง */
 #leftAlarmPanel { top: 175px !important; }
 @media (max-width: 768px) { #leftAlarmPanel { top: 100px !important; } }
+
+
+
+/* โหมดประหยัดทรัพยากรสำหรับ Smart TV + ขยายตัวอักษร */
+.top, .posCard, #alarmPanelHeader, .map-coords, .btn {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.top { background: rgba(12, 18, 27, 0.95) !important; }
+.posCard {
+  background: rgba(10, 15, 23, 0.90) !important;
+  min-width: 190px;
+  padding: 10px 12px;
+}
+.posCardTitle .t, .posCardTitle .sum, .posLeft, .posRight {
+  font-size: 13px !important;
+}
+#leftAlarmPanel {
+  width: 260px;
+}
+.scada-ticker-wrap { height: 32px; }
+.scada-ticker-content { font-size: 13px; }
