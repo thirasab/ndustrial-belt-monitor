@@ -29,13 +29,16 @@
 
 <body data-theme="night" data-mode="PM10">
   
-  <!-- ================= TOP BAR ================= -->
+  <!-- ปุ่มลอยสำหรับเรียกเมนูคืนเมื่ออยู่ในโหมดซ่อน Header -->
+  <button id="floatingHeaderToggle" class="floating-header-btn" title="Show Header">☰ Menu</button>
+
+  <!-- ================= TOP BAR (COMPACT SINGLE LINE) ================= -->
   <div class="top">
     <div class="left">
       <div class="brand">
-        <div style="display:flex;align-items:center;gap:9px;">
+        <div style="display:flex;align-items:center;gap:8px;">
           <img id="logoImg" alt="logo" />
-          <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="display:flex;flex-direction:column;gap:1px;">
             <div class="h1" id="title">Monitor</div>
             <div class="sub" id="subtitle">focus Cement transport</div>
           </div>
@@ -54,19 +57,17 @@
       <button class="btn modeBtn headBtn primary" id="modeBeltBtn">Damaged belt</button>
       <button class="btn modeBtn pmBtn" id="modePm10Btn">PM10</button>
       <button class="btn modeBtn vibBtn" id="modeVibDashBtn" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button>
-      
-      <!-- อัปเดตสีปุ่ม Noise Sensor ให้เป็นโทนสี Teal -->
       <button class="btn modeBtn" id="modeAiBtn" style="background-color: #0d9488; border-color: #0f766e; color: #fff; font-weight: 1000;">Noise Sensor</button>
 
-      <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .5px;">🔄 Auto: ON 30s</button>
-      <button class="btn" id="qrBtn" style="font-weight: 1000; letter-spacing: .5px; border-color: rgba(255,255,255,0.3);">📱 QR code webapp</button>
-
-      <!-- ปุ่ม Fullscreen สำหรับเปิดบนจอ TV -->
-      <button class="btn" id="tvFullscreenBtn" style="font-weight: 1000; border-color: rgba(0,224,255,0.4);">🖥️ Fullscreen</button>
+      <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .3px;">🔄 Auto: ON 30s</button>
 
       <div class="dropdown">
-        <button class="btn dropbtn" data-target="ddMainMenu" style="padding: 9px 14px; border-radius: 11px; font-weight: 1000;">⚙️ Menu ▾</button>
+        <button class="btn dropbtn" data-target="ddMainMenu" style="font-weight: 1000;">⚙️ Menu ▾</button>
         <div class="dropdown-content" id="ddMainMenu">
+          <button id="toggleHeaderBtn">👁️ Hide Header Now</button>
+          <button id="tvFullscreenBtn">🖥️ Fullscreen</button>
+          <button id="qrBtn">📱 QR code webapp</button>
+          <div style="border-top:1px solid rgba(150,160,180,0.15); margin: 4px 0;"></div>
           <button id="opBtn">👤 Operator: -</button>
           <button id="muteBtn">🔊 Beep: ON</button>
           <button id="themeBtnToggle">🌙 Theme: NIGHT</button>
@@ -96,8 +97,6 @@
         <button class="btn modeBtn headBtn primary" id="modeBeltBtn2">Head-Open</button>
         <button class="btn modeBtn pmBtn" id="modePm10Btn2">PM10</button>
         <button class="btn modeBtn vibBtn" id="modeVibDashBtn2" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button> 
-        
-        <!-- อัปเดตสีปุ่ม Noise Sensor (มือถือ) -->
         <button class="btn modeBtn" id="modeAiBtn2" style="background-color: #0d9488; border-color: #0f766e; color: #fff; font-weight: 1000;">Noise Sensor</button>
       </div>
       
@@ -117,47 +116,48 @@
     </div>
   </div>
 
-  <!-- ================= MAP SECTION ================= -->
-  <div class="section" id="mapSection">
-    <div class="secHead">
-      <div class="secTitle">
-        <span class="dot ok"></span>
-        <span id="mapTitle">Plant Map • หัวสายพานชำรุด Check Points</span>
+  <!-- ================= MAIN VIEWPORT WRAPPER ================= -->
+  <div class="mainViewport">
+    <!-- MAP SECTION -->
+    <div class="section" id="mapSection">
+      <div class="secHead">
+        <div class="secTitle">
+          <span class="dot ok"></span>
+          <span id="mapTitle">Plant Map • หัวสายพานชำรุด Check Points</span>
+        </div>
+        <div class="secMeta mono" id="mapHint">Click dot/card to view details</div>
       </div>
-      <div class="secMeta mono" id="mapHint">Click dot/card to view details</div>
+      <div class="mapOuter">
+        <div class="mapCanvas" id="mapCanvas"></div>
+      </div>
     </div>
-    <div class="mapOuter">
-      <div class="mapCanvas" id="mapCanvas"></div>
-    </div>
-  </div>
 
-  <!-- ================= NOISE SENSOR SECTION ================= -->
-  <!-- คง id="aiSection" ไว้ เพื่อให้ script.js จัดการแสดงผลได้ถูกต้อง -->
-  <div class="section aiSection" id="aiSection" style="height: calc(100vh - 102px); margin-top: 6px; padding: 0;">
-    <div class="secHead" style="padding: 5px 10px;">
-      <div class="secTitle">
-        <span class="dot ok"></span>
-        <span id="aiTitle">Noise Sensor Analysis</span>
+    <!-- NOISE SENSOR SECTION -->
+    <div class="section aiSection" id="aiSection">
+      <div class="secHead">
+        <div class="secTitle">
+          <span class="dot ok"></span>
+          <span id="aiTitle">Noise Sensor Analysis</span>
+        </div>
+        <div class="secMeta mono" id="aiHint">Live Dashboard from External Source</div>
       </div>
-      <div class="secMeta mono" id="aiHint">Live Dashboard from External Source</div>
+      <div class="iframeWrap">
+        <iframe src="https://thirasab.github.io/-noisesensor/" loading="lazy"></iframe>
+      </div>
     </div>
-    <div style="width: 100%; height: calc(100% - 36px); border-radius: 0; overflow: hidden; border: none; margin-top: 0;">
-      <!-- ใส่ loading="lazy" ป้องกันการโหลดหนักตอนเริ่มเว็บ -->
-      <iframe src="https://thirasab.github.io/-noisesensor/" loading="lazy" style="width: 100%; height: 100%; border: none; display: block;"></iframe>
-    </div>
-  </div>
 
-  <!-- ================= VIBRATION DASHBOARD SECTION ================= -->
-  <div class="section" id="vibDashboardSection" style="display: none; height: calc(100vh - 120px);">
-    <div class="secHead">
-      <div class="secTitle">
-        <span class="dot ok"></span>
-        <span id="vibDashTitle">Vibration Gear-Motor Dashboard</span>
+    <!-- VIBRATION DASHBOARD SECTION -->
+    <div class="section" id="vibDashboardSection" style="display: none;">
+      <div class="secHead">
+        <div class="secTitle">
+          <span class="dot ok"></span>
+          <span id="vibDashTitle">Vibration Gear-Motor Dashboard</span>
+        </div>
+        <div class="secMeta mono">Live Dashboard from External Source</div>
       </div>
-      <div class="secMeta mono">Live Dashboard from External Source</div>
-    </div>
-    <div style="width: 100%; height: 100%; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); margin-top: 10px;">
-      <iframe src="https://thirasab.github.io/vibration-dashboard/" style="width: 100%; height: 100%; border: none;"></iframe>
+      <div class="iframeWrap">
+        <iframe src="https://thirasab.github.io/vibration-dashboard/"></iframe>
+      </div>
     </div>
   </div>
 
