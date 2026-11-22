@@ -1236,3 +1236,26 @@ body.header-hidden #leftAlarmPanel {
 #leftAlarmPanel {
   display: none !important;
 }
+/* ========================================================= */
+/* 18. SMART TV ANTI-DISTORTION & OVERSCAN SAFE-ZONE         */
+/* ========================================================= */
+html {
+  -webkit-text-size-adjust: 100% !important;
+  text-size-adjust: 100% !important;
+}
+
+@media (min-width: 769px) {
+  body {
+    padding: 6px 8px !important; /* กันขอบทีวีตัดภาพ (TV Overscan) */
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+  }
+}
+
+/* ล็อกการแสดงผลตัวหนังสือและกล่องให้คมชัด ไม่เบลอบนจอ TV */
+.mapCanvas, .posCard, .top {
+  -webkit-font-smoothing: antialiased;
+  backface-visibility: hidden;
+}
