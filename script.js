@@ -2022,7 +2022,7 @@ function setLegendForMode_(){
 function setPageMode(mode){
   // แยกพิกัดและระยะซูมเริ่มต้นตามโหมด (PM10 = 16.0, Damaged belt = 16.5)
   var isPm10Mode = (mode === "PM10");
-  var TV_INIT_LAT = 8.10115;
+  var TV_INIT_LAT = 8.10515;
   var TV_INIT_LNG = isPm10Mode ? 99.68380 : 99.68520;
   var TV_INIT_ZOOM = isPm10Mode ? 16 : 16.5;
 
