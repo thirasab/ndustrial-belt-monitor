@@ -1107,7 +1107,7 @@ function adjustCardPositions_() {
   
   var cr = canvas.getBoundingClientRect();
   var currentZoom = map.getZoom();
-  var BASE_ZOOM = map.__BASE_ZOOM || 17.5;
+  var BASE_ZOOM = map.__BASE_ZOOM || 16.5;
   var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
 
   for (var i = 0; i < MAP_POINTS.length; i++) {
@@ -1234,9 +1234,11 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  var TV_INIT_LAT = 8.10115;
-  var TV_INIT_LNG = 99.68546;
-  var TV_INIT_ZOOM = 17;
+  // แยกพิกัดและระยะซูมเริ่มต้นตามโหมด (PM10 = 16.0, Damaged belt = 16.5)
+  var isPm10Init = (__PAGE_MODE__ === "PM10");
+  var TV_INIT_LAT = isPm10Init ? 8.10115 : 8.10115;
+  var TV_INIT_LNG = isPm10Init ? 99.68380 : 99.68520;
+  var TV_INIT_ZOOM = isPm10Init ? 16 : 16.5;
 
   var bounds = L.latLngBounds();
   var hasPoints = false;
@@ -1262,7 +1264,7 @@ function initLeafletMap_() {
   if (hasPoints && bounds.isValid()) {
     map.setMaxBounds(bounds.pad(0.5));
   }
-  map.options.minZoom = TV_INIT_ZOOM - 2;
+  map.options.minZoom = 14.5;
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -1287,8 +1289,9 @@ function initLeafletMap_() {
 
   function updateCoordAndZoomDisplay_() {
     if (!coordContainer) return;
+    var baseZ = map.__BASE_ZOOM || TV_INIT_ZOOM;
     var z = map.getZoom();
-    var pct = Math.round(Math.pow(2, z - TV_INIT_ZOOM) * 100);
+    var pct = Math.round(Math.pow(2, z - baseZ) * 100);
     coordContainer.innerHTML = 'Lat: ' + lastLatStr + ', Lng: ' + lastLngStr + ' | Zoom: ' + z.toFixed(1) + ' (' + pct + '%)';
   }
 
@@ -1372,8 +1375,9 @@ function initLeafletMap_() {
   }
 
   map.on('zoom', function() {
+    var baseZ = map.__BASE_ZOOM || TV_INIT_ZOOM;
     var currentZoom = map.getZoom();
-    var scaleFactor = Math.pow(2, currentZoom - TV_INIT_ZOOM);
+    var scaleFactor = Math.pow(2, currentZoom - baseZ);
     for (var w = 0; w < markerWrappers.length; w++) {
       markerWrappers[w].style.transform = "scale(" + scaleFactor + ")";
     }
@@ -2016,9 +2020,11 @@ function setLegendForMode_(){
 }
 
 function setPageMode(mode){
-  var TV_INIT_LAT = 8.10115;
-  var TV_INIT_LNG = 99.68546;
-  var TV_INIT_ZOOM = 17;
+  // แยกพิกัดและระยะซูมเริ่มต้นตามโหมด (PM10 = 16.0, Damaged belt = 16.5)
+  var isPm10Mode = (mode === "PM10");
+  var TV_INIT_LAT = isPm10Mode ? 8.10115 : 8.10115;
+  var TV_INIT_LNG = isPm10Mode ? 99.68380 : 99.68520;
+  var TV_INIT_ZOOM = isPm10Mode ? 16 : 16.5;
 
   var isCurrentMapVisible = (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH");
   if (isCurrentMapVisible && typeof map !== 'undefined' && map) {
@@ -2038,12 +2044,14 @@ function setPageMode(mode){
   clearMapDotStateCache_();
 
   if (typeof map !== 'undefined' && map) {
+    map.__BASE_ZOOM = TV_INIT_ZOOM;
     setTimeout(function() {
       map.invalidateSize(true);
       var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
       
       if (isNewMapVisible) {
         map.setView([TV_INIT_LAT, TV_INIT_LNG], TV_INIT_ZOOM, { animate: true });
+        map.fire('zoom');
         setTimeout(adjustCardPositions_, 300);
       }
     }, 150);
@@ -2696,6 +2704,10 @@ document.addEventListener("DOMContentLoaded", function() {
   updateMuteBtn();
   loadLogo(); 
   
+  var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
+  __PAGE_MODE__ = savedMode;
+  document.body.setAttribute("data-mode", savedMode);
+
   var canvas = document.getElementById("mapCanvas");
   if(canvas) {
     buildMapDotsOnce_();
@@ -2704,7 +2716,6 @@ document.addEventListener("DOMContentLoaded", function() {
     setTimeout(buildMapDotsOnce_, 500); 
   }
 
-  var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
   setPageMode(savedMode);
   setAutoSwitchButtons_();
   if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
