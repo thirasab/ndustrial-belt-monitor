@@ -2,8 +2,8 @@
 <html lang="th">
 <head>
   <meta charset="utf-8" />
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  
   <!-- Preconnect & DNS Prefetch -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
@@ -11,9 +11,8 @@
   <!-- External CSS Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
-  <!-- Main CSS -->
-
-<link rel="stylesheet" href="style.css?v=2" />
+  <!-- Main CSS (v=3 สำหรับอัปเดต Responsive มือถือ) -->
+  <link rel="stylesheet" href="style.css?v=3" />
   <title>Industrial Belt Monitor</title>
 
   <!-- External JS Libraries -->
@@ -23,14 +22,13 @@
   <script defer src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
-  <!-- Main JS -->
-
-  <script defer src="script.js?v=2"></script>
+  <!-- Main JS (v=3 สำหรับอัปเดตฟังก์ชันมือถือ & Reset Zoom) -->
+  <script defer src="script.js?v=3"></script>
 </head>
 
 <body data-theme="night" data-mode="PM10">
   
-  <!-- ปุ่มลอยสำหรับเรียกเมนูคืนเมื่ออยู่ในโหมดซ่อน Header -->
+  <!-- ปุ่มลอยสำหรับเรียกเมนูคืนเมื่ออยู่ในโหมดซ่อน Header (เฉพาะจอใหญ่ TV/PC) -->
   <button id="floatingHeaderToggle" class="floating-header-btn" title="Show Header">☰ Menu</button>
 
   <!-- ================= TOP BAR (COMPACT SINGLE LINE) ================= -->
@@ -95,7 +93,7 @@
   <div class="mobileMenu" id="mobileMenu">
     <div class="right">
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
-        <button class="btn modeBtn headBtn primary" id="modeBeltBtn2">Head-Open</button>
+        <button class="btn modeBtn headBtn primary" id="modeBeltBtn2">Damaged belt</button>
         <button class="btn modeBtn pmBtn" id="modePm10Btn2">PM10</button>
         <button class="btn modeBtn vibBtn" id="modeVibDashBtn2" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button> 
         <button class="btn modeBtn" id="modeAiBtn2" style="background-color: #0d9488; border-color: #0f766e; color: #fff; font-weight: 1000;">Noise Sensor</button>
