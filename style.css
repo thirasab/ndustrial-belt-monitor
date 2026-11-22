@@ -1230,3 +1230,33 @@ body.header-hidden .mainViewport {
 body.header-hidden #leftAlarmPanel {
   top: 10px !important;
 }
+/* ========================================================= */
+/* FIX: ซ่อน Section ที่ไม่ได้เลือก และย้ายตำแหน่งกล่อง Alarm       */
+/* ========================================================= */
+
+/* 1. บังคับซ่อน Section ที่ไม่ได้ใช้งาน ไม่ให้แสดงซ้อนกัน */
+#aiSection:not(.open) {
+  display: none !important;
+}
+
+.mainViewport > .section[style*="display: none"] {
+  display: none !important;
+}
+
+/* 2. ย้ายกล่อง Alarm มุมซ้ายบน ลงมาให้พ้นแถบหัวข้อ secHead */
+#leftAlarmPanel {
+  top: 112px !important; /* ขยับลงมาจาก 76px เพื่อหลบแถบหัวข้อ */
+  left: 12px !important;
+}
+
+/* ตอนซ่อนแถบเมนูด้านบน (TV Zen Mode) */
+body.header-hidden #leftAlarmPanel {
+  top: 12px !important;
+}
+
+/* บนหน้าจอมือถือ */
+@media (max-width: 768px) {
+  #leftAlarmPanel {
+    top: 118px !important;
+  }
+}
