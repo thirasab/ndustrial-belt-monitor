@@ -1233,3 +1233,6 @@ body.header-hidden .mainViewport {
 body.header-hidden #leftAlarmPanel {
   top: 12px !important;
 }
+#leftAlarmPanel {
+  display: none !important;
+}
