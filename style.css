@@ -755,17 +755,14 @@ table th, .aiTable th {
 .imgViewerHint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; color: rgba(255,255,255,.82); font-size: 11px; font-weight: 900; pointer-events: none; }
 
 /* ========================================================= */
-/* 11. MEDIA QUERIES (CONSOLIDATED MOBILE STYLES) */
+/* 11. MEDIA QUERIES (BASE MOBILE & TABLET) */
 /* ========================================================= */
 @media (max-width: 1024px) {
   .aiMain { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
-  body { margin: 4px; padding-bottom: 20px; }
-  
   .top {
-    padding: 8px 10px;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -775,7 +772,7 @@ table th, .aiTable th {
   }
   .top .left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
   .brand { min-width: auto; flex: 1; overflow: hidden; }
-  #logoImg { height: 44px; padding: 3px 6px; }
+  #logoImg { height: 36px !important; padding: 2px 5px !important; }
   .h1 { font-size: 14px; }
   .sub { font-size: 11px; }
 
@@ -788,57 +785,27 @@ table th, .aiTable th {
     background: rgba(255,255,255,0.06);
     border-radius: 8px;
   }
-  .mobileMenu.open { display: flex; }
   .mobileMenu.open .right { display: flex !important; }
-
-  .mapDot {
-    width: 18px !important; height: 18px !important;
-    font-size: 8px !important; border-width: 1px !important;
-  }
-  .mapDot.pmFocus { min-width: 32px !important; padding: 0 4px !important; font-size: 7.5px !important; }
-  
-  .overlay { padding: 6px; }
-  .modal { width: 98vw !important; max-height: 94vh !important; border-radius: 12px; }
-  .modalHead { padding: 8px 10px; }
-  .modalBody { padding: 8px; -webkit-overflow-scrolling: touch; }
-  .modalTitle {
-    font-size: 20px !important;
-    white-space: normal !important;
-    line-height: 1.3 !important;
-    padding-right: 10px !important;
-  }
-  .modalBody div[style*="font-size:22px"] { font-size: 16px !important; font-weight: 900 !important; }
-  .modalBody div[style*="font-size:10px"] { font-size: 8.5px !important; letter-spacing: 0px !important; }
-  .modalBody table { display: block; width: 100%; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
-  .rCard { padding: 8px !important; border-radius: 10px; }
 
   .aiGrid { grid-template-columns: repeat(2, 1fr); }
   .aiCard:last-child { grid-column: 1 / -1; }
   .aiMain { display: grid !important; grid-template-columns: 1fr !important; width: 100% !important; max-width: 100% !important; }
   .aiObservations, .aiObsPanel, .aiCard { width: 100% !important; max-width: 100% !important; }
-  .aiObsList, .aiObsGrid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important; gap: 12px !important; }
+  .aiObsList, .aiObsGrid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important; gap: 12px !important; }
 
   .qrOverlay { padding-top: 12vh; } 
   .qrZoomBox { 
     width: min(320px, 85vw); height: min(320px, 85vw);
-    transform-origin: top center;
-    transform: scale(0.4) translate3d(0, -30vh, 0);
+    margin-top: 0; margin-left: calc(-1 * min(160px, 42.5vw));
+    top: 18vh;
   }
   .qrZoomHint { bottom: -28px; font-size: 12px; }
-  
-  #leftAlarmPanel { width: calc(100% - 20px); }
-  #leftAlarmPanel.collapsed { width: 135px; } 
-}
-
-@media (max-width: 600px) {
-  .mapCanvas { aspect-ratio: 4/3; }
 }
 
 @media(max-width: 380px) {
   .h1 { font-size: 12px; }
   .sub { font-size: 9px; }
   .connBadge { padding: 2px 6px; font-size: 9px; }
-  .modalTitle { font-size: 16px !important; }
 }
 
 /* ========================================================= */
@@ -875,54 +842,10 @@ table th, .aiTable th {
 .sev4 { color: var(--open); }
 
 /* ========================================================= */
-/* 12. DYNAMIC LEFT ALARM PANEL */
+/* 12. DYNAMIC LEFT ALARM PANEL (HIDDEN) */
 /* ========================================================= */
-@keyframes alarmSlideIn { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
 #leftAlarmPanel {
-  position: fixed;
-  top: 112px;
-  left: 12px;
-  width: 260px;
-  z-index: 9990;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  pointer-events: none; 
-  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), top 0.25s ease;
-}
-
-#alarmPanelHeader {
-  pointer-events: auto; 
-  background: rgba(255, 59, 48, 0.15);
-  border: 1px solid rgba(255, 59, 48, 0.4);
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: bold;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  transition: background 0.2s, transform 0.1s;
-}
-#alarmPanelHeader:hover { background: rgba(255, 59, 48, 0.30); }
-#alarmPanelHeader:active { transform: translateY(1px); }
-
-#alarmPanelList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  pointer-events: none; 
-}
-
-#leftAlarmPanel.collapsed {
-  width: 135px; 
-}
-#leftAlarmPanel.collapsed #alarmPanelList {
-  display: none; 
+  display: none !important;
 }
 
 /* ========================================================= */
@@ -967,25 +890,27 @@ table th, .aiTable th {
 [data-theme="day"] .top { background: rgba(255, 255, 255, 0.95) !important; }
 
 /* ========================================================= */
-/* 15. UNIFIED COMPACT POS CARD (ALL SCREENS) */
+/* 15. UNIFIED COMPACT POS CARD (DESKTOP/TV) */
 /* ========================================================= */
 body[data-mode="PM10"] .posCard {
   display: none !important;
 }
 
-body:not([data-mode="PM10"]) .posCard {
-  display: block !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  background: rgba(10, 15, 23, 0.90) !important;
-  min-width: 115px !important;
-  max-width: 165px !important;
-  padding: 4px 6px !important;
-  border-radius: 8px !important;
-}
+@media (min-width: 769px) {
+  body:not([data-mode="PM10"]) .posCard {
+    display: block !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(10, 15, 23, 0.90) !important;
+    min-width: 115px !important;
+    max-width: 165px !important;
+    padding: 4px 6px !important;
+    border-radius: 8px !important;
+  }
 
-[data-theme="day"] body:not([data-mode="PM10"]) .posCard {
-  background: rgba(255, 255, 255, 0.88) !important;
+  [data-theme="day"] body:not([data-mode="PM10"]) .posCard {
+    background: rgba(255, 255, 255, 0.88) !important;
+  }
 }
 
 .posCardTitle {
@@ -1117,7 +1042,6 @@ body:not([data-mode="PM10"]) .posCard {
   flex-direction: column;
 }
 
-/* ป้องกันการซ้อนกันของ Section ที่ไม่ได้ถูกเลือก */
 #aiSection:not(.open) {
   display: none !important;
 }
@@ -1171,15 +1095,6 @@ body:not([data-mode="PM10"]) .posCard {
   }
 }
 
-/* ตำแหน่งกล่อง Alarm ซ้ายบน (หลบแถบหัวข้อ secHead) */
-#leftAlarmPanel {
-  top: 112px !important;
-  left: 12px !important;
-}
-@media (max-width: 768px) {
-  #leftAlarmPanel { top: 118px !important; }
-}
-
 /* ========================================================= */
 /* 17. TV IDLE AUTO-HIDE HEADER (15s)                        */
 /* ========================================================= */
@@ -1230,12 +1145,6 @@ body.header-hidden .mainViewport {
   height: 100% !important;
 }
 
-body.header-hidden #leftAlarmPanel {
-  top: 12px !important;
-}
-#leftAlarmPanel {
-  display: none !important;
-}
 /* ========================================================= */
 /* 18. SMART TV ANTI-DISTORTION & OVERSCAN SAFE-ZONE         */
 /* ========================================================= */
@@ -1246,7 +1155,7 @@ html {
 
 @media (min-width: 769px) {
   body {
-    padding: 6px 8px !important; /* กันขอบทีวีตัดภาพ (TV Overscan) */
+    padding: 6px 8px !important;
     width: 100vw !important;
     height: 100vh !important;
     max-width: 100vw !important;
@@ -1254,8 +1163,236 @@ html {
   }
 }
 
-/* ล็อกการแสดงผลตัวหนังสือและกล่องให้คมชัด ไม่เบลอบนจอ TV */
 .mapCanvas, .posCard, .top {
   -webkit-font-smoothing: antialiased;
   backface-visibility: hidden;
+}
+
+/* ========================================================= */
+/* 19. MOBILE RESPONSIVE OVERRIDES (ALL-IN-ONE <= 768px)      */
+/* ========================================================= */
+@media (max-width: 768px) {
+  /* 1. โครงสร้างหลักเต็มความสูงหน้าจอมือถือ ไม่เลื่อนเด้ง */
+  html, body {
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: 4px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  /* 2. ป้องกันระบบ Auto-Hide ซ่อน Header บนมือถือ */
+  .top {
+    padding: 6px 8px !important;
+    border-radius: 10px !important;
+    flex-shrink: 0 !important;
+  }
+  .scada-ticker-wrap {
+    height: 22px !important;
+    margin-top: 4px !important;
+    flex-shrink: 0 !important;
+  }
+  body.header-hidden .top,
+  body.header-hidden .scada-ticker-wrap,
+  body.header-hidden .secHead {
+    display: flex !important;
+  }
+  body.header-hidden .floating-header-btn {
+    display: none !important;
+  }
+
+  /* 3. เมนูมือถือแบบลอยทับหน้าจอ ไม่ดันพื้นที่แผนที่ */
+  .mobileMenu.open {
+    position: fixed !important;
+    top: 56px !important;
+    left: 6px !important;
+    right: 6px !important;
+    background: rgba(12, 18, 27, 0.97) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.85) !important;
+    z-index: 10010 !important;
+    max-height: 80dvh !important;
+    overflow-y: auto !important;
+  }
+  [data-theme="day"] .mobileMenu.open {
+    background: rgba(255, 255, 255, 0.97) !important;
+  }
+
+  /* 4. ขยายพื้นที่แผนที่และ Iframe (Noise / Vib Dashboard) ให้เต็มจอ */
+  .mainViewport {
+    flex: 1 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    margin-top: 4px !important;
+  }
+  .mainViewport > .section {
+    flex: 1 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .mapOuter {
+    flex: 1 !important;
+    min-height: 0 !important;
+    padding: 4px !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .mapCanvas {
+    aspect-ratio: auto !important;
+    height: 100% !important;
+    flex: 1 !important;
+  }
+  .iframeWrap {
+    flex: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  /* 5. ขยายจุดบนแผนที่และปุ่มควบคุม (+, -, 🎯) ให้กดง่ายด้วยนิ้ว */
+  .mapDot {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 11px !important;
+    border-width: 2px !important;
+  }
+  .mapDot.pmFocus {
+    min-width: 38px !important;
+    height: 24px !important;
+    padding: 0 6px !important;
+    font-size: 9px !important;
+  }
+  .leaflet-touch .leaflet-bar a,
+  .leaflet-touch .scada-reset-map-btn {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 34px !important;
+    font-size: 18px !important;
+  }
+
+  /* 6. การ์ดสถานะบนแผนที่ (ซ่อนเป็นค่าเริ่มต้น โชว์เฉพาะจุดที่แตะ) */
+  body:not([data-mode="PM10"]) .posCard {
+    display: none !important;
+  }
+  body:not([data-mode="PM10"]) .posCard.mobile-active {
+    display: block !important;
+    background: rgba(10, 15, 23, 0.92) !important;
+    min-width: 120px !important;
+    max-width: 175px !important;
+    padding: 5px 7px !important;
+    border-radius: 8px !important;
+    z-index: 500 !important;
+  }
+  [data-theme="day"] body:not([data-mode="PM10"]) .posCard.mobile-active {
+    background: rgba(255, 255, 255, 0.92) !important;
+  }
+
+  /* 7. Popup รายละเอียดสายพาน (Bottom Sheet ด้านล่างจอ) */
+  .mapPopup {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 10px !important;
+    top: auto !important;
+    max-width: none !important;
+    width: auto !important;
+    z-index: 10005 !important;
+    box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.75) !important;
+  }
+
+  /* 8. Modal เต็มตาบนมือถือแนวตั้ง */
+  .overlay {
+    padding: 4px !important;
+  }
+  .modal {
+    width: 100vw !important;
+    max-height: 96dvh !important;
+    border-radius: 12px !important;
+  }
+  .modalHead {
+    padding: 10px 12px !important;
+  }
+  .modalTitle {
+    font-size: 15px !important;
+    line-height: 1.25 !important;
+  }
+  .modalBody {
+    padding: 8px !important;
+  }
+
+  /* 9. ตาราง History / Alarm Log / PM10 แบบตรึงคอลัมน์เวลาซ้ายสุด */
+  .modalBody table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 8px !important;
+  }
+  .modalBody th,
+  .modalBody td {
+    padding: 7px 8px !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+    vertical-align: middle !important;
+  }
+  .modalBody td:nth-child(3) {
+    white-space: normal !important;
+    min-width: 140px !important;
+    max-width: 200px !important;
+    line-height: 1.3 !important;
+  }
+  .modalBody th:first-child,
+  .modalBody td:first-child {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 10 !important;
+    background-color: var(--panel) !important;
+    border-right: 1px solid var(--border) !important;
+    font-size: 10px !important;
+  }
+  .modalBody th:first-child {
+    z-index: 25 !important;
+  }
+  [data-theme="day"] .modalBody th:first-child,
+  [data-theme="day"] .modalBody td:first-child {
+    background-color: #ffffff !important;
+  }
+  .modalBody tbody tr:nth-child(even) td {
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+  [data-theme="day"] .modalBody tbody tr:nth-child(even) td {
+    background-color: rgba(10, 18, 32, 0.025);
+  }
+
+  /* 10. กราฟ Chart.js และการ์ดสรุปค่า PM10 */
+  .modalBody div[style*="height:240px"] {
+    height: 260px !important;
+    margin-left: -4px !important;
+    margin-right: -4px !important;
+  }
+  .modalBody canvas {
+    touch-action: pan-y !important;
+  }
+  .pm10Summary {
+    gap: 5px !important;
+    margin-bottom: 6px !important;
+  }
+  .pm10StatCard {
+    padding: 6px 4px !important;
+  }
+  .pm10StatVal {
+    font-size: 15px !important;
+  }
+  .pm10StatLbl {
+    font-size: 9px !important;
+  }
+
+  /* 11. ป้องกันเบราว์เซอร์มือถือซูมหน้าจออัตโนมัติเวลาแตะช่องกรอกข้อมูล */
+  .rInput, .rText, select {
+    font-size: 16px !important;
+  }
 }
