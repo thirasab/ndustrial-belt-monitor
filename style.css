@@ -826,7 +826,7 @@ table th, .aiTable th {
   }
   .qrZoomHint { bottom: -28px; font-size: 12px; }
   
-  #leftAlarmPanel { width: calc(100% - 20px); top: 70px; }
+  #leftAlarmPanel { width: calc(100% - 20px); }
   #leftAlarmPanel.collapsed { width: 135px; } 
 }
 
@@ -881,9 +881,9 @@ table th, .aiTable th {
 
 #leftAlarmPanel {
   position: fixed;
-  top: 140px;
+  top: 112px;
   left: 12px;
-  width: 220px;
+  width: 260px;
   z-index: 9990;
   display: flex;
   flex-direction: column;
@@ -906,8 +906,6 @@ table th, .aiTable th {
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   transition: background 0.2s, transform 0.1s;
 }
 #alarmPanelHeader:hover { background: rgba(255, 59, 48, 0.30); }
@@ -967,10 +965,6 @@ table th, .aiTable th {
 }
 .top { background: rgba(12, 18, 27, 0.95) !important; }
 [data-theme="day"] .top { background: rgba(255, 255, 255, 0.95) !important; }
-
-#leftAlarmPanel {
-  width: 260px;
-}
 
 /* ========================================================= */
 /* 15. UNIFIED COMPACT POS CARD (ALL SCREENS) */
@@ -1108,14 +1102,6 @@ body:not([data-mode="PM10"]) .posCard {
   font-size: 11px !important;
 }
 
-#leftAlarmPanel {
-  top: 76px !important;
-  left: 10px !important;
-}
-@media (max-width: 768px) {
-  #leftAlarmPanel { top: 88px !important; }
-}
-
 .mainViewport {
   flex: 1;
   min-height: 0;
@@ -1128,8 +1114,16 @@ body:not([data-mode="PM10"]) .posCard {
   margin-top: 0 !important;
   flex: 1;
   min-height: 0;
-  display: flex;
   flex-direction: column;
+}
+
+/* ป้องกันการซ้อนกันของ Section ที่ไม่ได้ถูกเลือก */
+#aiSection:not(.open) {
+  display: none !important;
+}
+
+.mainViewport > .section[style*="display: none"] {
+  display: none !important;
 }
 
 .aiSection.open,
@@ -1175,6 +1169,15 @@ body:not([data-mode="PM10"]) .posCard {
     height: 100% !important;
     flex: 1;
   }
+}
+
+/* ตำแหน่งกล่อง Alarm ซ้ายบน (หลบแถบหัวข้อ secHead) */
+#leftAlarmPanel {
+  top: 112px !important;
+  left: 12px !important;
+}
+@media (max-width: 768px) {
+  #leftAlarmPanel { top: 118px !important; }
 }
 
 /* ========================================================= */
@@ -1228,35 +1231,5 @@ body.header-hidden .mainViewport {
 }
 
 body.header-hidden #leftAlarmPanel {
-  top: 10px !important;
-}
-/* ========================================================= */
-/* FIX: ซ่อน Section ที่ไม่ได้เลือก และย้ายตำแหน่งกล่อง Alarm       */
-/* ========================================================= */
-
-/* 1. บังคับซ่อน Section ที่ไม่ได้ใช้งาน ไม่ให้แสดงซ้อนกัน */
-#aiSection:not(.open) {
-  display: none !important;
-}
-
-.mainViewport > .section[style*="display: none"] {
-  display: none !important;
-}
-
-/* 2. ย้ายกล่อง Alarm มุมซ้ายบน ลงมาให้พ้นแถบหัวข้อ secHead */
-#leftAlarmPanel {
-  top: 112px !important; /* ขยับลงมาจาก 76px เพื่อหลบแถบหัวข้อ */
-  left: 12px !important;
-}
-
-/* ตอนซ่อนแถบเมนูด้านบน (TV Zen Mode) */
-body.header-hidden #leftAlarmPanel {
   top: 12px !important;
-}
-
-/* บนหน้าจอมือถือ */
-@media (max-width: 768px) {
-  #leftAlarmPanel {
-    top: 118px !important;
-  }
 }
