@@ -277,7 +277,7 @@ body {
 .dropdown-content {
   display: none; position: absolute; right: 0; top: calc(100% + 5px);
   background: linear-gradient(180deg, var(--panel), var(--panel2));
-  min-width: 180px; box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+  min-width: 195px; box-shadow: 0 10px 25px rgba(0,0,0,0.6);
   border: 1px solid var(--border); border-radius: 10px; z-index: 10000;
   flex-direction: column; overflow: hidden;
 }
@@ -729,7 +729,7 @@ table th, .aiTable th {
   font-size: 12px; background: rgba(255,255,255,.04); color: var(--text); outline: none; transition: border-color .15s;
 }
 .rInput:focus, .rText:focus { border-color: rgba(0,224,255,.45); }
-[data-theme="day"] .rInput, .rText { background: rgba(10,18,32,.04); }
+[data-theme="day"] .rInput, [data-theme="day"] .rText { background: rgba(10,18,32,.04); }
 .rText { min-height: 86px; resize: vertical; }
 .rActions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
 
@@ -889,7 +889,7 @@ table th, .aiTable th {
   flex-direction: column;
   gap: 8px;
   pointer-events: none; 
-  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), top 0.25s ease;
 }
 
 #alarmPanelHeader {
@@ -958,10 +958,6 @@ table th, .aiTable th {
   100% { transform: translateX(-100%); }
 }
 
-/* ปรับตำแหน่งแผงซ้ายมือให้หลบแถบวิ่ง */
-#leftAlarmPanel { top: 175px !important; }
-@media (max-width: 768px) { #leftAlarmPanel { top: 100px !important; } }
-
 /* ========================================================= */
 /* 14. SMART TV & LARGE SCREEN OPTIMIZATION */
 /* ========================================================= */
@@ -970,53 +966,20 @@ table th, .aiTable th {
   -webkit-backdrop-filter: none !important;
 }
 .top { background: rgba(12, 18, 27, 0.95) !important; }
+[data-theme="day"] .top { background: rgba(255, 255, 255, 0.95) !important; }
+
 #leftAlarmPanel {
   width: 260px;
-}
-.scada-ticker-wrap { height: 32px; }
-.scada-ticker-content { font-size: 13px; }
-
-@media (min-width: 1280px) {
-  body {
-    margin: 4px !important;
-  }
-  .top {
-    padding: 6px 12px !important;
-    top: 4px !important;
-  }
-  #logoImg {
-    height: 42px !important;
-  }
-  .mapOuter {
-    padding: 4px !important;
-  }
-  .mapCanvas {
-    aspect-ratio: auto !important;
-    height: calc(100vh - 115px) !important;
-  }
-}
-
-/* ขยายหน้า Noise Sensor ให้เต็มพื้นที่จอมากขึ้น */
-body[data-mode="AI"] .aiSection {
-  margin-top: 4px !important;
-  height: calc(100vh - 96px) !important;
-  border-radius: 10px;
-}
-
-body[data-mode="AI"] .aiSection .secHead {
-  padding: 4px 10px !important;
-}
-
-@media (min-width: 1280px) {
-  body[data-mode="AI"] .aiSection {
-    height: calc(100vh - 92px) !important;
-  }
 }
 
 /* ========================================================= */
 /* 15. UNIFIED COMPACT POS CARD (ALL SCREENS) */
 /* ========================================================= */
-.posCard {
+body[data-mode="PM10"] .posCard {
+  display: none !important;
+}
+
+body:not([data-mode="PM10"]) .posCard {
   display: block !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -1027,7 +990,7 @@ body[data-mode="AI"] .aiSection .secHead {
   border-radius: 8px !important;
 }
 
-[data-theme="day"] .posCard {
+[data-theme="day"] body:not([data-mode="PM10"]) .posCard {
   background: rgba(255, 255, 255, 0.88) !important;
 }
 
@@ -1065,22 +1028,205 @@ body[data-mode="AI"] .aiSection .secHead {
 .posRight {
   gap: 3px !important;
 }
-/* ซ่อนการ์ด POS เฉพาะตอนอยู่โหมด PM10 */
-body[data-mode="PM10"] .posCard {
+
+/* ========================================================= */
+/* 16. COMPACT HEADER & FULL-HEIGHT VIEWPORT OVERRIDES       */
+/* ========================================================= */
+@media (min-width: 769px) {
+  html, body {
+    height: 100dvh;
+    margin: 0 !important;
+    padding: 4px 6px !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+}
+
+.top {
+  padding: 5px 10px !important;
+  border-radius: 10px !important;
+  flex-wrap: nowrap !important;
+  gap: 6px !important;
+  top: 0 !important;
+  flex-shrink: 0;
+}
+
+.top .left {
+  gap: 6px !important;
+  flex-shrink: 0;
+}
+
+.top .right {
+  gap: 5px !important;
+  flex-wrap: nowrap !important;
+}
+
+.brand {
+  min-width: auto !important;
+  margin-right: 4px !important;
+}
+
+#logoImg {
+  height: 32px !important;
+  max-height: 32px !important;
+  padding: 2px 5px !important;
+  border-radius: 6px !important;
+}
+
+.h1 { font-size: 14px !important; }
+.sub { font-size: 10px !important; }
+
+.top .btn,
+.top .modeBtn {
+  padding: 5px 9px !important;
+  font-size: 11.5px !important;
+  border-radius: 7px !important;
+  letter-spacing: 0.2px !important;
+}
+
+.top .pill {
+  padding: 4px 8px !important;
+  font-size: 10.5px !important;
+}
+
+@media (max-width: 1250px) {
+  #legendPill { display: none !important; }
+}
+
+.scada-ticker-wrap {
+  height: 22px !important;
+  margin-top: 4px !important;
+  border-radius: 6px !important;
+  flex-shrink: 0;
+}
+.scada-ticker-label {
+  font-size: 9px !important;
+  padding: 0 8px !important;
+}
+.scada-ticker-content {
+  font-size: 11px !important;
+}
+
+#leftAlarmPanel {
+  top: 76px !important;
+  left: 10px !important;
+}
+@media (max-width: 768px) {
+  #leftAlarmPanel { top: 88px !important; }
+}
+
+.mainViewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+
+.mainViewport > .section {
+  margin-top: 0 !important;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.aiSection.open,
+#vibDashboardSection[style*="block"],
+#vibDashboardSection[style*="flex"] {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+}
+
+.iframeWrap {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.iframeWrap iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.secHead {
+  padding: 4px 10px !important;
+  flex-shrink: 0;
+}
+.secTitle { font-size: 12px !important; }
+.secMeta { font-size: 10.5px !important; }
+
+.mapOuter {
+  padding: 4px !important;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 769px) {
+  .mapCanvas {
+    aspect-ratio: auto !important;
+    height: 100% !important;
+    flex: 1;
+  }
+}
+
+/* ========================================================= */
+/* 17. TV IDLE AUTO-HIDE HEADER (15s)                        */
+/* ========================================================= */
+.top, .scada-ticker-wrap {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.floating-header-btn {
+  display: none;
+  position: fixed;
+  top: 8px;
+  right: 10px;
+  z-index: 10005;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(12, 18, 27, 0.75);
+  color: var(--scada-cyan);
+  border: 1px solid rgba(0, 224, 255, 0.4);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  opacity: 0.45;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.floating-header-btn:hover,
+.floating-header-btn:focus {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+body.header-hidden .top,
+body.header-hidden .scada-ticker-wrap,
+body.header-hidden .mobileMenu,
+body.header-hidden .secHead {
   display: none !important;
 }
 
-body:not([data-mode="PM10"]) .posCard {
-  display: block !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  background: rgba(10, 15, 23, 0.90) !important;
-  min-width: 115px !important;
-  max-width: 165px !important;
-  padding: 4px 6px !important;
-  border-radius: 8px !important;
+body.header-hidden .floating-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
-[data-theme="day"] body:not([data-mode="PM10"]) .posCard {
-  background: rgba(255, 255, 255, 0.88) !important;
+body.header-hidden .mainViewport {
+  margin-top: 0 !important;
+  height: 100% !important;
+}
+
+body.header-hidden #leftAlarmPanel {
+  top: 10px !important;
 }
