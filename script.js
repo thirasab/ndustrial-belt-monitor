@@ -541,9 +541,6 @@ function buildAiRows_(data){
   return rows;
 }
 
-// =========================================================
-// [UPDATED] FLEXBOX VIEWPORT DISPLAY SWITCHING
-// =========================================================
 function setSectionVisibility_(){
   var mapSec=$id("mapSection"), aiSec=$id("aiSection"), dashSec=$id("vibDashboardSection");
   if(mapSec) mapSec.style.display=(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH")?"none":"flex";
@@ -2649,46 +2646,21 @@ function reportRefresh_(){
 })();
 
 // =========================================================
-// 18. LEFT ALARM PANEL & LIVE TICKER
+// 18. LIVE TICKER ONLY (ลบกล่องแจ้งเตือนด้านข้างออกแล้ว)
 // =========================================================
 function updateGlobalLeftAlarms_() {
   if (!window.__LAST_DATA__) return; 
   var rows = buildAiRows_(window.__LAST_DATA__);
-  
-  var panel = document.getElementById("leftAlarmPanel");
-  if (!panel) {
-    panel = document.createElement("div");
-    panel.id = "leftAlarmPanel";
-    panel.innerHTML = `
-      <div id="alarmPanelHeader" onclick="toggleLeftAlarmPanel_()">
-        <span id="alarmHeaderTitle">🚨 Alarms</span>
-        <span id="alarmHeaderIcon">➖</span>
-      </div>
-      <div id="alarmPanelList"></div>
-    `;
-    document.body.appendChild(panel);
 
-    window.toggleLeftAlarmPanel_ = function() {
-      var p = document.getElementById("leftAlarmPanel");
-      var icon = document.getElementById("alarmHeaderIcon");
-      if(p.classList.contains("collapsed")) {
-        p.classList.remove("collapsed"); icon.textContent = "➖"; 
-        window.__ALARM_PANEL_COLLAPSED__ = false;
-      } else {
-        p.classList.add("collapsed"); icon.textContent = "➕"; 
-        window.__ALARM_PANEL_COLLAPSED__ = true;
-      }
-    };
-  }
+  // ลบกล่องด้านซ้ายทิ้งหากยังมีค้างอยู่ในหน้าจอ
+  var oldPanel = document.getElementById("leftAlarmPanel");
+  if (oldPanel) oldPanel.remove();
 
   var activeAlarms = rows.filter(function(r) {
     var isAlarm = r.level === "CRITICAL" || r.level === "HIGH" || r.level === "MEDIUM";
     var isAlert = r.status === "ALERT" || r.status === "WARN";
     return isAlarm && isAlert;
   });
-
-  var header = document.getElementById("alarmPanelHeader");
-  var list = document.getElementById("alarmPanelList");
 
   var ticker = document.getElementById("liveTickerContent");
   if (ticker) {
@@ -2702,43 +2674,6 @@ function updateGlobalLeftAlarms_() {
     tickerHtml += '</span>';
     ticker.innerHTML = tickerHtml;
   }
-
-  if (activeAlarms.length === 0) {
-    header.style.display = "flex";
-    header.style.background = "rgba(31, 210, 122, 0.15)";
-    header.style.borderColor = "rgba(31, 210, 122, 0.4)";
-    document.getElementById("alarmHeaderTitle").innerHTML = "✅ Normal (0)";
-    list.innerHTML = '<div style="background:rgba(15,20,30,0.95); padding:6px 10px; border-radius:6px; color:var(--ok); font-size:11px; text-align:center; border: 1px solid rgba(255,255,255,0.05);">No active alarms</div>';
-    return;
-  }
-
-  header.style.display = "flex";
-  header.style.background = "rgba(255, 59, 48, 0.15)"; 
-  header.style.borderColor = "rgba(255, 59, 48, 0.4)";
-  document.getElementById("alarmHeaderTitle").innerHTML = "🚨 Alarms (" + activeAlarms.length + ")";
-
-  if (window.__ALARM_PANEL_COLLAPSED__) {
-    panel.classList.add("collapsed");
-    document.getElementById("alarmHeaderIcon").textContent = "➕";
-  } else {
-    panel.classList.remove("collapsed");
-    document.getElementById("alarmHeaderIcon").textContent = "➖";
-  }
-
-  var html = "";
-  for (var i = 0; i < activeAlarms.length; i++) {
-    var r = activeAlarms[i];
-    var borderColor = r.level === "CRITICAL" ? "#ff3b30" : (r.level === "HIGH" ? "#ff9f0a" : "#f1c40f");
-    var bgColor = "rgba(15,20,30,0.95)";
-
-    html += '<div style="background:'+bgColor+'; padding:8px 12px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.6); pointer-events:auto; animation:alarmSlideIn 0.2s ease-out; border: 1px solid rgba(255,255,255,0.08); border-left:4px solid '+borderColor+';">';
-    html += '<div style="font-size:12px; font-weight:bold; color:#fff; line-height:1.3; word-break:break-word;">' + esc(r.belt) + '</div>';
-    var shortMsg = r.alarmMsg ? r.alarmMsg : r.alarmType;
-    html += '<div style="font-size:10px; color:'+borderColor+'; margin-top:3px; font-weight:bold;">⚠️ ' + esc(shortMsg) + '</div>';
-    html += '</div>';
-  }
-
-  if(list.innerHTML !== html) { list.innerHTML = html; }
 }
 
 // =========================================================
