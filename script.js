@@ -1266,6 +1266,7 @@ function initLeafletMap_() {
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+  // กล่องแสดงพิกัดและระยะการซูมมุมซ้ายล่าง
   var coordControl = L.control({ position: 'bottomleft' });
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
@@ -1276,20 +1277,30 @@ function initLeafletMap_() {
     this._div.style.fontSize = '11px';
     this._div.style.fontWeight = 'bold';
     this._div.style.border = '1px solid rgba(0,224,255,0.3)';
-    this._div.innerHTML = 'Lat: -, Lng: -';
+    this._div.innerHTML = 'Lat: -, Lng: - | Zoom: ' + TV_INIT_ZOOM.toFixed(1) + ' (100%)';
     return this._div;
   };
   var coordContainer = coordControl.addTo(map).getContainer();
 
+  var lastLatStr = "-";
+  var lastLngStr = "-";
+
+  function updateCoordAndZoomDisplay_() {
+    if (!coordContainer) return;
+    var z = map.getZoom();
+    var pct = Math.round(Math.pow(2, z - TV_INIT_ZOOM) * 100);
+    coordContainer.innerHTML = 'Lat: ' + lastLatStr + ', Lng: ' + lastLngStr + ' | Zoom: ' + z.toFixed(1) + ' (' + pct + '%)';
+  }
+
   map.on('mousemove', function(e) {
-    if (coordContainer) {
-      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
-    }
+    lastLatStr = e.latlng.lat.toFixed(5);
+    lastLngStr = e.latlng.lng.toFixed(5);
+    updateCoordAndZoomDisplay_();
   });
   map.on('click', function(e) {
-    if (coordContainer) {
-      coordContainer.innerHTML = 'Lat: ' + e.latlng.lat.toFixed(5) + ', Lng: ' + e.latlng.lng.toFixed(5);
-    }
+    lastLatStr = e.latlng.lat.toFixed(5);
+    lastLngStr = e.latlng.lng.toFixed(5);
+    updateCoordAndZoomDisplay_();
   });
 
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -1367,6 +1378,7 @@ function initLeafletMap_() {
       markerWrappers[w].style.transform = "scale(" + scaleFactor + ")";
     }
     adjustCardPositions_();
+    updateCoordAndZoomDisplay_();
   });
   map.fire('zoom');
 
