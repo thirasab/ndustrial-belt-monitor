@@ -2022,15 +2022,9 @@ function setLegendForMode_(){
 function setPageMode(mode){
   // แยกพิกัดและระยะซูมเริ่มต้นตามโหมด (PM10 = 16.0, Damaged belt = 16.5)
   var isPm10Mode = (mode === "PM10");
-  var TV_INIT_LAT = isPm10Mode ? 8.10115 : 8.10115;
+  var TV_INIT_LAT = 8.10115;
   var TV_INIT_LNG = isPm10Mode ? 99.68380 : 99.68520;
   var TV_INIT_ZOOM = isPm10Mode ? 16 : 16.5;
-
-  var isCurrentMapVisible = (__PAGE_MODE__ !== "AI" && __PAGE_MODE__ !== "VIB_DASH");
-  if (isCurrentMapVisible && typeof map !== 'undefined' && map) {
-    map.__lastCenter = map.getCenter();
-    map.__lastZoom = map.getZoom();
-  }
 
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
@@ -2040,21 +2034,25 @@ function setPageMode(mode){
   setModeButtons_();
   setLegendForMode_();
   hideMapPopup_();
-
   clearMapDotStateCache_();
 
   if (typeof map !== 'undefined' && map) {
     map.__BASE_ZOOM = TV_INIT_ZOOM;
-    setTimeout(function() {
-      map.invalidateSize(true);
-      var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
-      
-      if (isNewMapVisible) {
-        map.setView([TV_INIT_LAT, TV_INIT_LNG], TV_INIT_ZOOM, { animate: true });
-        map.fire('zoom');
-        setTimeout(adjustCardPositions_, 300);
-      }
-    }, 150);
+    var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
+
+    // ฟังก์ชันย้ำตำแหน่งแผนที่สำหรับจอ TV ที่เรนเดอร์ช้า
+    var syncTvMapView_ = function() {
+      if (!isNewMapVisible) return;
+      map.invalidateSize({ animate: false });
+      map.setView([TV_INIT_LAT, TV_INIT_LNG], TV_INIT_ZOOM, { animate: false });
+      map.fire('zoom');
+      if (typeof adjustCardPositions_ === "function") adjustCardPositions_();
+    };
+
+    if (isNewMapVisible) {
+      setTimeout(syncTvMapView_, 120);
+      setTimeout(syncTvMapView_, 600); // ย้ำอีกรอบหลัง TV ขยายเฟรมเสร็จสมบูรณ์
+    }
   }
 
   for(var i=0; i<MAP_POINTS.length; i++){
@@ -2072,11 +2070,7 @@ function setPageMode(mode){
           if(p.__card) p.__card.style.display = "none";
         } else {
           if(p.__card) {
-            if(window.innerWidth <= 768) {
-              p.__card.style.display = "none";
-            } else {
-              p.__card.style.display = "block";
-            }
+            p.__card.style.display = (window.innerWidth <= 768) ? "none" : "block";
           }
         }
       } else {
