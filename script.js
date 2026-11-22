@@ -541,11 +541,14 @@ function buildAiRows_(data){
   return rows;
 }
 
+// =========================================================
+// [UPDATED] FLEXBOX VIEWPORT DISPLAY SWITCHING
+// =========================================================
 function setSectionVisibility_(){
   var mapSec=$id("mapSection"), aiSec=$id("aiSection"), dashSec=$id("vibDashboardSection");
-  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH")?"none":"block";
+  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH")?"none":"flex";
   if(aiSec) aiSec.classList.toggle("open", __PAGE_MODE__==="AI");
-  if(dashSec) dashSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"block":"none";
+  if(dashSec) dashSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"flex":"none";
 }
 
 function renderAiAnalysis_(data){
@@ -1388,6 +1391,7 @@ function initLeafletMap_() {
     updatePosCards_(window.__LAST_DATA__);
   }
 }
+
 // =========================================================
 // 12. PM10 LOGIC & CHARTS
 // =========================================================
@@ -2738,7 +2742,7 @@ function updateGlobalLeftAlarms_() {
 }
 
 // =========================================================
-// 15. INITIALIZATION (ย้ายมาไว้ล่างสุด)
+// 15. INITIALIZATION
 // =========================================================
 document.addEventListener("DOMContentLoaded", function() {
   refreshOperatorPill();
@@ -2801,4 +2805,107 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
   document.addEventListener("fullscreenchange", updateFsButtonText);
   document.addEventListener("webkitfullscreenchange", updateFsButtonText);
+})();
+
+// =========================================================
+// 20. IDLE AUTO-HIDE HEADER (15 SECONDS)
+// =========================================================
+(function() {
+  var hideBtn = document.getElementById("toggleHeaderBtn");
+  var floatBtn = document.getElementById("floatingHeaderToggle");
+  var IDLE_TIMEOUT_MS = 15000; // 15 วินาที
+  var idleTimer = null;
+  var lastMoveTime = 0;
+
+  // ตรวจสอบว่ากำลังเปิดเมนูหรือหน้าต่าง Modal ค้างไว้อยู่หรือไม่ (ถ้าเปิดอยู่ห้ามซ่อน)
+  function isUserBusy() {
+    var dd = document.querySelector(".dropdown-content.show");
+    var mob = document.querySelector(".mobileMenu.open");
+    if (dd || mob) return true;
+    if (typeof shouldPauseAutoSwitch_ === "function" && shouldPauseAutoSwitch_()) return true;
+    return false;
+  }
+
+  function setHeaderHidden(isHidden) {
+    var currentlyHidden = document.body.classList.contains("header-hidden");
+    if (currentlyHidden === isHidden) return;
+
+    if (isHidden) {
+      if (isUserBusy()) {
+        resetIdleTimer(); // ถ้ากำลังเปิดเมนูค้างไว้ ให้เลื่อนเวลาซ่อนออกไปก่อน
+        return;
+      }
+      document.body.classList.add("header-hidden");
+      if (hideBtn) hideBtn.textContent = "👁️ Show Header";
+    } else {
+      document.body.classList.remove("header-hidden");
+      if (hideBtn) hideBtn.textContent = "👁️ Hide Header Now";
+    }
+
+    // บังคับให้แผนที่ Leaflet ปรับขนาดเต็มพื้นที่ใหม่ทันที
+    setTimeout(function() {
+      if (typeof map !== "undefined" && map) {
+        map.invalidateSize(true);
+        if (typeof adjustCardPositions_ === "function") adjustCardPositions_();
+      }
+    }, 100);
+  }
+
+  function resetIdleTimer() {
+    // 1. เด้งแถบเมนูกลับมาทันทีที่ขยับเมาส์หรือกดปุ่ม
+    setHeaderHidden(false);
+
+    // 2. รีเซ็ตเวลานับถอยหลัง 15 วินาทีใหม่
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(function() {
+      setHeaderHidden(true);
+    }, IDLE_TIMEOUT_MS);
+  }
+
+  // Throttle mousemove ไม่ให้ทำงานถี่เกินไปจนกินแรม TV
+  function onPointerActivity() {
+    var now = Date.now();
+    if (now - lastMoveTime < 400) return;
+    lastMoveTime = now;
+    resetIdleTimer();
+  }
+
+  // ดักจับความเคลื่อนไหวทั้งหมด
+  window.addEventListener("mousemove", onPointerActivity, { passive: true });
+  window.addEventListener("mousedown", resetIdleTimer, { passive: true });
+  window.addEventListener("touchstart", resetIdleTimer, { passive: true });
+  window.addEventListener("wheel", onPointerActivity, { passive: true });
+  window.addEventListener("keydown", function(e) {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    if (e.key === "h" || e.key === "H") {
+      var cur = document.body.classList.contains("header-hidden");
+      if (idleTimer) clearTimeout(idleTimer);
+      setHeaderHidden(!cur);
+      if (cur) resetIdleTimer();
+    } else {
+      resetIdleTimer();
+    }
+  });
+
+  // กดปุ่มซ่อนทันทีจากเมนู
+  if (hideBtn) {
+    hideBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var dd = document.querySelector(".dropdown-content.show");
+      if (dd) dd.classList.remove("show");
+      if (idleTimer) clearTimeout(idleTimer);
+      setHeaderHidden(true);
+    });
+  }
+
+  // กดปุ่มลอยมุมขวาบน
+  if (floatBtn) {
+    floatBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      resetIdleTimer();
+    });
+  }
+
+  // เริ่มนับถอยหลัง 15 วินาทีทันทีที่เปิดหน้าเว็บ
+  resetIdleTimer();
 })();
