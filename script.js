@@ -2925,32 +2925,55 @@ function reportRefresh_(){
 })();
 
 // =========================================================
-// 18. LIVE TICKER ONLY (ลบกล่องแจ้งเตือนด้านข้างออกแล้ว)
+// 18. LIVE TICKER (SMOOTH SPEED & ANTI-FLICKER)
 // =========================================================
+var __LAST_TICKER_TEXT__ = "";
+var __LAST_TICKER_RENDER_AT__ = 0;
+
 function updateGlobalLeftAlarms_() {
-  if (!window.__LAST_DATA__) return; 
+  if (!window.__LAST_DATA__) return;
+
+  // เว้นระยะอัปเดตข้อความอย่างน้อยทุก 30 วินาที เพื่อไม่ให้แถบกระตุกบ่อยเกินไป
+  var now = Date.now();
+  if (__LAST_TICKER_TEXT__ && (now - __LAST_TICKER_RENDER_AT__ < 30000)) {
+    return;
+  }
+
   var rows = buildAiRows_(window.__LAST_DATA__);
 
   var oldPanel = document.getElementById("leftAlarmPanel");
   if (oldPanel) oldPanel.remove();
 
+  // คัดกรองเฉพาะรายการที่สถานะผิดปกติจริง (ตัดข้อความซ้ำออก)
+  var seenMap = {};
   var activeAlarms = rows.filter(function(r) {
     var isAlarm = r.level === "CRITICAL" || r.level === "HIGH" || r.level === "MEDIUM";
     var isAlert = r.status === "ALERT" || r.status === "WARN";
-    return isAlarm && isAlert;
+    if (!isAlarm || !isAlert) return false;
+    var key = String(r.belt || "") + "|" + String(r.alarmType || "");
+    if (seenMap[key]) return false;
+    seenMap[key] = true;
+    return true;
   });
 
-  var ticker = document.getElementById("liveTickerContent");
-  if (ticker) {
-    var tickerHtml = '<span>';
-    if (activeAlarms.length === 0) {
-      tickerHtml += '✅ [' + new Date().toLocaleTimeString('th-TH') + '] SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.';
-    } else {
-      var msgs = activeAlarms.map(a => '⚠️ ' + a.belt + ': ' + (a.alarmMsg || a.alarmType));
-      tickerHtml += msgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ');
+  var nextText = "";
+  if (activeAlarms.length === 0) {
+    nextText = "✅ SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.";
+  } else {
+    var msgs = activeAlarms.map(function(a) {
+      return "⚠️ " + a.belt + " [" + a.level + "]: " + (a.alarmMsg || a.alarmType);
+    });
+    nextText = msgs.join("     •     ");
+  }
+
+  // อัปเดต DOM เฉพาะเมื่อข้อความเปลี่ยนแปลง ป้องกันแอนิเมชันกระตุกรีเซ็ต
+  if (nextText !== __LAST_TICKER_TEXT__) {
+    __LAST_TICKER_TEXT__ = nextText;
+    __LAST_TICKER_RENDER_AT__ = now;
+    var ticker = document.getElementById("liveTickerContent");
+    if (ticker) {
+      ticker.innerHTML = "<span>" + esc(nextText) + "</span>";
     }
-    tickerHtml += '</span>';
-    ticker.innerHTML = tickerHtml;
   }
 }
 
