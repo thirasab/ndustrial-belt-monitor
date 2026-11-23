@@ -1397,14 +1397,21 @@ html {
 }
 
 /* ========================================================= */
-/* 20. FIX LEAFLET TILE GRID LINES ON SMART TV / ZOOM        */
+/* 20. FIX LEAFLET TILE GRID LINES (PC, MOBILE & SMART TV)   */
 /* ========================================================= */
+.leaflet-container {
+  background: #1b241e !important; /* สีพื้นหลังโทนเดียวกับแผนที่ดาวเทียม กันสีขาว/ดำทะลุ */
+}
+
+.leaflet-tile-container img,
 .leaflet-container .leaflet-tile {
   outline: 1px solid transparent !important;
-  -webkit-backface-visibility: visible !important;
-  backface-visibility: visible !important;
-  width: 256.6px !important;
-  height: 256.6px !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  /* ขยายภาพจากจุดกึ่งกลาง 0.4% (ประมาณ 1px) เพื่อเกยทับรอยต่อพอดีโดยไม่เสียสัดส่วน */
+  transform-origin: center center;
+  scale: 1.004;
 }
 
 .mapCanvas {
