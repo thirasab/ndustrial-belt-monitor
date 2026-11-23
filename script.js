@@ -1181,7 +1181,7 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 }
 
 // =========================================================
-// 11. MAP & POPUP RENDERERS
+// 11. MAP & POPUP RENDERERS (STATIC IMAGE OVERLAY map1.jpg)
 // =========================================================
 
 function adjustCardPositions_() {
@@ -1323,12 +1323,11 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  // ใช้ระยะซูมจำนวนเต็ม (16 / 17) เพื่อป้องกันรอยต่อตารางบน Smart TV
   var isMobile = window.innerWidth <= 768;
   var isPm10Init = (__PAGE_MODE__ === "PM10");
   var TV_INIT_LAT = 8.10115;
   var TV_INIT_LNG = isPm10Init ? 99.68380 : 99.68520;
-  var TV_INIT_ZOOM = (isPm10Init ? 16 : 17) - (isMobile ? 1 : 0);
+  var TV_INIT_ZOOM = (isPm10Init ? 16 : 16.5) - (isMobile ? 1.0 : 0);
 
   var bounds = L.latLngBounds();
   var hasPoints = false;
@@ -1343,9 +1342,7 @@ function initLeafletMap_() {
   map = L.map('mapCanvas', {
     zoomControl: false,
     attributionControl: false,
-    zoomSnap: 1,
-    zoomAnimation: false,
-    fadeAnimation: false,
+    zoomSnap: 0.5,
     wheelPxPerZoomLevel: 120,
     maxZoom: 22
   });
@@ -1356,7 +1353,7 @@ function initLeafletMap_() {
   if (hasPoints && bounds.isValid()) {
     map.setMaxBounds(bounds.pad(0.5));
   }
-  map.options.minZoom = 14;
+  map.options.minZoom = 14.5;
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -1384,9 +1381,9 @@ function initLeafletMap_() {
       var isPm10 = (__PAGE_MODE__ === "PM10");
       var initLat = 8.10115;
       var initLng = isPm10 ? 99.68380 : 99.68520;
-      var initZoom = (isPm10 ? 16 : 17) - (mob ? 1 : 0);
+      var initZoom = (isPm10 ? 16 : 16.5) - (mob ? 1.0 : 0);
 
-      map.setView([initLat, initLng], initZoom, { animate: false });
+      map.setView([initLat, initLng], initZoom, { animate: true });
       if (typeof hideMapPopup_ === "function") hideMapPopup_();
       if (mob) {
         for (var m = 0; m < MAP_POINTS.length; m++) {
@@ -1409,7 +1406,7 @@ function initLeafletMap_() {
     this._div.style.fontSize = '11px';
     this._div.style.fontWeight = 'bold';
     this._div.style.border = '1px solid rgba(0,224,255,0.3)';
-    this._div.innerHTML = 'Lat: -, Lng: - | Zoom: ' + TV_INIT_ZOOM.toFixed(0) + ' (100%)';
+    this._div.innerHTML = 'Lat: -, Lng: - | Zoom: ' + TV_INIT_ZOOM.toFixed(1) + ' (100%)';
     return this._div;
   };
   var coordContainer = coordControl.addTo(map).getContainer();
@@ -1422,7 +1419,7 @@ function initLeafletMap_() {
     var baseZ = map.__BASE_ZOOM || TV_INIT_ZOOM;
     var z = map.getZoom();
     var pct = Math.round(Math.pow(2, z - baseZ) * 100);
-    coordContainer.innerHTML = 'Lat: ' + lastLatStr + ', Lng: ' + lastLngStr + ' | Zoom: ' + z.toFixed(0) + ' (' + pct + '%)';
+    coordContainer.innerHTML = 'Lat: ' + lastLatStr + ', Lng: ' + lastLngStr + ' | Zoom: ' + z.toFixed(1) + ' (' + pct + '%)';
   }
 
   map.on('mousemove', function(e) {
@@ -1436,9 +1433,14 @@ function initLeafletMap_() {
     updateCoordAndZoomDisplay_();
   });
 
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 22,
-    maxNativeZoom: 17
+  // ✅ ใช้ภาพนิ่ง map1.jpg จาก GitHub แทน TileLayer (ไม่มีเส้นตาราง 100%)
+  var imageBounds = [
+    [8.10950, 99.67450], // มุมซ้ายบน (Top-Left: Lat สูง, Lng ต่ำ)
+    [8.09550, 99.69450]  // มุมขวาล่าง (Bottom-Right: Lat ต่ำ, Lng สูง)
+  ];
+
+  L.imageOverlay('map1.jpg', imageBounds, {
+    interactive: false
   }).addTo(map);
 
   var markerWrappers = [];
@@ -2161,12 +2163,11 @@ function setLegendForMode_(){
 }
 
 function setPageMode(mode){
-  // ใช้ระยะซูมจำนวนเต็ม (16 / 17) เพื่อป้องกันรอยต่อตารางบน Smart TV
   var isMobile = window.innerWidth <= 768;
   var isPm10Mode = (mode === "PM10");
   var TV_INIT_LAT = 8.10515;
   var TV_INIT_LNG = isPm10Mode ? 99.68380 : 99.68520;
-  var TV_INIT_ZOOM = (isPm10Mode ? 16 : 17) - (isMobile ? 1 : 0);
+  var TV_INIT_ZOOM = (isPm10Mode ? 16 : 16.5) - (isMobile ? 1.0 : 0);
 
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
@@ -2262,7 +2263,8 @@ function shouldPauseAutoSwitch_(){
          isShown_($id("reportOverlay")) ||
          isShown_($id("reportFormOverlay")) ||
          isShown_($id("mapPopup")) ||
-         isShown_($id("qrOverlay"));
+         isShown_($id("qrOverlay")) ||
+         isShown_($id("layoutEditorBar"));
 }
 
 function setAutoSwitchButtons_(){
@@ -3028,4 +3030,158 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   }
 
   resetIdleTimer();
+})();
+
+// =========================================================
+// 21. DRAG & DROP LAYOUT EDITOR (POS & CARD POSITIONING)
+// =========================================================
+(function() {
+  var __EDIT_LAYOUT_MODE__ = false;
+  var editBtn = document.getElementById("editLayoutBtn");
+  if (!editBtn) return;
+
+  // สร้างแถบเครื่องมือลอยด้านบนเมื่อเปิดโหมดแก้ไข
+  var bar = document.createElement("div");
+  bar.id = "layoutEditorBar";
+  bar.style.cssText = "display:none; position:fixed; top:54px; left:50%; transform:translateX(-50%); z-index:10020; background:rgba(12,18,27,0.96); border:1px solid #00e0ff; border-radius:10px; padding:8px 14px; box-shadow:0 8px 25px rgba(0,0,0,0.8); align-items:center; gap:10px; font-family:ui-monospace,monospace; font-size:12px; color:#fff;";
+  bar.innerHTML = 
+    '<span style="color:#00e0ff; font-weight:bold;">🛠️ EDIT MODE:</span>' +
+    '<span>ลากจุด POS หรือลากกล่องการ์ดเพื่อจัดตำแหน่ง</span>' +
+    '<button id="copyLayoutBtn" class="rBtn primary" style="padding:5px 10px;">📋 Copy JSON</button>' +
+    '<button id="exitLayoutBtn" class="rBtn danger" style="padding:5px 10px;">✕ Done</button>';
+  document.body.appendChild(bar);
+
+  function setEditMode(active) {
+    __EDIT_LAYOUT_MODE__ = !!active;
+    bar.style.display = __EDIT_LAYOUT_MODE__ ? "flex" : "none";
+    editBtn.textContent = __EDIT_LAYOUT_MODE__ ? "✅ Exit Edit Layout" : "🛠️ Edit POS & Card";
+
+    if (typeof map !== "undefined" && map) {
+      // ปิดการลากแผนที่ชั่วคราวเพื่อให้ลากจุดและ์การ์ดได้แม่นยำไม่เลื่อนตาม
+      if (__EDIT_LAYOUT_MODE__) map.dragging.disable();
+      else map.dragging.enable();
+    }
+
+    for (var i = 0; i < MAP_POINTS.length; i++) {
+      var p = MAP_POINTS[i];
+      if (!p.__el || !p.__card) continue;
+
+      if (__EDIT_LAYOUT_MODE__) {
+        p.__el.style.cursor = "grab";
+        p.__el.style.outline = "2px dashed #00e0ff";
+        p.__card.style.cursor = "move";
+        p.__card.style.outline = "2px dashed #ff9f0a";
+        if (p.modes && p.modes.includes(__PAGE_MODE__)) {
+          p.__card.style.display = "block";
+        }
+        bindDragHandlers_(p);
+      } else {
+        p.__el.style.cursor = "pointer";
+        p.__el.style.outline = "none";
+        p.__card.style.cursor = "pointer";
+        p.__card.style.outline = "none";
+        if (__PAGE_MODE__ === "PM10" || window.innerWidth <= 768) {
+          p.__card.style.display = "none";
+        }
+      }
+    }
+  }
+
+  function bindDragHandlers_(p) {
+    if (p.__dragBound) return;
+    p.__dragBound = true;
+
+    // 1. ลากจุด POS (เปลี่ยนค่า Lat, Lng)
+    p.__el.addEventListener("mousedown", function(e) {
+      if (!__EDIT_LAYOUT_MODE__) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      function onMove(ev) {
+        var rect = document.getElementById("mapCanvas").getBoundingClientRect();
+        var pt = L.point(ev.clientX - rect.left, ev.clientY - rect.top);
+        var latlng = map.containerPointToLatLng(pt);
+        p.lat = Number(latlng.lat.toFixed(6));
+        p.lng = Number(latlng.lng.toFixed(6));
+        p.__marker.setLatLng([p.lat, p.lng]);
+      }
+
+      function onUp() {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        showToast("POS " + p.pos + " moved", "ok", p.lat + ", " + p.lng);
+      }
+
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    });
+
+    // 2. ลากกล่องการ์ด (เปลี่ยนค่า labelDx, labelDy)
+    p.__card.addEventListener("mousedown", function(e) {
+      if (!__EDIT_LAYOUT_MODE__) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      var startX = e.clientX;
+      var startY = e.clientY;
+      var origDx = Number(p.labelDx) || 0;
+      var origDy = Number(p.labelDy) || 0;
+      var baseZ = map.__BASE_ZOOM || 16;
+      var scaleFactor = Math.pow(2, map.getZoom() - baseZ);
+
+      function onMove(ev) {
+        var diffX = (ev.clientX - startX) / scaleFactor;
+        var diffY = (ev.clientY - startY) / scaleFactor;
+        p.labelDx = Math.round(origDx + diffX);
+        p.labelDy = Math.round(origDy + diffY);
+        p.__card.style.transform = "translate(" + p.labelDx + "px," + p.labelDy + "px)";
+      }
+
+      function onUp() {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        showToast("Card POS " + p.pos, "ok", "dx: " + p.labelDx + ", dy: " + p.labelDy);
+      }
+
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    });
+  }
+
+  // ป้องกันการเปิด Popup รายละเอียดขณะอยู่ในโหมดลากจัดตำแหน่ง
+  var origShowPosCards = window.showPosCards_;
+  window.showPosCards_ = function(pos, anchorEl) {
+    if (__EDIT_LAYOUT_MODE__) return;
+    if (origShowPosCards) origShowPosCards(pos, anchorEl);
+  };
+
+  editBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    setEditMode(!__EDIT_LAYOUT_MODE__);
+  });
+
+  document.getElementById("exitLayoutBtn").addEventListener("click", function() {
+    setEditMode(false);
+  });
+
+  document.getElementById("copyLayoutBtn").addEventListener("click", function() {
+    var exported = MAP_POINTS.map(function(p) {
+      return {
+        pos: p.pos,
+        lat: p.lat,
+        lng: p.lng,
+        labelDx: p.labelDx,
+        labelDy: p.labelDy
+      };
+    });
+    var jsonStr = JSON.stringify(exported, null, 2);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(jsonStr).then(function() {
+        showToast("Copied to Clipboard!", "ok", "นำค่าพิกัดไปอัปเดตใน Google Sheet ได้เลย");
+      });
+    } else {
+      console.log(jsonStr);
+      Swal.fire({ title: "POS Coordinates JSON", html: '<textarea style="width:100%;height:260px;font-family:monospace;">' + jsonStr + '</textarea>' });
+    }
+  });
 })();
