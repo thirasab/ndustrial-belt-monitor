@@ -328,6 +328,7 @@ body {
   position: relative; width: 100%; border-radius: 12px; border: 1px solid var(--border);
   overflow: hidden; box-shadow: 0 8px 18px rgba(0,0,0,.22);
   aspect-ratio: 2048/1342; background: transparent !important; touch-action: none;
+  will-change: transform;
 }
 .scada-leaflet-marker { overflow: visible !important; }
 
@@ -1162,9 +1163,8 @@ html {
   }
 }
 
-.mapCanvas, .posCard, .top {
+.posCard, .top {
   -webkit-font-smoothing: antialiased;
-  backface-visibility: hidden;
 }
 
 /* ========================================================= */
@@ -1397,24 +1397,18 @@ html {
 }
 
 /* ========================================================= */
-/* 20. FIX LEAFLET BLACK GRID LINES ON SMART TV              */
+/* 20. FIX LEAFLET TILE GRID LINES ON SMART TV / ZOOM        */
 /* ========================================================= */
+.leaflet-container .leaflet-tile {
+  outline: 1px solid transparent !important;
+  -webkit-backface-visibility: visible !important;
+  backface-visibility: visible !important;
+  width: 256.6px !important;
+  height: 256.6px !important;
+}
+
 .mapCanvas {
-  will-change: auto !important;
+  -webkit-backface-visibility: visible !important;
+  backface-visibility: visible !important;
   transform: none !important;
-  background: #232d25 !important;
-}
-
-.leaflet-tile-pane {
-  will-change: auto !important;
-}
-
-.leaflet-tile-container img.leaflet-tile {
-  width: 257.5px !important;
-  height: 257.5px !important;
-  max-width: none !important;
-  max-height: none !important;
-  margin: -0.75px !important;
-  border: none !important;
-  outline: none !important;
 }
