@@ -82,21 +82,6 @@ function esc(s) {
     .replace(/'/g, "&#039;");
 }
 
-function formatShortTimeMobile_(rawVal) {
-  var s = String(rawVal == null ? "" : rawVal).trim();
-  if (window.innerWidth > 768 || !s) return s;
-
-  // รูปแบบ DD/MM/YYYY HH:mm:ss หรือ DD/MM/YYYY HH:mm -> DD/MM HH:mm
-  var m1 = s.match(/^(\d{2}\/\d{2})\/\d{4}[ T](\d{2}:\d{2})(?::\d{2})?$/);
-  if (m1) return m1[1] + " " + m1[2];
-
-  // รูปแบบ YYYY-MM-DD HH:mm:ss หรือ YYYY-MM-DD HH:mm -> DD/MM HH:mm
-  var m2 = s.match(/^\d{4}-(\d{2})-(\d{2})[ T](\d{2}:\d{2})(?::\d{2})?$/);
-  if (m2) return m2[2] + "/" + m2[1] + " " + m2[3];
-
-  return s;
-}
-
 function hardCrashScreen(title,msg,stack){
   try{stopPolling();}catch(_){}
   document.body.innerHTML='<div style="font-family:ui-monospace,Menlo,Consolas,monospace;padding:16px;">'+
@@ -893,73 +878,27 @@ function rpmCellInfo_(r){
   return{text:text,cls:cls,n:n,has:(s!=="")};
 }
 function renderHistory(history){
-  var belt = history.belt, group = history.group || "", rows = history.rows || [];
-  var isMobile = window.innerWidth <= 768;
-
-  function fullDirName(d){
-    if(d==="N") return "NORTH"; 
-    if(d==="S") return "SOUTH"; 
-    if(d==="E") return "EAST"; 
-    if(d==="W") return "WEST"; 
-    return "";
-  }
-
-  var html = '<div class="mono" style="color:var(--muted);margin-bottom:9px;">CM: <b>' + esc(group) + '</b></div>';
-  if(!rows.length){ 
-    html += '<div class="mono" style="color:var(--muted);">No data</div>'; 
-  } else {
-    var thTimeStyle = isMobile ? 'style="width:88px;"' : 'style="width:195px;"';
-    var thTypeStyle = isMobile ? 'style="width:72px;"'  : 'style="width:100px;"';
-    var thSwayStyle = isMobile ? 'style="width:75px;"'  : 'style="width:100px;"';
-    var thDirStyle  = isMobile ? 'style="width:60px;"'  : 'style="width:80px;"';
-    var thRpmStyle  = isMobile ? 'style="width:70px;"'  : 'style="width:150px;"';
-
-    html += '<table><thead><tr>' +
-            '<th ' + thTimeStyle + '>Time</th>' +
-            '<th ' + thTypeStyle + '>Type</th>' +
-            '<th>Msg</th>' +
-            '<th ' + thSwayStyle + '>SWAY</th>' +
-            '<th ' + thDirStyle  + '>DIR</th>' +
-            '<th ' + thRpmStyle  + '>RPM</th>' +
-            '</tr></thead><tbody>';
-
-    for(var i = 0; i < rows.length; i++){
-      var r = rows[i]; 
-      var rpmInfo = rpmCellInfo_(r);
-      var isStop = false;
-      
-      if(r.type === "SLEEP"){
-        if(!rpmInfo.has) isStop = true;
-        else {
-          var nn = Number(rpmInfo.n); 
-          if(!isFinite(nn) || nn <= 0) isStop = true;
-        }
-      }
-      
-      var dirMini = r.dir ? ("  DIR:" + esc(r.dir)) : ""; 
-      var msgText = r.msg ? (esc(r.msg) + dirMini) : dirMini;
-      var sc = (r && r.swayCountHour != null) ? Number(r.swayCountHour) : 0; 
-      if(!isFinite(sc)) sc = 0;
-      var sd = (r && r.swayDirHour != null) ? String(r.swayDirHour).trim().toUpperCase() : "";
-      
-      var scText = (sc > 0) ? (history.belt || "") : "-"; 
-      var sdText = (sc > 0 && sd) ? fullDirName(sd) : "-";
-      var displayTime = formatShortTimeMobile_(r.time);
-
-      html += '<tr>' +
-              '<td>' + esc(displayTime) + '</td>' +
-              '<td>' + tagHtml(r.type, isStop) + '</td>' +
-              '<td>' + msgText + '</td>' +
-              '<td class="mono" style="text-align:center;font-weight:900;">' + esc(scText) + '</td>' +
-              '<td class="mono" style="text-align:center;font-weight:900;">' + esc(sdText) + '</td>' +
-              '<td class="' + esc(rpmInfo.cls) + '">' + esc(rpmInfo.text) + '</td>' +
-              '</tr>';
+  var belt=history.belt,group=history.group||"",rows=history.rows||[];
+  var html='<div class="mono" style="color:var(--muted);margin-bottom:9px;">CM: <b>'+esc(group)+'</b></div>';
+  if(!rows.length){ html+='<div class="mono" style="color:var(--muted);">No data</div>'; }
+  else {
+    html+='<table><thead><tr><th style="width:195px;">Time</th><th style="width:100px;">Type</th><th>Msg</th><th style="width:100px;">SWAY</th><th style="width:80px;">DIR</th><th style="width:150px;">RPM</th></tr></thead><tbody>';
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i]; var rpmInfo=rpmCellInfo_(r);
+      var isStop=false;
+      if(r.type==="SLEEP"){if(!rpmInfo.has) isStop=true;
+      else{var nn=Number(rpmInfo.n); if(!isFinite(nn)||nn<=0) isStop=true;}}
+      var dirMini=r.dir?("  DIR:"+esc(r.dir)):""; var msgText=r.msg?(esc(r.msg)+dirMini):(dirMini);
+      var sc=(r&&r.swayCountHour!=null)?Number(r.swayCountHour):0; if(!isFinite(sc)) sc=0;
+      var sd=(r&&r.swayDirHour!=null)?String(r.swayDirHour).trim().toUpperCase():"";
+      function fullDirName(d){if(d==="N") return "NORTH"; if(d==="S") return "SOUTH"; if(d==="E") return "EAST"; if(d==="W") return "WEST"; return "";}
+      var scText=(sc>0)?(history.belt||""):"-"; var sdText=(sc>0&&sd)?fullDirName(sd):"-";
+      html+='<tr><td>'+esc(r.time)+'</td><td>'+tagHtml(r.type,isStop)+'</td><td>'+msgText+'</td><td class="mono" style="text-align:center;font-weight:900;">'+esc(scText)+'</td><td class="mono" style="text-align:center;font-weight:900;">'+esc(sdText)+'</td><td class="'+esc(rpmInfo.cls)+'">'+esc(rpmInfo.text)+'</td></tr>';
     }
-    html += '</tbody></table>';
+    html+='</tbody></table>';
   }
-  
-  setText("modalTitle", "History 24h — " + belt + " (" + group + ")");
-  setHTML("modalBody", html);
+  setText("modalTitle","History 24h — "+belt+" ("+group+")");
+  setHTML("modalBody",html);
 }
 
 // =========================================================
@@ -1003,7 +942,7 @@ function renderVibModal_(res, currentRange, isGroup2) {
   var d20 = downsampleVibData_(rawD20, currentRange);
 
   var html = '<div style="display:flex;flex-direction:column;gap:10px;">';
-  html += '<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); padding:10px 12px; border-radius:10px; border:1px solid var(--border); gap:8px; flex-wrap:wrap;">';
+  html += '<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); padding:10px 12px; border-radius:10px; border:1px solid var(--border);">';
   html += '<div style="font-weight:900; font-size:13px;">📈 เลือกช่วงเวลาดูแนวโน้ม</div>';
   html += '<select style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-weight:bold; cursor:pointer; outline:none;" onchange="fetchVibData(this.value, ' + posArg + ')">';
   html += '<option value="4h" '+(currentRange==="4h"?"selected":"")+'>4 ชั่วโมงล่าสุด (~80 รายการ)</option>';
@@ -1034,12 +973,9 @@ function renderVibModal_(res, currentRange, isGroup2) {
     if (isOffline) color = "var(--stale)";
 
     return '<div class="rCard" style="padding:10px; margin-bottom:10px; position:relative; z-index:1;">' +
-           '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;">' +
-             '<div class="mono" style="color:var(--text);font-weight:bold;font-size:14px;">' + title + '</div>' +
-             '<div style="display:flex; align-items:center; gap:8px;">' +
-               '<button type="button" class="rBtn rBtnMini" onclick="if(__VIB_CHARTS__[\'' + canvasId + '\']) __VIB_CHARTS__[\'' + canvasId + '\'].resetZoom();">↺ Reset</button>' +
-               '<div class="mono" style="color:' + color + ';font-weight:bold;">' + statusText + '</div>' +
-             '</div>' +
+           '<div style="display:flex; justify-content:space-between; margin-bottom:6px;">' +
+           '<div class="mono" style="color:var(--text);font-weight:bold;font-size:14px;">' + title + '</div>' +
+           '<div class="mono" style="color:' + color + ';font-weight:bold;">' + statusText + '</div>' +
            '</div>' +
            '<div style="height:240px;width:100%;"><canvas id="' + canvasId + '"></canvas></div>' +
            '</div>';
@@ -1126,53 +1062,34 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
   var isDark = (document.body.getAttribute("data-theme") || "night") !== "day";
   var gridColor = isDark ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)";
   var textColor = isDark ? "#9fb2c9" : "#4b5b70";
-  var isMobile = window.innerWidth <= 768;
 
   __VIB_CHARTS__[canvasId] = new Chart(cvs, {
     type: "line",
     data: {
       labels: labels,
       datasets: [
-        { label: "Vib (mm/s)", data: acc, borderColor: "#e74c3c", backgroundColor: "rgba(231,76,60,0.1)", yAxisID: 'y', tension: 0.1, fill: true, borderWidth: isMobile ? 1.5 : 2, pointRadius: isMobile ? 0 : 1 },
-        { label: "Sound (dB)", data: sound, borderColor: "#3498db", backgroundColor: "rgba(52,152,219,0.1)", yAxisID: 'y1', tension: 0.1, fill: true, borderWidth: isMobile ? 1.5 : 2, pointRadius: isMobile ? 0 : 1 }
+        { label: "Vibration (mm/s)", data: acc, borderColor: "#e74c3c", backgroundColor: "rgba(231,76,60,0.1)", yAxisID: 'y', tension: 0.1, fill: true, borderWidth: 2, pointRadius: 1 },
+        { label: "Sound (dB)", data: sound, borderColor: "#3498db", backgroundColor: "rgba(52,152,219,0.1)", yAxisID: 'y1', tension: 0.1, fill: true, borderWidth: 2, pointRadius: 1 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      layout: {
-        padding: { left: 0, right: 0, top: 4, bottom: 0 }
-      },
       plugins: { 
-        legend: { 
-          display: true,
-          labels: { color: textColor, boxWidth: 12, font: { size: isMobile ? 10 : 12, weight: 'bold' } }
-        },
+        legend: { display: false },
         zoom: {
           pan: { enabled: true, mode: 'x' },
           zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
         }
       },
       scales: {
-        x: { 
-          ticks: { 
-            color: textColor, 
-            maxTicksLimit: isMobile ? 5 : 10,
-            maxRotation: 0,
-            font: { size: isMobile ? 9 : 11 }
-          }, 
-          grid: { color: gridColor } 
-        },
+        x: { ticks: { color: textColor, maxTicksLimit: 10 }, grid: { color: gridColor } },
         y: { 
-          type: 'linear', position: 'left', 
-          ticks: { color: '#e74c3c', font: { size: isMobile ? 9 : 11 }, maxTicksLimit: 6 }, 
-          grid: { color: gridColor }, 
+          type: 'linear', position: 'left', ticks: { color: '#e74c3c' }, grid: { color: gridColor }, 
           suggestedMin: targetMinVib, suggestedMax: targetMaxVib  
         },
         y1: { 
-          type: 'linear', position: 'right', 
-          ticks: { color: '#3498db', font: { size: isMobile ? 9 : 11 }, maxTicksLimit: 6 }, 
-          grid: { drawOnChartArea: false }, 
+          type: 'linear', position: 'right', ticks: { color: '#3498db' }, grid: { drawOnChartArea: false }, 
           suggestedMin: targetMinSound, suggestedMax: targetMaxSound  
         }
       }
@@ -1190,18 +1107,12 @@ function adjustCardPositions_() {
   
   var cr = canvas.getBoundingClientRect();
   var currentZoom = map.getZoom();
-  var BASE_ZOOM = map.__BASE_ZOOM || 16;
+  var BASE_ZOOM = map.__BASE_ZOOM || 16.5;
   var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
 
   for (var i = 0; i < MAP_POINTS.length; i++) {
     var p = MAP_POINTS[i];
-    if (!p.__card) continue;
-
-    var isVisible = (window.innerWidth <= 768) 
-      ? p.__card.classList.contains("mobile-active") 
-      : (p.__card.style.display !== "none");
-
-    if (isVisible) {
+    if (p.__card && p.__card.style.display !== "none") {
       var dx = p.labelDx || 0;
       var dy = p.labelDy || 0;
       p.__card.style.transform = "translate(" + dx + "px," + dy + "px)";
@@ -1323,12 +1234,11 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  // ใช้เลขจำนวนเต็ม (16 บน TV/PC, 15 บนมือถือ) เพื่อป้องกันรอยต่อแผนที่แตกเป็นเส้นดำบน Smart TV
-  var isMobile = window.innerWidth <= 768;
+  // แยกพิกัดและระยะซูมเริ่มต้นตามโหมด (PM10 = 16.0, Damaged belt = 16.5)
   var isPm10Init = (__PAGE_MODE__ === "PM10");
-  var TV_INIT_LAT = 8.10115;
+  var TV_INIT_LAT = isPm10Init ? 8.10115 : 8.10115;
   var TV_INIT_LNG = isPm10Init ? 99.68380 : 99.68520;
-  var TV_INIT_ZOOM = isMobile ? 15 : 16;
+  var TV_INIT_ZOOM = isPm10Init ? 16 : 16.5;
 
   var bounds = L.latLngBounds();
   var hasPoints = false;
@@ -1343,8 +1253,7 @@ function initLeafletMap_() {
   map = L.map('mapCanvas', {
     zoomControl: false,
     attributionControl: false,
-    zoomSnap: 1,
-    zoomDelta: 1,
+    zoomSnap: 0.5,
     wheelPxPerZoomLevel: 120,
     maxZoom: 22
   });
@@ -1355,47 +1264,9 @@ function initLeafletMap_() {
   if (hasPoints && bounds.isValid()) {
     map.setMaxBounds(bounds.pad(0.5));
   }
-  map.options.minZoom = 14;
+  map.options.minZoom = 14.5;
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-  // ปุ่ม Reset View มุมขวาล่างเหนือปุ่ม + / -
-  var resetViewControl = L.control({ position: 'bottomright' });
-  resetViewControl.onAdd = function() {
-    var btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control scada-reset-map-btn');
-    btn.type = 'button';
-    btn.title = 'Reset Map View';
-    btn.innerHTML = '🎯';
-    btn.style.width = '30px';
-    btn.style.height = '30px';
-    btn.style.lineHeight = '28px';
-    btn.style.textAlign = 'center';
-    btn.style.fontSize = '15px';
-    btn.style.cursor = 'pointer';
-    btn.style.background = '#fff';
-    btn.style.border = 'none';
-    btn.style.padding = '0';
-
-    L.DomEvent.disableClickPropagation(btn);
-    btn.addEventListener('click', function(e) {
-      e.preventDefault();
-      var mob = window.innerWidth <= 768;
-      var isPm10 = (__PAGE_MODE__ === "PM10");
-      var initLat = 8.10115;
-      var initLng = isPm10 ? 99.68380 : 99.68520;
-      var initZoom = mob ? 15 : 16;
-
-      map.setView([initLat, initLng], initZoom, { animate: true });
-      if (typeof hideMapPopup_ === "function") hideMapPopup_();
-      if (mob) {
-        for (var m = 0; m < MAP_POINTS.length; m++) {
-          if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.classList.remove("mobile-active");
-        }
-      }
-    });
-    return btn;
-  };
-  resetViewControl.addTo(map);
 
   // กล่องแสดงพิกัดและระยะการซูมมุมซ้ายล่าง
   var coordControl = L.control({ position: 'bottomleft' });
@@ -1462,18 +1333,11 @@ function initLeafletMap_() {
       d.addEventListener("click", function(ev) {
         if (ev.stopPropagation) ev.stopPropagation();
         if (window.innerWidth <= 768) {
-          if (__PAGE_MODE__ === "PM10") {
-            fetchPm10ForPos_(p.pos);
-            return;
-          }
-          var wasActive = card.classList.contains("mobile-active");
+          var isHidden = (card.style.display === "none" || !card.style.display);
           for (var m = 0; m < MAP_POINTS.length; m++) {
-            if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.classList.remove("mobile-active");
+            if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.style.display = "none";
           }
-          if (!wasActive) {
-            card.classList.add("mobile-active");
-            adjustCardPositions_();
-          }
+          card.style.display = isHidden ? "block" : "none";
         } else {
           showPosCards_(p.pos, wrapper);
         }
@@ -1527,7 +1391,7 @@ function initLeafletMap_() {
   map.on('click', function() {
     if (window.innerWidth <= 768) {
       for (var m = 0; m < MAP_POINTS.length; m++) {
-        if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.classList.remove("mobile-active");
+        if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.style.display = "none";
       }
     }
   });
@@ -1706,7 +1570,7 @@ function renderPm10Modal_(pos, res, currentDays){
 
   var html='<div style="display:flex;flex-direction:column;gap:10px;">';
 
-  html+='<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); padding:10px 12px; border-radius:10px; border:1px solid var(--border); gap:8px; flex-wrap:wrap;">';
+  html+='<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); padding:10px 12px; border-radius:10px; border:1px solid var(--border);">';
   html+='<div style="font-weight:900; font-size:13px;">📈 เลือกช่วงเวลาดูแนวโน้ม</div>';
   html+='<select style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-weight:bold; cursor:pointer; outline:none;" onchange="fetchPm10ForPos_(' + pos + ', true, this.value)">';
   html+='<option value="2" '+(currentDays==2?"selected":"")+'>2 วันย้อนหลัง (~192 รายการ)</option>';
@@ -1732,21 +1596,17 @@ function renderPm10Modal_(pos, res, currentDays){
   html+='<div class="pm10StatCard"><div class="pm10StatVal mono">'+esc(fmt_(maxV))+'</div><div class="pm10StatLbl">MAX</div></div>';
   html+='</div>';
   html+='</div>';
-
   html+='<div class="rCard" style="padding:10px;">';
-  html+='<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;">';
-  html+='<div class="mono" style="color:var(--muted);font-size:11px;">PM10 trend — last '+rows.length+' readings</div>';
-  html+='<button type="button" class="rBtn rBtnMini" onclick="if(__PM10_CHART__) __PM10_CHART__.resetZoom();">↺ Reset</button>';
-  html+='</div>';
+  html+='<div class="mono" style="color:var(--muted);margin-bottom:6px;font-size:11px;">PM10 trend — last '+rows.length+' readings</div>';
   html+='<div style="height:240px;width:100%;"><canvas id="pm10Chart"></canvas></div>';
   html+='</div>';
 
   html+='<div class="rCard" style="padding:10px;">';
   html+='<div style="overflow:auto;max-height:320px;">';
-  html+='<table><thead><tr><th style="width:92px;">Time</th><th style="text-align:right;">PM10 (µg/m³)</th><th>Status</th></tr></thead><tbody>';
+  html+='<table><thead><tr><th>Time</th><th style="text-align:right;">PM10 (µg/m³)</th><th>Status</th></tr></thead><tbody>';
   for(var r=rows.length-1;r>=0;r--){
     var row = rows[r] || {};
-    var tv = formatShortTimeMobile_(row.rawLabel || row.time || "-");
+    var tv = String(row.rawLabel || row.time || "-");
     var vv2 = num_(row.v);
     var rs = sev_(vv2);
     html+='<tr><td class="mono">'+esc(tv)+'</td><td class="mono" style="text-align:right;font-weight:900;color:'+rs.color+';">'+esc(fmt_(vv2))+'</td><td class="'+esc(rs.cls)+'">'+esc(rs.txt)+'</td></tr>';
@@ -2160,12 +2020,11 @@ function setLegendForMode_(){
 }
 
 function setPageMode(mode){
-  // ใช้เลขจำนวนเต็ม (16 บน TV/PC, 15 บนมือถือ) เพื่อป้องกันรอยต่อแผนที่แตกเป็นเส้นดำบน Smart TV
-  var isMobile = window.innerWidth <= 768;
+  // แยกพิกัดและระยะซูมเริ่มต้นตามโหมด (PM10 = 16.0, Damaged belt = 16.5)
   var isPm10Mode = (mode === "PM10");
   var TV_INIT_LAT = 8.10515;
   var TV_INIT_LNG = isPm10Mode ? 99.68380 : 99.68520;
-  var TV_INIT_ZOOM = isMobile ? 15 : 16;
+  var TV_INIT_ZOOM = isPm10Mode ? 16 : 16.5;
 
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
@@ -2192,7 +2051,7 @@ function setPageMode(mode){
 
     if (isNewMapVisible) {
       setTimeout(syncTvMapView_, 120);
-      setTimeout(syncTvMapView_, 600);
+      setTimeout(syncTvMapView_, 600); // ย้ำอีกรอบหลัง TV ขยายเฟรมเสร็จสมบูรณ์
     }
   }
 
@@ -2204,8 +2063,6 @@ function setPageMode(mode){
          p.__el.classList.remove("pmFocus");
          p.__el.innerHTML = String(p.pos);
       }
-
-      if(p.__card) p.__card.classList.remove("mobile-active");
 
       if(p.modes && p.modes.includes(mode)) {
         p.__marker.addTo(map); 
@@ -2248,7 +2105,6 @@ function setPageMode(mode){
 
   if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
 }
-
 function isShown_(el){
   if(!el) return false;
   if(el.classList && el.classList.contains("open")) return true;
@@ -2264,7 +2120,6 @@ function shouldPauseAutoSwitch_(){
          isShown_($id("mapPopup")) ||
          isShown_($id("qrOverlay"));
 }
-
 function setAutoSwitchButtons_(){
   var txt = __AUTO_SWITCH_ENABLED__ ? ("🔄 Auto: ON " + __AUTO_SWITCH_REMAINING__ + "s") : "⏸ Auto: OFF";
   var isWarning = (__AUTO_SWITCH_ENABLED__ && __AUTO_SWITCH_REMAINING__ <= 5 && __AUTO_SWITCH_REMAINING__ > 0);
@@ -2308,7 +2163,6 @@ function startAutoSwitch_(){
   if(!__AUTO_SWITCH_ENABLED__) return;
   __AUTO_SWITCH_TIMER__ = setInterval(autoSwitchTick_, 1000);
 }
-
 function setAutoSwitchEnabled_(on){
   __AUTO_SWITCH_ENABLED__=!!on;
   try{ localStorage.setItem("scada_auto_switch", on ? "1" : "0"); }catch(e){}
@@ -2328,31 +2182,24 @@ function setAutoSwitchEnabled_(on){
 // =========================================================
 // 14. ALARM LOG & EVENT LIST
 // =========================================================
-function renderSimpleTable_(title, rows){
-  rows = rows || [];
-  var html = "";
-  if(!rows.length){
-    html = '<div class="mono" style="color:var(--muted);font-weight:900;">No data</div>';
-  } else {
-    var keys = Object.keys(rows[0] || {}).filter(function(k){ return k !== "ts"; });
-    html += '<table><thead><tr>';
-    for(var k = 0; k < keys.length; k++) {
-      html += '<th>' + esc(keys[k]) + '</th>';
+function renderSimpleTable_(title,rows){
+  rows=rows||[];
+  var html="";
+  if(!rows.length){html='<div class="mono" style="color:var(--muted);font-weight:900;">No data</div>';}
+  else{
+    var keys=Object.keys(rows[0]||{}).filter(function(k){return k!=="ts";});
+    html+='<table><thead><tr>';
+    for(var k=0;k<keys.length;k++) html+='<th>'+esc(keys[k])+'</th>';
+    html+='</tr></thead><tbody>';
+    for(var i=0;i<rows.length;i++){
+      html+='<tr>';
+      for(var j=0;j<keys.length;j++){var v=rows[i][keys[j]];
+      html+='<td>'+esc(v==null?"":String(v))+'</td>';}
+      html+='</tr>';
     }
-    html += '</tr></thead><tbody>';
-    for(var i = 0; i < rows.length; i++){
-      html += '<tr>';
-      for(var j = 0; j < keys.length; j++){
-        var rawVal = rows[i][keys[j]];
-        var displayVal = (rawVal == null) ? "" : formatShortTimeMobile_(String(rawVal));
-        html += '<td>' + esc(displayVal) + '</td>';
-      }
-      html += '</tr>';
-    }
-    html += '</tbody></table>';
+    html+='</tbody></table>';
   }
-  setText("modalTitle", title); 
-  setHTML("modalBody", html);
+  setText("modalTitle",title); setHTML("modalBody",html);
 }
 
 (function bindLogButtons_(){
@@ -2407,7 +2254,6 @@ window.addEventListener("resize", function() {
     if (window.innerWidth <= 768) {
       p.__card.style.display = "none";
     } else {
-      p.__card.classList.remove("mobile-active");
       if (p.modes && p.modes.includes(__PAGE_MODE__) && __PAGE_MODE__ !== "PM10") {
         p.__card.style.display = "block";
       } else {
@@ -2820,6 +2666,7 @@ function updateGlobalLeftAlarms_() {
   if (!window.__LAST_DATA__) return; 
   var rows = buildAiRows_(window.__LAST_DATA__);
 
+  // ลบกล่องด้านซ้ายทิ้งหากยังมีค้างอยู่ในหน้าจอ
   var oldPanel = document.getElementById("leftAlarmPanel");
   if (oldPanel) oldPanel.remove();
 
@@ -2913,7 +2760,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 })();
 
 // =========================================================
-// 20. IDLE AUTO-HIDE HEADER (15 SECONDS - DESKTOP/TV ONLY)
+// 20. IDLE AUTO-HIDE HEADER (15 SECONDS)
 // =========================================================
 (function() {
   var hideBtn = document.getElementById("toggleHeaderBtn");
@@ -2922,13 +2769,8 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   var idleTimer = null;
   var lastMoveTime = 0;
 
-  function isMobileView() {
-    return window.innerWidth <= 768;
-  }
-
   // ตรวจสอบว่ากำลังเปิดเมนูหรือหน้าต่าง Modal ค้างไว้อยู่หรือไม่ (ถ้าเปิดอยู่ห้ามซ่อน)
   function isUserBusy() {
-    if (isMobileView()) return true; // ห้ามซ่อนอัตโนมัติบนมือถือ
     var dd = document.querySelector(".dropdown-content.show");
     var mob = document.querySelector(".mobileMenu.open");
     if (dd || mob) return true;
@@ -2937,15 +2779,12 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   }
 
   function setHeaderHidden(isHidden) {
-    // บังคับไม่ให้ซ่อนบนมือถือ
-    if (isMobileView()) isHidden = false;
-
     var currentlyHidden = document.body.classList.contains("header-hidden");
     if (currentlyHidden === isHidden) return;
 
     if (isHidden) {
       if (isUserBusy()) {
-        resetIdleTimer();
+        resetIdleTimer(); // ถ้ากำลังเปิดเมนูค้างไว้ ให้เลื่อนเวลาซ่อนออกไปก่อน
         return;
       }
       document.body.classList.add("header-hidden");
@@ -2968,14 +2807,8 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     // 1. เด้งแถบเมนูกลับมาทันทีที่ขยับเมาส์หรือกดปุ่ม
     setHeaderHidden(false);
 
-    if (idleTimer) {
-      clearTimeout(idleTimer);
-      idleTimer = null;
-    }
-
-    // 2. ถ้าเปิดบนมือถือ ไม่ต้องตั้งเวลานับถอยหลังซ่อน Header
-    if (isMobileView()) return;
-
+    // 2. รีเซ็ตเวลานับถอยหลัง 15 วินาทีใหม่
+    if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(function() {
       setHeaderHidden(true);
     }, IDLE_TIMEOUT_MS);
@@ -2983,7 +2816,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
   // Throttle mousemove ไม่ให้ทำงานถี่เกินไปจนกินแรม TV
   function onPointerActivity() {
-    if (isMobileView()) return;
     var now = Date.now();
     if (now - lastMoveTime < 400) return;
     lastMoveTime = now;
@@ -2996,7 +2828,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   window.addEventListener("touchstart", resetIdleTimer, { passive: true });
   window.addEventListener("wheel", onPointerActivity, { passive: true });
   window.addEventListener("keydown", function(e) {
-    if (isMobileView()) return;
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
     if (e.key === "h" || e.key === "H") {
       var cur = document.body.classList.contains("header-hidden");
@@ -3004,16 +2835,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       setHeaderHidden(!cur);
       if (cur) resetIdleTimer();
     } else {
-      resetIdleTimer();
-    }
-  });
-
-  // รองรับกรณีหมุนจอหรือย่อขยายหน้าต่างเบราว์เซอร์
-  window.addEventListener("resize", function() {
-    if (isMobileView()) {
-      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-      setHeaderHidden(false);
-    } else if (!idleTimer && !document.body.classList.contains("header-hidden")) {
       resetIdleTimer();
     }
   });
@@ -3037,6 +2858,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     });
   }
 
-  // เริ่มทำงานเฉพาะเมื่อเปิดบนจอใหญ่ (TV/PC)
+  // เริ่มนับถอยหลัง 15 วินาทีทันทีที่เปิดหน้าเว็บ
   resetIdleTimer();
 })();
