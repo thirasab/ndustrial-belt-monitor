@@ -115,73 +115,62 @@ function hardCrashScreen(title,msg,stack){
 window.addEventListener("error",function(e){ hardCrashScreen("SCADA UI crashed",(e&&e.message)||"Unknown",(e&&e.error&&e.error.stack)||""); });
 window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA Promise crashed",(e&&e.reason)||"Unknown",""); });
 
-// =========================================================
-// 4. MOBILE MENU & THEME
-// =========================================================
-(function(){
-  var btn = $id("hamburgerBtn");
-  var menu = $id("mobileMenu");
-  if(!btn || !menu) return;
+function getAutoThemeByTime_() {
+  var hr = new Date().getHours();
+  // 18:00 - 05:59 = กลางคืน (night), 06:00 - 17:59 = กลางวัน (day)
+  return (hr >= 18 || hr < 6) ? "night" : "day";
+}
 
-  function closeMobileMenu(){
-    menu.classList.remove("open");
-    btn.textContent = "☰";
+function setTheme(theme, isManual) {
+  document.body.setAttribute("data-theme", theme);
+  // บันทึกโหมดที่ผู้ใช้เลือกด้วยมือไว้ชั่วคราว (หรือล้างเมื่อเข้าช่วงเวลาใหม่)
+  if (isManual) {
+    localStorage.setItem("belt_theme", theme);
+    localStorage.setItem("belt_theme_manual_hr", String(new Date().getHours()));
+  } else {
+    localStorage.setItem("belt_theme", theme);
   }
-
-  function toggleMobileMenu(){
-    menu.classList.toggle("open");
-    btn.textContent = menu.classList.contains("open") ? "✕" : "☰";
-  }
-
-  btn.addEventListener("click", function(e){
-    e.preventDefault(); e.stopPropagation(); toggleMobileMenu();
-  });
-
-  menu.addEventListener("click", function(e){
-    var targetBtn = e.target.closest("button");
-    if(!targetBtn) return;
-    setTimeout(closeMobileMenu, 120);
-  });
-
-  document.addEventListener("click", function(e){
-    if(!menu.classList.contains("open")) return;
-    if(menu.contains(e.target) || btn.contains(e.target)) return;
-    closeMobileMenu();
-  });
-
-  document.addEventListener("keydown", function(e){
-    if(e.key === "Escape") closeMobileMenu();
-  });
-
-  window.addEventListener("resize", function(){
-    if(window.innerWidth > 768) closeMobileMenu();
-  });
-})();
-
-function setTheme(theme){
-  document.body.setAttribute("data-theme",theme);
-  localStorage.setItem("belt_theme",theme);
-  var txt = (theme==="day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
-  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id){
-    var e = document.getElementById(id); 
-    if(e) e.textContent = txt;
+  var txt = (theme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
+  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
+    var e = document.getElementById(id);
+    if (e) e.textContent = txt;
   });
 }
-setTheme(localStorage.getItem("belt_theme")||"night");
 
-(function(){
-  function bindTheme(id){ 
-    var b = document.getElementById(id); 
-    if(!b) return; 
-    b.addEventListener("click", function(){ 
-      var cur = document.body.getAttribute("data-theme")||"night"; 
-      setTheme(cur==="day" ? "night" : "day"); 
-    }); 
+function applyAutoThemeIfNeeded_() {
+  var autoTheme = getAutoThemeByTime_();
+  var curTheme = document.body.getAttribute("data-theme") || "night";
+  var manualHr = localStorage.getItem("belt_theme_manual_hr");
+  var curHr = String(new Date().getHours());
+
+  // ถ้าผู้ใช้กดเปลี่ยนธีมเองในชั่วโมงนี้ ให้เคารพการเลือกของผู้ใช้จนกว่าจะเปลี่ยนชั่วโมงใหม่
+  if (manualHr !== null && manualHr === curHr) {
+    return;
   }
-  bindTheme("themeBtnToggle"); 
+
+  // พ้นชั่วโมงที่กดเลือกเองแล้ว ให้กลับเข้าสู่โหมดอัตโนมัติตามเวลากลางวัน/กลางคืน
+  localStorage.removeItem("belt_theme_manual_hr");
+  if (curTheme !== autoTheme) {
+    setTheme(autoTheme, false);
+  }
+}
+
+// เริ่มต้นตามเวลากลางวัน/กลางคืนทันที และตรวจเช็กทุก 1 นาที
+setTheme(getAutoThemeByTime_(), false);
+setInterval(applyAutoThemeIfNeeded_, 60000);
+
+(function() {
+  function bindTheme(id) {
+    var b = document.getElementById(id);
+    if (!b) return;
+    b.addEventListener("click", function() {
+      var cur = document.body.getAttribute("data-theme") || "night";
+      setTheme(cur === "day" ? "night" : "day", true);
+    });
+  }
+  bindTheme("themeBtnToggle");
   bindTheme("themeBtnToggle2");
 })();
-
 // =========================================================
 // 5. OPERATOR & BEEP & TOAST
 // =========================================================
