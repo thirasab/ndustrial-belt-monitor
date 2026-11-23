@@ -1190,15 +1190,59 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 // 11. MAP & POPUP RENDERERS (ZOOMABLE STATIC IMAGE map1.png)
 // =========================================================
 
-// ฟังก์ชันคำนวณซูมเริ่มต้นให้เต็มกรอบหน้าจอ แต่ปลดล็อกให้ย่อ-ขยายได้อิสระ
+// ฟังก์ชันเช็กจุด POS ทั้งหมดในโหมดปัจจุบัน แล้วปรับซูมให้เห็นครบทุกจุดในหน้าจอเดียว
 function fitMapCover_(animate) {
   if (typeof map === 'undefined' || !map) return;
-  var bounds = L.latLngBounds(MAP_IMAGE_BOUNDS);
-  var coverZoom = map.getBoundsZoom(bounds, true); // true = ขยายเต็มพื้นที่ตอนเริ่มต้น
-  map.options.minZoom = Math.max(12, coverZoom - 2); // อนุญาตให้ย่อภาพออกได้อีก 2 ระดับ
+
+  var imgBounds = L.latLngBounds(MAP_IMAGE_BOUNDS);
+  var coverZoom = map.getBoundsZoom(imgBounds, true);
+  map.options.minZoom = Math.max(12, coverZoom - 2);
   map.options.maxZoom = 22;
-  map.__BASE_ZOOM = coverZoom;
-  map.setView(bounds.getCenter(), coverZoom, { animate: !!animate });
+
+  // 1. รวบรวมพิกัดของจุด POS ทั้งหมดที่เปิดใช้งานในโหมดปัจจุบัน (__PAGE_MODE__)
+  var posBounds = L.latLngBounds();
+  var count = 0;
+
+  if (Array.isArray(MAP_POINTS)) {
+    for (var i = 0; i < MAP_POINTS.length; i++) {
+      var p = MAP_POINTS[i];
+      if (!p || !p.modes || !p.modes.includes(__PAGE_MODE__)) continue;
+      if (isFinite(Number(p.lat)) && isFinite(Number(p.lng)) && (p.lat !== 0 || p.lng !== 0)) {
+        posBounds.extend([Number(p.lat), Number(p.lng)]);
+        count++;
+      }
+    }
+  }
+
+  // 2. หากพบจุด POS ให้คำนวณระยะซูมที่พอดีกับทุกจุด (เผื่อขอบจอไว้ให้การ์ดสถานะไม่ตกขอบ)
+  if (count > 0 && posBounds.isValid()) {
+    var isMobile = window.innerWidth <= 768;
+    // เผื่อระยะขอบ (Padding) ด้านขวา/ล่าง เผื่อกล่องการ์ด posCard ยื่นออกมา
+    var padTopLeft = isMobile ? [40, 40] : [80, 70];
+    var padBottomRight = isMobile ? [40, 40] : [180, 110];
+
+    var targetZoom = map.getBoundsZoom(posBounds, false, L.point(
+      padTopLeft[0] + padBottomRight[0],
+      padTopLeft[1] + padBottomRight[1]
+    ));
+
+    // จำกัดไม่ให้ซูมใกล้เกินไป (กรณีมีจุดเดียว) และไม่ให้ซูมออกจนเห็นขอบดำนอกภาพ
+    targetZoom = Math.min(targetZoom, 18);
+    targetZoom = Math.max(targetZoom, coverZoom);
+
+    map.__BASE_ZOOM = targetZoom;
+    map.fitBounds(posBounds, {
+      paddingTopLeft: padTopLeft,
+      paddingBottomRight: padBottomRight,
+      maxZoom: targetZoom,
+      animate: !!animate
+    });
+  } else {
+    // Fallback กรณีไม่มีจุด POS ให้แสดงเต็มภาพ map1.png
+    map.__BASE_ZOOM = coverZoom;
+    map.setView(imgBounds.getCenter(), coverZoom, { animate: !!animate });
+  }
+
   map.fire('zoom');
 }
 
