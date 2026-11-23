@@ -2420,7 +2420,7 @@ window.addEventListener("resize", function() {
   var img  = document.getElementById("qrZoomImg");
   if(!ov || !box || !img) return;
 
-  img.src = "https://lh3.googleusercontent.com/d/1exbJtHJeLCMXH-MAPoCkItOj0rCJXBRB";
+  img.src = "https://lh3.googleusercontent.com/d/1exbJtHJeLCMXH-MAPoCkItOj0rCJXBRB=s0";
   function openQR(){ ov.setAttribute("aria-hidden","false"); ov.classList.add("open"); }
   function closeQR(){ ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); }
   function stop_(e){ try{ e.preventDefault(); e.stopPropagation(); }catch(_){} }
@@ -2434,7 +2434,7 @@ window.addEventListener("resize", function() {
 })();
 
 // =========================================================
-// 17. REPORT LOGIC
+// 17. REPORT LOGIC (HIGH-RES 2560px & ORIGINAL =s0)
 // =========================================================
 const DELETE_PASSWORD="1234";
 
@@ -2446,13 +2446,24 @@ function makeDelayedLoader(ms,title,text){
   return{close:function(){clearTimeout(t);if(shown) swalLoadingClose();}};
 }
 
-function toDriveImgUrl_(u){
-  u=String(u||"").trim(); if(!u) return "";
-  if(u.indexOf("https://lh3.googleusercontent.com/d/")===0) return u;
-  if(u.indexOf("drive.google.com/uc?export=view&id=")>=0){var m=u.match(/[?&]id=([a-zA-Z0-9_-]{10,})/); if(m&&m[1]) return"https://lh3.googleusercontent.com/d/"+m[1];}
-  var m1=u.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/); if(m1&&m1[1]) return"https://lh3.googleusercontent.com/d/"+m1[1];
-  var m2=u.match(/[?&]id=([a-zA-Z0-9_-]{10,})/); if(m2&&m2[1]) return"https://lh3.googleusercontent.com/d/"+m2[1];
-  if(/^[a-zA-Z0-9_-]{10,}$/.test(u)) return"https://lh3.googleusercontent.com/d/"+u;
+function toDriveImgUrl_(u) {
+  u = String(u || "").trim();
+  if (!u) return "";
+  
+  var id = "";
+  var m1 = u.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]{10,})/);
+  var m2 = u.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+  var m3 = u.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  
+  if (m1 && m1[1]) id = m1[1];
+  else if (m2 && m2[1]) id = m2[1];
+  else if (m3 && m3[1]) id = m3[1];
+  else if (/^[a-zA-Z0-9_-]{10,}$/.test(u)) id = u;
+
+  if (id) {
+    // =s0 สั่งให้ Google Drive ส่งภาพความละเอียดต้นฉบับ 100% คมชัดสูงสุดบนจอ TV
+    return "https://lh3.googleusercontent.com/d/" + id + "=s0";
+  }
   return u;
 }
 
@@ -2560,13 +2571,48 @@ function closeImgViewer_(){
   });
 })();
 
-function fileToBase64_(file){
-  return new Promise(function(resolve,reject){
-    var reader=new FileReader();
-    reader.onload=function(){
-      try{var s=String(reader.result||""),comma=s.indexOf(","),b64=(comma>=0)?s.slice(comma+1):s;resolve({fileName:file.name||("img_"+Date.now()+".jpg"),mimeType:file.type||"image/jpeg",base64:b64});}catch(e){reject(e);}
+function fileToBase64_(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var MAX_DIM = 2560; // ความละเอียดสูงระดับ 2K คมชัดเต็มจอ TV
+        var w = img.width;
+        var h = img.height;
+
+        if (w > MAX_DIM || h > MAX_DIM) {
+          if (w > h) {
+            h = Math.round((h * MAX_DIM) / w);
+            w = MAX_DIM;
+          } else {
+            w = Math.round((w * MAX_DIM) / h);
+            h = MAX_DIM;
+          }
+        }
+
+        var canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, w, h);
+
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.92); // คุณภาพ 92% คมชัดสูง
+        var comma = dataUrl.indexOf(",");
+        var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+
+        resolve({
+          fileName: (file.name || ("img_" + Date.now())).replace(/\.[^.]+$/, "") + ".jpg",
+          mimeType: "image/jpeg",
+          base64: b64
+        });
+      };
+      img.onerror = function() { reject(new Error("Image load error")); };
+      img.src = e.target.result;
     };
-    reader.onerror=function(){reject(reader.error||new Error("read error"));};
+    reader.onerror = function() { reject(reader.error || new Error("File read error")); };
     reader.readAsDataURL(file);
   });
 }
