@@ -3029,11 +3029,12 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
   var bar = document.createElement("div");
   bar.id = "layoutEditorBar";
-  bar.style.cssText = "display:none; position:fixed; top:54px; left:50%; transform:translateX(-50%); z-index:10020; background:rgba(12,18,27,0.96); border:1px solid #00e0ff; border-radius:10px; padding:8px 14px; box-shadow:0 8px 25px rgba(0,0,0,0.8); align-items:center; gap:10px; font-family:ui-monospace,monospace; font-size:12px; color:#fff;";
+  bar.style.cssText = "display:none; position:fixed; top:54px; left:50%; transform:translateX(-50%); z-index:10020; background:rgba(12,18,27,0.96); border:1px solid #00e0ff; border-radius:10px; padding:8px 14px; box-shadow:0 8px 25px rgba(0,0,0,0.8); align-items:center; gap:10px; font-family:ui-monospace,monospace; font-size:12px; color:#fff; flex-wrap:wrap; justify-content:center;";
   bar.innerHTML = 
     '<span style="color:#00e0ff; font-weight:bold;">🛠️ EDIT MODE:</span>' +
-    '<span>ลากจุด POS หรือลากกล่องการ์ดเพื่อจัดตำแหน่ง</span>' +
-    '<button id="copyLayoutBtn" class="rBtn primary" style="padding:5px 10px;">📋 Copy JSON</button>' +
+    '<span>ลากจุด POS หรือลากกล่องการ์ด</span>' +
+    '<button id="saveLayoutSheetBtn" class="rBtn primary" style="padding:5px 10px; background:rgba(31,210,122,0.2); border-color:#1fd27a;">💾 Save to Sheet</button>' +
+    '<button id="copyLayoutBtn" class="rBtn" style="padding:5px 10px;">📋 Copy JSON</button>' +
     '<button id="exitLayoutBtn" class="rBtn danger" style="padding:5px 10px;">✕ Done</button>';
   document.body.appendChild(bar);
 
@@ -3148,9 +3149,59 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setEditMode(false);
   });
 
+  // ปุ่มบันทึกพิกัดลง Google Sheets โดยตรง
+  document.getElementById("saveLayoutSheetBtn").addEventListener("click", function() {
+    Swal.fire({
+      title: "บันทึกตำแหน่งลง Google Sheets",
+      text: "กรอกรหัสผ่านเพื่อยืนยันการอัปเดตพิกัด",
+      input: "password",
+      inputPlaceholder: "Password",
+      showCancelButton: true,
+      confirmButtonText: "Save",
+      cancelButtonText: "Cancel",
+      preConfirm: function(pw) {
+        if ((pw || "").trim() !== DELETE_PASSWORD) {
+          Swal.showValidationMessage("รหัสผ่านไม่ถูกต้อง");
+          return false;
+        }
+        return true;
+      }
+    }).then(function(result) {
+      if (!result.isConfirmed) return;
+
+      var pointsPayload = MAP_POINTS.map(function(p) {
+        return {
+          mode: (p.modes && p.modes[0]) || "BELT",
+          pos: p.pos,
+          lat: p.lat,
+          lng: p.lng,
+          labelDx: p.labelDx,
+          labelDy: p.labelDy
+        };
+      });
+
+      var loader = makeDelayedLoader(150, "กำลังบันทึกพิกัด...", "กรุณารอสักครู่");
+      callGasAPI('saveMapPoints', {}, 'POST', { points: pointsPayload })
+        .then(function(res) {
+          loader.close();
+          if (!res || res.ok === false) {
+            showToast("บันทึกไม่สำเร็จ", "err", (res && res.error) || "Unknown error");
+            return;
+          }
+          showToast("บันทึกพิกัดสำเร็จ!", "ok", "อัปเดตแล้ว " + (res.updated || 0) + " จุด");
+          setEditMode(false);
+        })
+        .catch(function(err) {
+          loader.close();
+          showToast("เกิดข้อผิดพลาด", "err", String(err));
+        });
+    });
+  });
+
   document.getElementById("copyLayoutBtn").addEventListener("click", function() {
     var exported = MAP_POINTS.map(function(p) {
       return {
+        mode: (p.modes && p.modes[0]) || "BELT",
         pos: p.pos,
         lat: p.lat,
         lng: p.lng,
@@ -3161,10 +3212,9 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     var jsonStr = JSON.stringify(exported, null, 2);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(jsonStr).then(function() {
-        showToast("Copied to Clipboard!", "ok", "นำค่าพิกัดไปอัปเดตใน Google Sheet ได้เลย");
+        showToast("Copied to Clipboard!", "ok", "คัดลอกข้อมูลพิกัดเรียบร้อย");
       });
     } else {
-      console.log(jsonStr);
       Swal.fire({ title: "POS Coordinates JSON", html: '<textarea style="width:100%;height:260px;font-family:monospace;">' + jsonStr + '</textarea>' });
     }
   });
