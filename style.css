@@ -1397,24 +1397,28 @@ html {
 }
 
 /* ========================================================= */
-/* 20. FIX LEAFLET TILE GRID LINES (PC, MOBILE & SMART TV)   */
+/* 20. FIX LEAFLET TILE GRID LINES (ALL BROWSERS & SMART TV) */
 /* ========================================================= */
 .leaflet-container {
-  background: #1b241e !important; /* สีพื้นหลังโทนเดียวกับแผนที่ดาวเทียม กันสีขาว/ดำทะลุ */
+  background: #1b241e !important;
 }
 
 .leaflet-tile-container img,
 .leaflet-container .leaflet-tile {
-  outline: 1px solid transparent !important;
+  /* ขยายขนาดแผ่นแผนที่จาก 256px เป็น 268px และดึงกลับ 6px เพื่อปิดรอยต่อบน TV ทุกรุ่น */
+  width: 268px !important;
+  height: 268px !important;
+  margin: -6px 0 0 -6px !important;
+  max-width: none !important;
+  max-height: none !important;
   border: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  /* ขยายภาพจากจุดกึ่งกลาง 0.4% (ประมาณ 1px) เพื่อเกยทับรอยต่อพอดีโดยไม่เสียสัดส่วน */
-  transform-origin: center center;
-  scale: 1.004;
+  outline: none !important;
+  -webkit-backface-visibility: visible !important;
+  backface-visibility: visible !important;
 }
 
 .mapCanvas {
+  will-change: auto !important;
   -webkit-backface-visibility: visible !important;
   backface-visibility: visible !important;
   transform: none !important;
