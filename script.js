@@ -4,6 +4,12 @@
 // 🛑 นำ URL ของ Google Apps Script Web App ที่ Deploy ใหม่มาใส่ตรงนี้ 🛑
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwvucmeMFhcN_6wIyOGg33kd6XKKe3K66T311r8nm7GtlA29-qmisdoo5a6Rm5q690V/exec";
 
+// กรอบพิกัดภาพ map1.jpg (ปรับค่า Lat, Lng 2 มุมนี้ให้ตรงกับขอบภาพที่แคปมา)
+const MAP_IMAGE_BOUNDS = [
+  [8.11150, 99.67100], // มุมซ้ายบน (Top-Left: Lat สูง, Lng ต่ำ)
+  [8.09350, 99.69800]  // มุมขวาล่าง (Bottom-Right: Lat ต่ำ, Lng สูง)
+];
+
 // Global Variables
 let MAP_POINTS = [];
 let mapCoords = {};
@@ -1181,8 +1187,19 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 }
 
 // =========================================================
-// 11. MAP & POPUP RENDERERS (STATIC IMAGE OVERLAY map1.jpg)
+// 11. MAP & POPUP RENDERERS (FULL-COVER STATIC IMAGE map1.jpg)
 // =========================================================
+
+// ฟังก์ชันคำนวณซูมแบบ Cover (ขยายภาพให้เต็มขอบกรอบแผนที่แบบไร้ขอบดำ 100%)
+function fitMapCover_(animate) {
+  if (typeof map === 'undefined' || !map) return;
+  var bounds = L.latLngBounds(MAP_IMAGE_BOUNDS);
+  var coverZoom = map.getBoundsZoom(bounds, true); // true = ขยายเต็มพื้นที่ (Cover)
+  map.options.minZoom = coverZoom;
+  map.__BASE_ZOOM = coverZoom;
+  map.setView(bounds.getCenter(), coverZoom, { animate: !!animate });
+  map.fire('zoom');
+}
 
 function adjustCardPositions_() {
   var canvas = document.getElementById("mapCanvas");
@@ -1323,37 +1340,26 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  var isMobile = window.innerWidth <= 768;
-  var isPm10Init = (__PAGE_MODE__ === "PM10");
-  var TV_INIT_LAT = 8.10115;
-  var TV_INIT_LNG = isPm10Init ? 99.68380 : 99.68520;
-  var TV_INIT_ZOOM = (isPm10Init ? 16 : 16.5) - (isMobile ? 1.0 : 0);
-
-  var bounds = L.latLngBounds();
-  var hasPoints = false;
-  for (var i = 0; i < MAP_POINTS.length; i++) {
-    var p = MAP_POINTS[i];
-    if (p.modes && p.modes.includes(__PAGE_MODE__)) {
-      bounds.extend([p.lat, p.lng]);
-      hasPoints = true;
-    }
-  }
-
   map = L.map('mapCanvas', {
     zoomControl: false,
     attributionControl: false,
-    zoomSnap: 0.5,
+    zoomSnap: 0.1, // รองรับการคำนวณ Cover Zoom ได้ละเอียดพอดีขอบจอ TV เป๊ะ
+    zoomDelta: 0.5,
     wheelPxPerZoomLevel: 120,
     maxZoom: 22
   });
 
-  map.setView([TV_INIT_LAT, TV_INIT_LNG], TV_INIT_ZOOM);
-  map.__BASE_ZOOM = TV_INIT_ZOOM;
+  // แสดงภาพแผนผังโรงงาน map1.jpg
+  L.imageOverlay('map1.jpg', MAP_IMAGE_BOUNDS, {
+    interactive: false
+  }).addTo(map);
 
-  if (hasPoints && bounds.isValid()) {
-    map.setMaxBounds(bounds.pad(0.5));
-  }
-  map.options.minZoom = 14.5;
+  // ล็อกขอบเขตไม่ให้ลากหลุดออกไปเห็นพื้นหลังสีดำ
+  map.setMaxBounds(MAP_IMAGE_BOUNDS);
+  map.options.maxBoundsViscosity = 1.0;
+
+  // คำนวณและซูมภาพให้เต็มกรอบหน้าจอแบบไร้ขอบดำ (Cover)
+  fitMapCover_(false);
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -1377,15 +1383,9 @@ function initLeafletMap_() {
     L.DomEvent.disableClickPropagation(btn);
     btn.addEventListener('click', function(e) {
       e.preventDefault();
-      var mob = window.innerWidth <= 768;
-      var isPm10 = (__PAGE_MODE__ === "PM10");
-      var initLat = 8.10115;
-      var initLng = isPm10 ? 99.68380 : 99.68520;
-      var initZoom = (isPm10 ? 16 : 16.5) - (mob ? 1.0 : 0);
-
-      map.setView([initLat, initLng], initZoom, { animate: true });
+      fitMapCover_(true);
       if (typeof hideMapPopup_ === "function") hideMapPopup_();
-      if (mob) {
+      if (window.innerWidth <= 768) {
         for (var m = 0; m < MAP_POINTS.length; m++) {
           if (MAP_POINTS[m].__card) MAP_POINTS[m].__card.classList.remove("mobile-active");
         }
@@ -1406,7 +1406,7 @@ function initLeafletMap_() {
     this._div.style.fontSize = '11px';
     this._div.style.fontWeight = 'bold';
     this._div.style.border = '1px solid rgba(0,224,255,0.3)';
-    this._div.innerHTML = 'Lat: -, Lng: - | Zoom: ' + TV_INIT_ZOOM.toFixed(1) + ' (100%)';
+    this._div.innerHTML = 'Lat: -, Lng: - | Zoom: 100%';
     return this._div;
   };
   var coordContainer = coordControl.addTo(map).getContainer();
@@ -1416,7 +1416,7 @@ function initLeafletMap_() {
 
   function updateCoordAndZoomDisplay_() {
     if (!coordContainer) return;
-    var baseZ = map.__BASE_ZOOM || TV_INIT_ZOOM;
+    var baseZ = map.__BASE_ZOOM || map.getZoom();
     var z = map.getZoom();
     var pct = Math.round(Math.pow(2, z - baseZ) * 100);
     coordContainer.innerHTML = 'Lat: ' + lastLatStr + ', Lng: ' + lastLngStr + ' | Zoom: ' + z.toFixed(1) + ' (' + pct + '%)';
@@ -1432,16 +1432,6 @@ function initLeafletMap_() {
     lastLngStr = e.latlng.lng.toFixed(5);
     updateCoordAndZoomDisplay_();
   });
-
-  // ✅ ใช้ภาพนิ่ง map1.jpg จาก GitHub แทน TileLayer (ไม่มีเส้นตาราง 100%)
-  var imageBounds = [
-    [8.10950, 99.67450], // มุมซ้ายบน (Top-Left: Lat สูง, Lng ต่ำ)
-    [8.09550, 99.69450]  // มุมขวาล่าง (Bottom-Right: Lat ต่ำ, Lng สูง)
-  ];
-
-  L.imageOverlay('map1.jpg', imageBounds, {
-    interactive: false
-  }).addTo(map);
 
   var markerWrappers = [];
 
@@ -1514,7 +1504,7 @@ function initLeafletMap_() {
   }
 
   map.on('zoom', function() {
-    var baseZ = map.__BASE_ZOOM || TV_INIT_ZOOM;
+    var baseZ = map.__BASE_ZOOM || map.getZoom();
     var currentZoom = map.getZoom();
     var scaleFactor = Math.pow(2, currentZoom - baseZ);
     for (var w = 0; w < markerWrappers.length; w++) {
@@ -2163,12 +2153,6 @@ function setLegendForMode_(){
 }
 
 function setPageMode(mode){
-  var isMobile = window.innerWidth <= 768;
-  var isPm10Mode = (mode === "PM10");
-  var TV_INIT_LAT = 8.10515;
-  var TV_INIT_LNG = isPm10Mode ? 99.68380 : 99.68520;
-  var TV_INIT_ZOOM = (isPm10Mode ? 16 : 16.5) - (isMobile ? 1.0 : 0);
-
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
   localStorage.setItem("scada_page_mode", mode);
@@ -2180,20 +2164,17 @@ function setPageMode(mode){
   clearMapDotStateCache_();
 
   if (typeof map !== 'undefined' && map) {
-    map.__BASE_ZOOM = TV_INIT_ZOOM;
     var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
 
     var syncTvMapView_ = function() {
       if (!isNewMapVisible) return;
       map.invalidateSize({ animate: false });
-      map.setView([TV_INIT_LAT, TV_INIT_LNG], TV_INIT_ZOOM, { animate: false });
-      map.fire('zoom');
-      if (typeof adjustCardPositions_ === "function") adjustCardPositions_();
+      fitMapCover_(false);
     };
 
     if (isNewMapVisible) {
       setTimeout(syncTvMapView_, 120);
-      setTimeout(syncTvMapView_, 600);
+      setTimeout(syncTvMapView_, 500);
     }
   }
 
@@ -2419,6 +2400,7 @@ window.addEventListener("resize", function() {
   }
   if (typeof map !== 'undefined' && map) {
     map.invalidateSize();
+    fitMapCover_(false);
   }
 });
 
@@ -2894,7 +2876,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setTimeout(function() {
       if (typeof map !== "undefined" && map) {
         map.invalidateSize(true);
-        adjustCardPositions_();
+        fitMapCover_(false);
       }
     }, 300);
   }
@@ -2958,7 +2940,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setTimeout(function() {
       if (typeof map !== "undefined" && map) {
         map.invalidateSize(true);
-        if (typeof adjustCardPositions_ === "function") adjustCardPositions_();
+        fitMapCover_(false);
       }
     }, 100);
   }
@@ -3040,7 +3022,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   var editBtn = document.getElementById("editLayoutBtn");
   if (!editBtn) return;
 
-  // สร้างแถบเครื่องมือลอยด้านบนเมื่อเปิดโหมดแก้ไข
   var bar = document.createElement("div");
   bar.id = "layoutEditorBar";
   bar.style.cssText = "display:none; position:fixed; top:54px; left:50%; transform:translateX(-50%); z-index:10020; background:rgba(12,18,27,0.96); border:1px solid #00e0ff; border-radius:10px; padding:8px 14px; box-shadow:0 8px 25px rgba(0,0,0,0.8); align-items:center; gap:10px; font-family:ui-monospace,monospace; font-size:12px; color:#fff;";
@@ -3057,7 +3038,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     editBtn.textContent = __EDIT_LAYOUT_MODE__ ? "✅ Exit Edit Layout" : "🛠️ Edit POS & Card";
 
     if (typeof map !== "undefined" && map) {
-      // ปิดการลากแผนที่ชั่วคราวเพื่อให้ลากจุดและ์การ์ดได้แม่นยำไม่เลื่อนตาม
       if (__EDIT_LAYOUT_MODE__) map.dragging.disable();
       else map.dragging.enable();
     }
@@ -3148,7 +3128,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     });
   }
 
-  // ป้องกันการเปิด Popup รายละเอียดขณะอยู่ในโหมดลากจัดตำแหน่ง
   var origShowPosCards = window.showPosCards_;
   window.showPosCards_ = function(pos, anchorEl) {
     if (__EDIT_LAYOUT_MODE__) return;
