@@ -1355,7 +1355,7 @@ function initLeafletMap_() {
   });
 
   // แสดงภาพแผนผังโรงงาน map1.jpg
-  L.imageOverlay('map1.jpg', MAP_IMAGE_BOUNDS, {
+  L.imageOverlay('map1.png', MAP_IMAGE_BOUNDS, {
     interactive: false
   }).addTo(map);
 
