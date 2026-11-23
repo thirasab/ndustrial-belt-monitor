@@ -1404,13 +1404,16 @@ html {
 
 .leaflet-tile-container img,
 .leaflet-container .leaflet-tile {
-  width: 268px !important;
-  height: 268px !important;
-  margin: -6px 0 0 -6px !important;
+  /* ขยายเป็น 276px และดึงกลับ 10px เพื่อปิดรอยต่อทั้ง 4 ด้านบน Smart TV */
+  width: 276px !important;
+  height: 276px !important;
+  margin: -10px 0 0 -10px !important;
   max-width: none !important;
   max-height: none !important;
   border: none !important;
   outline: none !important;
+  box-shadow: none !important;
+  image-rendering: auto !important;
   -webkit-backface-visibility: visible !important;
   backface-visibility: visible !important;
 }
