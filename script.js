@@ -1187,15 +1187,16 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 }
 
 // =========================================================
-// 11. MAP & POPUP RENDERERS (FULL-COVER STATIC IMAGE map1.jpg)
+// 11. MAP & POPUP RENDERERS (ZOOMABLE STATIC IMAGE map1.jpg)
 // =========================================================
 
-// ฟังก์ชันคำนวณซูมแบบ Cover (ขยายภาพให้เต็มขอบกรอบแผนที่แบบไร้ขอบดำ 100%)
+// ฟังก์ชันคำนวณซูมเริ่มต้นให้เต็มกรอบหน้าจอ แต่ปลดล็อกให้ย่อ-ขยายได้อิสระ
 function fitMapCover_(animate) {
   if (typeof map === 'undefined' || !map) return;
   var bounds = L.latLngBounds(MAP_IMAGE_BOUNDS);
-  var coverZoom = map.getBoundsZoom(bounds, true); // true = ขยายเต็มพื้นที่ (Cover)
-  map.options.minZoom = coverZoom;
+  var coverZoom = map.getBoundsZoom(bounds, true); // true = ขยายเต็มพื้นที่ตอนเริ่มต้น
+  map.options.minZoom = Math.max(12, coverZoom - 2); // อนุญาตให้ย่อภาพออกได้อีก 2 ระดับ
+  map.options.maxZoom = 22;
   map.__BASE_ZOOM = coverZoom;
   map.setView(bounds.getCenter(), coverZoom, { animate: !!animate });
   map.fire('zoom');
@@ -1343,9 +1344,13 @@ function initLeafletMap_() {
   map = L.map('mapCanvas', {
     zoomControl: false,
     attributionControl: false,
-    zoomSnap: 0.1, // รองรับการคำนวณ Cover Zoom ได้ละเอียดพอดีขอบจอ TV เป๊ะ
+    zoomSnap: 0.25,
     zoomDelta: 0.5,
-    wheelPxPerZoomLevel: 120,
+    wheelPxPerZoomLevel: 100,
+    scrollWheelZoom: true,
+    touchZoom: true,
+    doubleClickZoom: true,
+    boxZoom: true,
     maxZoom: 22
   });
 
@@ -1354,11 +1359,11 @@ function initLeafletMap_() {
     interactive: false
   }).addTo(map);
 
-  // ล็อกขอบเขตไม่ให้ลากหลุดออกไปเห็นพื้นหลังสีดำ
-  map.setMaxBounds(MAP_IMAGE_BOUNDS);
-  map.options.maxBoundsViscosity = 1.0;
+  // เผื่อขอบเขตการเลื่อนออกไป 80% เพื่อให้ย่อ-ขยายและลากดูพื้นที่รอบๆ ได้อิสระ
+  map.setMaxBounds(L.latLngBounds(MAP_IMAGE_BOUNDS).pad(0.8));
+  map.options.maxBoundsViscosity = 0.5;
 
-  // คำนวณและซูมภาพให้เต็มกรอบหน้าจอแบบไร้ขอบดำ (Cover)
+  // คำนวณและซูมภาพให้เต็มกรอบหน้าจอตอนเริ่มต้น
   fitMapCover_(false);
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -1419,7 +1424,7 @@ function initLeafletMap_() {
     var baseZ = map.__BASE_ZOOM || map.getZoom();
     var z = map.getZoom();
     var pct = Math.round(Math.pow(2, z - baseZ) * 100);
-    coordContainer.innerHTML = 'Lat: ' + lastLatStr + ', Lng: ' + lastLngStr + ' | Zoom: ' + z.toFixed(1) + ' (' + pct + '%)';
+    coordContainer.innerHTML = 'Lat: ' + lastLatStr + ', Lng: ' + lastLngStr + ' | Zoom: ' + z.toFixed(2) + ' (' + pct + '%)';
   }
 
   map.on('mousemove', function(e) {
