@@ -11,8 +11,8 @@
   <!-- External CSS Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
-  <!-- Main CSS (v=3 สำหรับอัปเดต Responsive มือถือ) -->
-  <link rel="stylesheet" href="style.css?v=5" />
+  <!-- Main CSS (v=6) -->
+  <link rel="stylesheet" href="style.css?v=6" />
   <title>Industrial Belt Monitor</title>
 
   <!-- External JS Libraries -->
@@ -22,7 +22,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
-  <!-- Main JS (v=3 สำหรับอัปเดตฟังก์ชันมือถือ & Reset Zoom) -->
+  <!-- Main JS (v=6) -->
   <script defer src="script.js?v=6"></script>
 </head>
 
@@ -65,6 +65,7 @@
         <div class="dropdown-content" id="ddMainMenu">
           <button id="toggleHeaderBtn">👁️ Hide Header Now</button>
           <button id="tvFullscreenBtn">🖥️ Fullscreen</button>
+          <button id="editLayoutBtn">🛠️ Edit POS & Card</button>
           <button id="qrBtn">📱 QR code webapp</button>
           <div style="border-top:1px solid rgba(150,160,180,0.15); margin: 4px 0;"></div>
           <button id="opBtn">👤 Operator: -</button>
