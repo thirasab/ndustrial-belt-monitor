@@ -328,7 +328,6 @@ body {
   position: relative; width: 100%; border-radius: 12px; border: 1px solid var(--border);
   overflow: hidden; box-shadow: 0 8px 18px rgba(0,0,0,.22);
   aspect-ratio: 2048/1342; background: transparent !important; touch-action: none;
-  will-change: transform;
 }
 .scada-leaflet-marker { overflow: visible !important; }
 
@@ -1405,7 +1404,6 @@ html {
 
 .leaflet-tile-container img,
 .leaflet-container .leaflet-tile {
-  /* ขยายขนาดแผ่นแผนที่จาก 256px เป็น 268px และดึงกลับ 6px เพื่อปิดรอยต่อบน TV ทุกรุ่น */
   width: 268px !important;
   height: 268px !important;
   margin: -6px 0 0 -6px !important;
