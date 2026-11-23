@@ -3031,31 +3031,22 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     return false;
   }
 
-  function setHeaderHidden(isHidden) {
-    if (isMobileView()) isHidden = false;
+function setHeaderHidden(isHidden) {
+  // ปิดการซ่อนแถบเมนูอัตโนมัติ (Auto-Hide) และให้แถบ LIVE LOG ค้างอยู่ตลอดเวลา
+  document.body.classList.remove("header-hidden");
+  if (hideBtn) hideBtn.textContent = "👁️ Hide Header Now";
 
-    var currentlyHidden = document.body.classList.contains("header-hidden");
-    if (currentlyHidden === isHidden) return;
-
-    if (isHidden) {
-      if (isUserBusy()) {
-        resetIdleTimer();
-        return;
-      }
-      document.body.classList.add("header-hidden");
-      if (hideBtn) hideBtn.textContent = "👁️ Show Header";
-    } else {
-      document.body.classList.remove("header-hidden");
-      if (hideBtn) hideBtn.textContent = "👁️ Hide Header Now";
-    }
-
-    setTimeout(function() {
-      if (typeof map !== "undefined" && map) {
-        map.invalidateSize(true);
+  setTimeout(function() {
+    if (typeof map !== "undefined" && map) {
+      map.invalidateSize(true);
+      if (typeof fitMapCover_ === "function") {
         fitMapCover_(false);
+      } else if (typeof adjustCardPositions_ === "function") {
+        adjustCardPositions_();
       }
-    }, 100);
-  }
+    }
+  }, 100);
+}
 
   function resetIdleTimer() {
     setHeaderHidden(false);
