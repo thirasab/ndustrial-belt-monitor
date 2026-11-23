@@ -4,7 +4,7 @@
 // 🛑 นำ URL ของ Google Apps Script Web App ที่ Deploy ใหม่มาใส่ตรงนี้ 🛑
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwvucmeMFhcN_6wIyOGg33kd6XKKe3K66T311r8nm7GtlA29-qmisdoo5a6Rm5q690V/exec";
 
-// กรอบพิกัดภาพ map1.jpg (ปรับค่า Lat, Lng 2 มุมนี้ให้ตรงกับขอบภาพที่แคปมา)
+// กรอบพิกัดภาพ map1.png (ปรับค่า Lat, Lng 2 มุมนี้ให้ตรงกับขอบภาพที่แคปมา)
 const MAP_IMAGE_BOUNDS = [
   [8.11150, 99.67100], // มุมซ้ายบน (Top-Left: Lat สูง, Lng ต่ำ)
   [8.09350, 99.69800]  // มุมขวาล่าง (Bottom-Right: Lat ต่ำ, Lng สูง)
@@ -1187,7 +1187,7 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 }
 
 // =========================================================
-// 11. MAP & POPUP RENDERERS (ZOOMABLE STATIC IMAGE map1.jpg)
+// 11. MAP & POPUP RENDERERS (ZOOMABLE STATIC IMAGE map1.png)
 // =========================================================
 
 // ฟังก์ชันคำนวณซูมเริ่มต้นให้เต็มกรอบหน้าจอ แต่ปลดล็อกให้ย่อ-ขยายได้อิสระ
@@ -1335,6 +1335,12 @@ function buildMapDotsOnce_() {
         mapCoords[p.pos] = { lat: p.lat, lng: p.lng };
       });
       initLeafletMap_();
+      if (window.__LAST_DATA__) {
+        updateMapDots_(window.__LAST_DATA__);
+        updatePosCards_(window.__LAST_DATA__);
+      } else {
+        fetchStatus();
+      }
       fetchPm10SnapshotAll_(); 
     })
     .catch(err => console.error("Map points fetch error:", err));
@@ -1354,7 +1360,7 @@ function initLeafletMap_() {
     maxZoom: 22
   });
 
-  // แสดงภาพแผนผังโรงงาน map1.jpg
+  // แสดงภาพแผนผังโรงงาน map1.png
   L.imageOverlay('map1.png', MAP_IMAGE_BOUNDS, {
     interactive: false
   }).addTo(map);
@@ -1454,7 +1460,16 @@ function initLeafletMap_() {
       var card = document.createElement("div");
       card.className = "posCard";
       card.style.transform = "translate(" + p.labelDx + "px," + p.labelDy + "px)";
-      card.innerHTML = '<div class="posCardTitle"><div class="t">POS ' + p.pos + '</div><div class="sum mono" id="posSum_' + p.pos + '_' + p.modes[0] + '">-</div></div><div class="posCardBody" id="posBody_' + p.pos + '_' + p.modes[0] + '"></div>';
+
+      // สร้างรายการสายพานเริ่มต้นแสดงในการ์ดทันที ไม่ต้องรอโหลดเสร็จ
+      var initLines = "";
+      if (p.belts && p.belts.length) {
+        for (var bIdx = 0; bIdx < p.belts.length; bIdx++) {
+          initLines += '<div class="posLine pos-stale"><div class="posLeft"><span class="posChip"></span><span>' + esc(p.belts[bIdx]) + '</span></div><div class="posRight mono"><span>...</span></div></div>';
+        }
+      }
+
+      card.innerHTML = '<div class="posCardTitle"><div class="t">POS ' + p.pos + '</div><div class="sum mono" id="posSum_' + p.pos + '_' + p.modes[0] + '">-</div></div><div class="posCardBody" id="posBody_' + p.pos + '_' + p.modes[0] + '">' + initLines + '</div>';
       p.__card = card;
 
       d.addEventListener("click", function(ev) {
@@ -2230,6 +2245,8 @@ function setPageMode(mode){
       setText("subtitle", window.__LAST_DATA__.subtitle || "");
       updateMapDots_(window.__LAST_DATA__);
       updatePosCards_(window.__LAST_DATA__);
+    } else {
+      fetchStatus();
     }
   }
 
