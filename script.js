@@ -115,6 +115,49 @@ function hardCrashScreen(title,msg,stack){
 window.addEventListener("error",function(e){ hardCrashScreen("SCADA UI crashed",(e&&e.message)||"Unknown",(e&&e.error&&e.error.stack)||""); });
 window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA Promise crashed",(e&&e.reason)||"Unknown",""); });
 
+// =========================================================
+// 4. MOBILE MENU & THEME (AUTO NIGHT AT NIGHT)
+// =========================================================
+(function(){
+  var btn = $id("hamburgerBtn");
+  var menu = $id("mobileMenu");
+  if(!btn || !menu) return;
+
+  function closeMobileMenu(){
+    menu.classList.remove("open");
+    btn.textContent = "☰";
+  }
+
+  function toggleMobileMenu(){
+    menu.classList.toggle("open");
+    btn.textContent = menu.classList.contains("open") ? "✕" : "☰";
+  }
+
+  btn.addEventListener("click", function(e){
+    e.preventDefault(); e.stopPropagation(); toggleMobileMenu();
+  });
+
+  menu.addEventListener("click", function(e){
+    var targetBtn = e.target.closest("button");
+    if(!targetBtn) return;
+    setTimeout(closeMobileMenu, 120);
+  });
+
+  document.addEventListener("click", function(e){
+    if(!menu.classList.contains("open")) return;
+    if(menu.contains(e.target) || btn.contains(e.target)) return;
+    closeMobileMenu();
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape") closeMobileMenu();
+  });
+
+  window.addEventListener("resize", function(){
+    if(window.innerWidth > 768) closeMobileMenu();
+  });
+})();
+
 function getAutoThemeByTime_() {
   var hr = new Date().getHours();
   // 18:00 - 05:59 = กลางคืน (night), 06:00 - 17:59 = กลางวัน (day)
@@ -123,12 +166,9 @@ function getAutoThemeByTime_() {
 
 function setTheme(theme, isManual) {
   document.body.setAttribute("data-theme", theme);
-  // บันทึกโหมดที่ผู้ใช้เลือกด้วยมือไว้ชั่วคราว (หรือล้างเมื่อเข้าช่วงเวลาใหม่)
+  localStorage.setItem("belt_theme", theme);
   if (isManual) {
-    localStorage.setItem("belt_theme", theme);
     localStorage.setItem("belt_theme_manual_hr", String(new Date().getHours()));
-  } else {
-    localStorage.setItem("belt_theme", theme);
   }
   var txt = (theme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
   ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
@@ -143,34 +183,32 @@ function applyAutoThemeIfNeeded_() {
   var manualHr = localStorage.getItem("belt_theme_manual_hr");
   var curHr = String(new Date().getHours());
 
-  // ถ้าผู้ใช้กดเปลี่ยนธีมเองในชั่วโมงนี้ ให้เคารพการเลือกของผู้ใช้จนกว่าจะเปลี่ยนชั่วโมงใหม่
   if (manualHr !== null && manualHr === curHr) {
     return;
   }
 
-  // พ้นชั่วโมงที่กดเลือกเองแล้ว ให้กลับเข้าสู่โหมดอัตโนมัติตามเวลากลางวัน/กลางคืน
   localStorage.removeItem("belt_theme_manual_hr");
   if (curTheme !== autoTheme) {
     setTheme(autoTheme, false);
   }
 }
 
-// เริ่มต้นตามเวลากลางวัน/กลางคืนทันที และตรวจเช็กทุก 1 นาที
 setTheme(getAutoThemeByTime_(), false);
 setInterval(applyAutoThemeIfNeeded_, 60000);
 
-(function() {
-  function bindTheme(id) {
-    var b = document.getElementById(id);
-    if (!b) return;
-    b.addEventListener("click", function() {
-      var cur = document.body.getAttribute("data-theme") || "night";
-      setTheme(cur === "day" ? "night" : "day", true);
-    });
+(function(){
+  function bindTheme(id){ 
+    var b = document.getElementById(id); 
+    if(!b) return; 
+    b.addEventListener("click", function(){ 
+      var cur = document.body.getAttribute("data-theme")||"night"; 
+      setTheme(cur==="day" ? "night" : "day", true); 
+    }); 
   }
-  bindTheme("themeBtnToggle");
+  bindTheme("themeBtnToggle"); 
   bindTheme("themeBtnToggle2");
 })();
+
 // =========================================================
 // 5. OPERATOR & BEEP & TOAST
 // =========================================================
@@ -1188,7 +1226,6 @@ function fitMapCover_(animate) {
   map.options.minZoom = Math.max(12, coverZoom - 2);
   map.options.maxZoom = 22;
 
-  // 1. รวบรวมพิกัดของจุด POS ทั้งหมดที่เปิดใช้งานในโหมดปัจจุบัน (__PAGE_MODE__)
   var posBounds = L.latLngBounds();
   var count = 0;
 
@@ -1203,10 +1240,8 @@ function fitMapCover_(animate) {
     }
   }
 
-  // 2. หากพบจุด POS ให้คำนวณระยะซูมที่พอดีกับทุกจุด (เผื่อขอบจอไว้ให้การ์ดสถานะไม่ตกขอบ)
   if (count > 0 && posBounds.isValid()) {
     var isMobile = window.innerWidth <= 768;
-    // เผื่อระยะขอบ (Padding) ด้านขวา/ล่าง เผื่อกล่องการ์ด posCard ยื่นออกมา
     var padTopLeft = isMobile ? [40, 40] : [80, 70];
     var padBottomRight = isMobile ? [40, 40] : [180, 110];
 
@@ -1215,7 +1250,6 @@ function fitMapCover_(animate) {
       padTopLeft[1] + padBottomRight[1]
     ));
 
-    // จำกัดไม่ให้ซูมใกล้เกินไป (กรณีมีจุดเดียว) และไม่ให้ซูมออกจนเห็นขอบดำนอกภาพ
     targetZoom = Math.min(targetZoom, 18);
     targetZoom = Math.max(targetZoom, coverZoom);
 
@@ -1227,7 +1261,6 @@ function fitMapCover_(animate) {
       animate: !!animate
     });
   } else {
-    // Fallback กรณีไม่มีจุด POS ให้แสดงเต็มภาพ map1.png
     map.__BASE_ZOOM = coverZoom;
     map.setView(imgBounds.getCenter(), coverZoom, { animate: !!animate });
   }
@@ -1393,21 +1426,17 @@ function initLeafletMap_() {
     maxZoom: 22
   });
 
-  // แสดงภาพแผนผังโรงงาน map1.png
   L.imageOverlay('map1.png', MAP_IMAGE_BOUNDS, {
     interactive: false
   }).addTo(map);
 
-  // เผื่อขอบเขตการเลื่อนออกไป 80% เพื่อให้ย่อ-ขยายและลากดูพื้นที่รอบๆ ได้อิสระ
   map.setMaxBounds(L.latLngBounds(MAP_IMAGE_BOUNDS).pad(0.8));
   map.options.maxBoundsViscosity = 0.5;
 
-  // คำนวณและซูมภาพให้เต็มกรอบหน้าจอตอนเริ่มต้น
   fitMapCover_(false);
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  // ปุ่ม Reset View มุมขวาล่างเหนือปุ่ม + / -
   var resetViewControl = L.control({ position: 'bottomright' });
   resetViewControl.onAdd = function() {
     var btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control scada-reset-map-btn');
@@ -1439,7 +1468,6 @@ function initLeafletMap_() {
   };
   resetViewControl.addTo(map);
 
-  // กล่องแสดงพิกัดและระยะการซูมมุมซ้ายล่าง
   var coordControl = L.control({ position: 'bottomleft' });
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
@@ -1494,7 +1522,6 @@ function initLeafletMap_() {
       card.className = "posCard";
       card.style.transform = "translate(" + p.labelDx + "px," + p.labelDy + "px)";
 
-      // สร้างรายการสายพานเริ่มต้นแสดงในการ์ดทันที ไม่ต้องรอโหลดเสร็จ
       var initLines = "";
       if (p.belts && p.belts.length) {
         for (var bIdx = 0; bIdx < p.belts.length; bIdx++) {
@@ -2511,7 +2538,6 @@ function toDriveImgUrl_(u) {
   else if (/^[a-zA-Z0-9_-]{10,}$/.test(u)) id = u;
 
   if (id) {
-    // =s0 สั่งให้ Google Drive ส่งภาพความละเอียดต้นฉบับ 100% คมชัดสูงสุดบนจอ TV
     return "https://lh3.googleusercontent.com/d/" + id + "=s0";
   }
   return u;
@@ -2627,7 +2653,7 @@ function fileToBase64_(file) {
     reader.onload = function(e) {
       var img = new Image();
       img.onload = function() {
-        var MAX_DIM = 2560; // ความละเอียดสูงระดับ 2K คมชัดเต็มจอ TV
+        var MAX_DIM = 2560;
         var w = img.width;
         var h = img.height;
 
@@ -2649,7 +2675,7 @@ function fileToBase64_(file) {
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, w, h);
 
-        var dataUrl = canvas.toDataURL("image/jpeg", 0.92); // คุณภาพ 92% คมชัดสูง
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.92);
         var comma = dataUrl.indexOf(",");
         var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 
@@ -2961,7 +2987,6 @@ window.addEventListener("load", function(){
   }, 50);
 });
 
-// รีเฟรชหน้าอัตโนมัติทุก 6 ชั่วโมง ป้องกัน Smart TV แรมเต็ม
 setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
 // =========================================================
@@ -3003,7 +3028,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 (function() {
   var hideBtn = document.getElementById("toggleHeaderBtn");
   var floatBtn = document.getElementById("floatingHeaderToggle");
-  var IDLE_TIMEOUT_MS = 15000; // 15 วินาที (ปรับเวลาได้ตามต้องการ เช่น 10000 = 10 วิ)
+  var IDLE_TIMEOUT_MS = 15000; // 15 วินาที
   var idleTimer = null;
   var lastMoveTime = 0;
 
@@ -3177,7 +3202,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     if (p.__dragBound) return;
     p.__dragBound = true;
 
-    // 1. ลากจุด POS (เปลี่ยนค่า Lat, Lng)
     p.__el.addEventListener("mousedown", function(e) {
       if (!__EDIT_LAYOUT_MODE__) return;
       e.preventDefault();
@@ -3202,7 +3226,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       window.addEventListener("mouseup", onUp);
     });
 
-    // 2. ลากกล่องการ์ด (เปลี่ยนค่า labelDx, labelDy)
     p.__card.addEventListener("mousedown", function(e) {
       if (!__EDIT_LAYOUT_MODE__) return;
       e.preventDefault();
@@ -3249,7 +3272,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setEditMode(false);
   });
 
-  // ปุ่มบันทึกพิกัดลง Google Sheets โดยตรง
   document.getElementById("saveLayoutSheetBtn").addEventListener("click", function() {
     Swal.fire({
       title: "บันทึกตำแหน่งลง Google Sheets",
