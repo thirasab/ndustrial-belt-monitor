@@ -1396,3 +1396,18 @@ html {
     font-size: 16px !important;
   }
 }
+/* ========================================================= */
+/* 20. FIX LEAFLET TILE GRID LINES ON SMART TV / ZOOM        */
+/* ========================================================= */
+.leaflet-container {
+  background: #1a222d !important;
+}
+
+.leaflet-tile-container img,
+.leaflet-tile {
+  outline: 1px solid transparent !important;
+  width: 256.6px !important;
+  height: 256.6px !important;
+  will-change: transform;
+  image-rendering: -webkit-optimize-contrast;
+}
