@@ -1102,10 +1102,58 @@ body[data-mode="PM10"] .posCard {
 }
 
 /* ========================================================= */
-/* 17. TV IDLE AUTO-HIDE HEADER (15s)                        */
+/* 17. TV IDLE AUTO-HIDE HEADER (KEEP LIVE LOG VISIBLE)      */
 /* ========================================================= */
-.top, .scada-ticker-wrap {
+.top {
   transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.floating-header-btn {
+  display: none;
+  position: fixed;
+  top: 8px;
+  right: 10px;
+  z-index: 10005;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(12, 18, 27, 0.85);
+  color: var(--scada-cyan);
+  border: 1px solid rgba(0, 224, 255, 0.45);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  opacity: 0.65;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.floating-header-btn:hover,
+.floating-header-btn:focus {
+  opacity: 1;
+  transform: scale(1.03);
+}
+
+/* ซ่อนเฉพาะแถบเมนูหลัก (.top) และปุ่มหัวข้อแผนที่ (.secHead) แต่ยังคงแสดง .scada-ticker-wrap (LIVE LOG) */
+body.header-hidden .top,
+body.header-hidden .mobileMenu,
+body.header-hidden .secHead {
+  display: none !important;
+}
+
+body.header-hidden .scada-ticker-wrap {
+  display: flex !important;
+  margin-top: 0 !important;
+  padding-right: 76px; /* เผื่อพื้นที่ด้านขวาไม่ให้ทับปุ่มลอย ☰ Menu */
+}
+
+body.header-hidden .floating-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+body.header-hidden .mainViewport {
+  margin-top: 4px !important;
 }
 
 .floating-header-btn {
