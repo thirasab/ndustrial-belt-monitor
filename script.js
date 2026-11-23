@@ -1190,7 +1190,7 @@ function adjustCardPositions_() {
   
   var cr = canvas.getBoundingClientRect();
   var currentZoom = map.getZoom();
-  var BASE_ZOOM = map.__BASE_ZOOM || 16.5;
+  var BASE_ZOOM = map.__BASE_ZOOM || 16;
   var scaleFactor = Math.pow(2, currentZoom - BASE_ZOOM);
 
   for (var i = 0; i < MAP_POINTS.length; i++) {
@@ -1323,12 +1323,12 @@ function buildMapDotsOnce_() {
 }
 
 function initLeafletMap_() {
-  // แยกพิกัดและระยะซูมเริ่มต้นตามโหมด (มือถือซูมออก 1 ระดับเพื่อไม่ให้ล้นขอบจอ)
+  // ใช้เลขจำนวนเต็ม (16 บน TV/PC, 15 บนมือถือ) เพื่อป้องกันรอยต่อแผนที่แตกเป็นเส้นดำบน Smart TV
   var isMobile = window.innerWidth <= 768;
   var isPm10Init = (__PAGE_MODE__ === "PM10");
   var TV_INIT_LAT = 8.10115;
   var TV_INIT_LNG = isPm10Init ? 99.68380 : 99.68520;
-  var TV_INIT_ZOOM = (isPm10Init ? 16 : 16.5) - (isMobile ? 1.0 : 0);
+  var TV_INIT_ZOOM = isMobile ? 15 : 16;
 
   var bounds = L.latLngBounds();
   var hasPoints = false;
@@ -1343,7 +1343,8 @@ function initLeafletMap_() {
   map = L.map('mapCanvas', {
     zoomControl: false,
     attributionControl: false,
-    zoomSnap: 0.5,
+    zoomSnap: 1,
+    zoomDelta: 1,
     wheelPxPerZoomLevel: 120,
     maxZoom: 22
   });
@@ -1354,7 +1355,7 @@ function initLeafletMap_() {
   if (hasPoints && bounds.isValid()) {
     map.setMaxBounds(bounds.pad(0.5));
   }
-  map.options.minZoom = 14.5;
+  map.options.minZoom = 14;
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -1382,7 +1383,7 @@ function initLeafletMap_() {
       var isPm10 = (__PAGE_MODE__ === "PM10");
       var initLat = 8.10115;
       var initLng = isPm10 ? 99.68380 : 99.68520;
-      var initZoom = (isPm10 ? 16 : 16.5) - (mob ? 1.0 : 0);
+      var initZoom = mob ? 15 : 16;
 
       map.setView([initLat, initLng], initZoom, { animate: true });
       if (typeof hideMapPopup_ === "function") hideMapPopup_();
@@ -2159,12 +2160,12 @@ function setLegendForMode_(){
 }
 
 function setPageMode(mode){
-  // แยกพิกัดและระยะซูมเริ่มต้นตามโหมด (มือถือซูมออก 1 ระดับ)
+  // ใช้เลขจำนวนเต็ม (16 บน TV/PC, 15 บนมือถือ) เพื่อป้องกันรอยต่อแผนที่แตกเป็นเส้นดำบน Smart TV
   var isMobile = window.innerWidth <= 768;
   var isPm10Mode = (mode === "PM10");
   var TV_INIT_LAT = 8.10515;
   var TV_INIT_LNG = isPm10Mode ? 99.68380 : 99.68520;
-  var TV_INIT_ZOOM = (isPm10Mode ? 16 : 16.5) - (isMobile ? 1.0 : 0);
+  var TV_INIT_ZOOM = isMobile ? 15 : 16;
 
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
