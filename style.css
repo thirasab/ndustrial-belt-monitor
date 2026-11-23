@@ -321,7 +321,7 @@ body {
 .dot.ok { background: var(--ok); }
 
 /* ========================================================= */
-/* 6. MAP & LEAFLET (STATIC IMAGE OVERLAY map1.jpg)          */
+/* 6. MAP & LEAFLET (STATIC IMAGE OVERLAY map1.png)          */
 /* ========================================================= */
 .mapOuter { padding: 8px; }
 .mapCanvas {
@@ -750,14 +750,14 @@ table th, .aiTable th {
 .uploadBarFill { height: 100%; background: var(--scada-cyan); border-radius: 999px; width: 0; transition: width .3s ease; }
 
 .imgViewer { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 12px; background: rgba(0,0,0,.86); z-index: 10003; overscroll-behavior: contain; }
-.imgViewerBox { width: min(960px,96vw); height: min(92vh,920px); border-radius: 14px; border: 1px solid rgba(255,255,255,.16); background: rgba(0,0,0,.52); overflow: hidden; box-shadow: 0 16px 40px rgba(0,0,0,.6); display: flex; flex-direction: column; }
+.imgViewerBox { width: min(98vw, 1800px); height: min(96vh, 1020px); border-radius: 14px; border: 1px solid rgba(255,255,255,.16); background: rgba(0,0,0,.85); overflow: hidden; box-shadow: 0 16px 40px rgba(0,0,0,.6); display: flex; flex-direction: column; }
 .imgViewerHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 11px; border-bottom: 1px solid rgba(255,255,255,.12); color: #fff; font-weight: 1000; flex-shrink: 0; }
 .imgViewerTitle { font-size: 12px; letter-spacing: .35px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .imgViewerClose { cursor: pointer; padding: 7px 11px; border-radius: 10px; border: 1px solid rgba(255,255,255,.20); background: rgba(255,255,255,.07); color: #fff; font-weight: 1000; }
 .imgViewerClose:hover { filter: brightness(1.15); }
 .imgViewerBody { position: relative; flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; background: rgba(0,0,0,.18); }
 .imgViewerStage { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; touch-action: none; }
-#imgViewerImg { max-width: min(100%, 92vw); max-height: min(100%, 78vh); border-radius: 10px; border: 1px solid rgba(255,255,255,.12); transform-origin: top center; transform: translate3d(0,0,0) scale(1); will-change: transform; backface-visibility: hidden; -webkit-backface-visibility: hidden; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+#imgViewerImg { max-width: 96vw; max-height: 88vh; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); image-rendering: -webkit-optimize-contrast; transform-origin: center center; transform: translate3d(0,0,0) scale(1); will-change: transform; backface-visibility: hidden; -webkit-backface-visibility: hidden; pointer-events: none; user-select: none; -webkit-user-drag: none; }
 .imgViewerHint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; color: rgba(255,255,255,.82); font-size: 11px; font-weight: 900; pointer-events: none; }
 
 /* ========================================================= */
@@ -1143,7 +1143,7 @@ body.header-hidden .secHead {
 body.header-hidden .scada-ticker-wrap {
   display: flex !important;
   margin-top: 0 !important;
-  padding-right: 76px; /* เผื่อพื้นที่ด้านขวาไม่ให้ทับปุ่มลอย ☰ Menu */
+  padding-right: 76px;
 }
 
 body.header-hidden .floating-header-btn {
@@ -1154,49 +1154,6 @@ body.header-hidden .floating-header-btn {
 
 body.header-hidden .mainViewport {
   margin-top: 4px !important;
-}
-
-.floating-header-btn {
-  display: none;
-  position: fixed;
-  top: 8px;
-  right: 10px;
-  z-index: 10005;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: rgba(12, 18, 27, 0.75);
-  color: var(--scada-cyan);
-  border: 1px solid rgba(0, 224, 255, 0.4);
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
-  opacity: 0.45;
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.floating-header-btn:hover,
-.floating-header-btn:focus {
-  opacity: 1;
-  transform: scale(1.05);
-}
-
-body.header-hidden .top,
-body.header-hidden .scada-ticker-wrap,
-body.header-hidden .mobileMenu,
-body.header-hidden .secHead {
-  display: none !important;
-}
-
-body.header-hidden .floating-header-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-body.header-hidden .mainViewport {
-  margin-top: 0 !important;
-  height: 100% !important;
 }
 
 /* ========================================================= */
