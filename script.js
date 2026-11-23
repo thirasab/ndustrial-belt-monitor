@@ -3009,12 +3009,12 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 })();
 
 // =========================================================
-// 20. IDLE AUTO-HIDE HEADER (15 SECONDS - DESKTOP/TV ONLY)
+// 20. IDLE AUTO-HIDE HEADER (KEEP LIVE LOG VISIBLE)
 // =========================================================
 (function() {
   var hideBtn = document.getElementById("toggleHeaderBtn");
   var floatBtn = document.getElementById("floatingHeaderToggle");
-  var IDLE_TIMEOUT_MS = 15000; // 15 วินาที
+  var IDLE_TIMEOUT_MS = 15000; // 15 วินาที (ปรับเวลาได้ตามต้องการ เช่น 10000 = 10 วิ)
   var idleTimer = null;
   var lastMoveTime = 0;
 
@@ -3031,22 +3031,35 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     return false;
   }
 
-function setHeaderHidden(isHidden) {
-  // ปิดการซ่อนแถบเมนูอัตโนมัติ (Auto-Hide) และให้แถบ LIVE LOG ค้างอยู่ตลอดเวลา
-  document.body.classList.remove("header-hidden");
-  if (hideBtn) hideBtn.textContent = "👁️ Hide Header Now";
+  function setHeaderHidden(isHidden) {
+    if (isMobileView()) isHidden = false;
 
-  setTimeout(function() {
-    if (typeof map !== "undefined" && map) {
-      map.invalidateSize(true);
-      if (typeof fitMapCover_ === "function") {
-        fitMapCover_(false);
-      } else if (typeof adjustCardPositions_ === "function") {
-        adjustCardPositions_();
+    var currentlyHidden = document.body.classList.contains("header-hidden");
+    if (currentlyHidden === !!isHidden) return;
+
+    if (isHidden) {
+      if (isUserBusy()) {
+        resetIdleTimer();
+        return;
       }
+      document.body.classList.add("header-hidden");
+      if (hideBtn) hideBtn.textContent = "👁️ Show Header";
+    } else {
+      document.body.classList.remove("header-hidden");
+      if (hideBtn) hideBtn.textContent = "👁️ Hide Header Now";
     }
-  }, 100);
-}
+
+    setTimeout(function() {
+      if (typeof map !== "undefined" && map) {
+        map.invalidateSize(true);
+        if (typeof fitMapCover_ === "function") {
+          fitMapCover_(false);
+        } else if (typeof adjustCardPositions_ === "function") {
+          adjustCardPositions_();
+        }
+      }
+    }, 100);
+  }
 
   function resetIdleTimer() {
     setHeaderHidden(false);
