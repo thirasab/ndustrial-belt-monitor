@@ -767,7 +767,36 @@ table th, .aiTable th {
   .aiMain { grid-template-columns: 1fr; }
 }
 
-/* 3. เมนูมือถือแบบลอยทับหน้าจอ พร้อมแอนิเมชันเปิด-ปิดนุ่มนวล */
+@media (max-width: 768px) {
+  .top {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 100%;
+  }
+  .top .left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden; }
+  .brand { min-width: 0; flex: 1; overflow: hidden; }
+  #logoImg { height: 36px !important; padding: 2px 5px !important; }
+  .h1 { font-size: 14px; }
+  .sub { font-size: 11px; }
+
+  .top .right { display: none !important; }
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 8px 12px;
+    font-size: 20px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+  }
+
+  /* เมนูมือถือแบบลอยทับหน้าจอ พร้อมแอนิเมชันเปิด-ปิดนุ่มนวล */
   .mobileMenu {
     display: flex !important;
     position: fixed !important;
@@ -808,6 +837,7 @@ table th, .aiTable th {
 
   /* จัดระยะห่างและขนาดปุ่มในเมนูมือถือให้กดง่าย */
   .mobileMenu .right {
+    display: flex !important;
     gap: 8px !important;
   }
   .mobileMenu .right > div[style*="grid-template-columns"] {
@@ -828,6 +858,21 @@ table th, .aiTable th {
   .mobileMenu .modeBtn:active {
     transform: scale(0.97) !important;
   }
+
+  .aiGrid { grid-template-columns: repeat(2, 1fr); }
+  .aiCard:last-child { grid-column: 1 / -1; }
+  .aiMain { display: grid !important; grid-template-columns: 1fr !important; width: 100% !important; max-width: 100% !important; }
+  .aiObservations, .aiObsPanel, .aiCard { width: 100% !important; max-width: 100% !important; }
+  .aiObsList, .aiObsGrid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important; gap: 12px !important; }
+
+  .qrOverlay { padding-top: 12vh; } 
+  .qrZoomBox { 
+    width: min(320px, 85vw); height: min(320px, 85vw);
+    margin-top: 0; margin-left: calc(-1 * min(160px, 42.5vw));
+    top: 18vh;
+  }
+  .qrZoomHint { bottom: -28px; font-size: 12px; }
+}
 
 @media(max-width: 380px) {
   .h1 { font-size: 12px; }
@@ -1203,8 +1248,10 @@ html {
 /* 19. MOBILE RESPONSIVE OVERRIDES (ALL-IN-ONE <= 768px)      */
 /* ========================================================= */
 @media (max-width: 768px) {
-  /* 1. โครงสร้างหลักเต็มความสูงหน้าจอมือถือ ไม่เลื่อนเด้ง */
+  /* 1. โครงสร้างหลักเต็มความสูงหน้าจอมือถือ ไม่ล้นขอบข้างและไม่เลื่อนเด้ง */
   html, body {
+    width: 100vw !important;
+    max-width: 100vw !important;
     height: 100dvh !important;
     margin: 0 !important;
     padding: 4px !important;
@@ -1233,29 +1280,11 @@ html {
     display: none !important;
   }
 
-  /* 3. เมนูมือถือแบบลอยทับหน้าจอ ไม่ดันพื้นที่แผนที่ */
-  .mobileMenu.open {
-    position: fixed !important;
-    top: 56px !important;
-    left: 6px !important;
-    right: 6px !important;
-    background: rgba(12, 18, 27, 0.97) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 12px !important;
-    padding: 10px !important;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.85) !important;
-    z-index: 10010 !important;
-    max-height: 80dvh !important;
-    overflow-y: auto !important;
-  }
-  [data-theme="day"] .mobileMenu.open {
-    background: rgba(255, 255, 255, 0.97) !important;
-  }
-
-  /* 4. ขยายพื้นที่แผนที่และ Iframe (Noise / Vib Dashboard) ให้เต็มจอ */
+  /* 3. ขยายพื้นที่แผนที่และ Iframe (Noise / Vib Dashboard) ให้เต็มจอ */
   .mainViewport {
     flex: 1 !important;
     min-height: 0 !important;
+    width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
     margin-top: 4px !important;
@@ -1263,6 +1292,7 @@ html {
   .mainViewport > .section {
     flex: 1 !important;
     min-height: 0 !important;
+    width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
   }
@@ -1284,7 +1314,7 @@ html {
     min-height: 0 !important;
   }
 
-  /* 5. ขยายจุดบนแผนที่และปุ่มควบคุม (+, -, 🎯) ให้กดง่ายด้วยนิ้ว */
+  /* 4. ขยายจุดบนแผนที่และปุ่มควบคุม (+, -, 🎯) ให้กดง่ายด้วยนิ้ว */
   .mapDot {
     width: 28px !important;
     height: 28px !important;
@@ -1305,7 +1335,7 @@ html {
     font-size: 18px !important;
   }
 
-  /* 6. การ์ดสถานะบนแผนที่ (ซ่อนเป็นค่าเริ่มต้น โชว์เฉพาะจุดที่แตะ) */
+  /* 5. การ์ดสถานะบนแผนที่ (ซ่อนเป็นค่าเริ่มต้น โชว์เฉพาะจุดที่แตะ) */
   body:not([data-mode="PM10"]) .posCard {
     display: none !important;
   }
@@ -1322,7 +1352,7 @@ html {
     background: rgba(255, 255, 255, 0.92) !important;
   }
 
-  /* 7. Popup รายละเอียดสายพาน (Bottom Sheet ด้านล่างจอ) */
+  /* 6. Popup รายละเอียดสายพาน (Bottom Sheet ด้านล่างจอ) */
   .mapPopup {
     position: fixed !important;
     left: 8px !important;
@@ -1335,7 +1365,7 @@ html {
     box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.75) !important;
   }
 
-  /* 8. Modal เต็มตาบนมือถือแนวตั้ง */
+  /* 7. Modal เต็มตาบนมือถือแนวตั้ง */
   .overlay {
     padding: 4px !important;
   }
@@ -1355,7 +1385,7 @@ html {
     padding: 8px !important;
   }
 
-  /* 9. ตาราง History / Alarm Log / PM10 แบบตรึงคอลัมน์เวลาซ้ายสุด */
+  /* 8. ตาราง History / Alarm Log / PM10 แบบตรึงคอลัมน์เวลาซ้ายสุด */
   .modalBody table {
     display: block !important;
     width: 100% !important;
@@ -1399,7 +1429,7 @@ html {
     background-color: rgba(10, 18, 32, 0.025);
   }
 
-  /* 10. กราฟ Chart.js และการ์ดสรุปค่า PM10 */
+  /* 9. กราฟ Chart.js และการ์ดสรุปค่า PM10 */
   .modalBody div[style*="height:240px"] {
     height: 260px !important;
     margin-left: -4px !important;
@@ -1422,7 +1452,7 @@ html {
     font-size: 9px !important;
   }
 
-  /* 11. ป้องกันเบราว์เซอร์มือถือซูมหน้าจออัตโนมัติเวลาแตะช่องกรอกข้อมูล */
+  /* 10. ป้องกันเบราว์เซอร์มือถือซูมหน้าจออัตโนมัติเวลาแตะช่องกรอกข้อมูล */
   .rInput, .rText, select {
     font-size: 16px !important;
   }
