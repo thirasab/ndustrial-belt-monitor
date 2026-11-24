@@ -116,7 +116,7 @@ window.addEventListener("error",function(e){ hardCrashScreen("SCADA UI crashed",
 window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA Promise crashed",(e&&e.reason)||"Unknown",""); });
 
 // =========================================================
-// 4. MOBILE MENU & THEME
+// 4. MOBILE MENU & THEME (AUTO NIGHT AT NIGHT)
 // =========================================================
 (function(){
   var btn = $id("hamburgerBtn");
@@ -158,16 +158,43 @@ window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA
   });
 })();
 
-function setTheme(theme){
-  document.body.setAttribute("data-theme",theme);
-  localStorage.setItem("belt_theme",theme);
-  var txt = (theme==="day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
-  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id){
-    var e = document.getElementById(id); 
-    if(e) e.textContent = txt;
+function getAutoThemeByTime_() {
+  var hr = new Date().getHours();
+  // 18:00 - 05:59 = กลางคืน (night), 06:00 - 17:59 = กลางวัน (day)
+  return (hr >= 18 || hr < 6) ? "night" : "day";
+}
+
+function setTheme(theme, isManual) {
+  document.body.setAttribute("data-theme", theme);
+  localStorage.setItem("belt_theme", theme);
+  if (isManual) {
+    localStorage.setItem("belt_theme_manual_hr", String(new Date().getHours()));
+  }
+  var txt = (theme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
+  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
+    var e = document.getElementById(id);
+    if (e) e.textContent = txt;
   });
 }
-setTheme(localStorage.getItem("belt_theme")||"night");
+
+function applyAutoThemeIfNeeded_() {
+  var autoTheme = getAutoThemeByTime_();
+  var curTheme = document.body.getAttribute("data-theme") || "night";
+  var manualHr = localStorage.getItem("belt_theme_manual_hr");
+  var curHr = String(new Date().getHours());
+
+  if (manualHr !== null && manualHr === curHr) {
+    return;
+  }
+
+  localStorage.removeItem("belt_theme_manual_hr");
+  if (curTheme !== autoTheme) {
+    setTheme(autoTheme, false);
+  }
+}
+
+setTheme(getAutoThemeByTime_(), false);
+setInterval(applyAutoThemeIfNeeded_, 60000);
 
 (function(){
   function bindTheme(id){ 
@@ -175,7 +202,7 @@ setTheme(localStorage.getItem("belt_theme")||"night");
     if(!b) return; 
     b.addEventListener("click", function(){ 
       var cur = document.body.getAttribute("data-theme")||"night"; 
-      setTheme(cur==="day" ? "night" : "day"); 
+      setTheme(cur==="day" ? "night" : "day", true); 
     }); 
   }
   bindTheme("themeBtnToggle"); 
@@ -1190,15 +1217,54 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 // 11. MAP & POPUP RENDERERS (ZOOMABLE STATIC IMAGE map1.png)
 // =========================================================
 
-// ฟังก์ชันคำนวณซูมเริ่มต้นให้เต็มกรอบหน้าจอ แต่ปลดล็อกให้ย่อ-ขยายได้อิสระ
+// ฟังก์ชันเช็กจุด POS ทั้งหมดในโหมดปัจจุบัน แล้วปรับซูมให้เห็นครบทุกจุดในหน้าจอเดียว
 function fitMapCover_(animate) {
   if (typeof map === 'undefined' || !map) return;
-  var bounds = L.latLngBounds(MAP_IMAGE_BOUNDS);
-  var coverZoom = map.getBoundsZoom(bounds, true); // true = ขยายเต็มพื้นที่ตอนเริ่มต้น
-  map.options.minZoom = Math.max(12, coverZoom - 2); // อนุญาตให้ย่อภาพออกได้อีก 2 ระดับ
+
+  var imgBounds = L.latLngBounds(MAP_IMAGE_BOUNDS);
+  var coverZoom = map.getBoundsZoom(imgBounds, true);
+  map.options.minZoom = Math.max(12, coverZoom - 2);
   map.options.maxZoom = 22;
-  map.__BASE_ZOOM = coverZoom;
-  map.setView(bounds.getCenter(), coverZoom, { animate: !!animate });
+
+  var posBounds = L.latLngBounds();
+  var count = 0;
+
+  if (Array.isArray(MAP_POINTS)) {
+    for (var i = 0; i < MAP_POINTS.length; i++) {
+      var p = MAP_POINTS[i];
+      if (!p || !p.modes || !p.modes.includes(__PAGE_MODE__)) continue;
+      if (isFinite(Number(p.lat)) && isFinite(Number(p.lng)) && (p.lat !== 0 || p.lng !== 0)) {
+        posBounds.extend([Number(p.lat), Number(p.lng)]);
+        count++;
+      }
+    }
+  }
+
+  if (count > 0 && posBounds.isValid()) {
+    var isMobile = window.innerWidth <= 768;
+    var padTopLeft = isMobile ? [40, 40] : [80, 70];
+    var padBottomRight = isMobile ? [40, 40] : [180, 110];
+
+    var targetZoom = map.getBoundsZoom(posBounds, false, L.point(
+      padTopLeft[0] + padBottomRight[0],
+      padTopLeft[1] + padBottomRight[1]
+    ));
+
+    targetZoom = Math.min(targetZoom, 18);
+    targetZoom = Math.max(targetZoom, coverZoom);
+
+    map.__BASE_ZOOM = targetZoom;
+    map.fitBounds(posBounds, {
+      paddingTopLeft: padTopLeft,
+      paddingBottomRight: padBottomRight,
+      maxZoom: targetZoom,
+      animate: !!animate
+    });
+  } else {
+    map.__BASE_ZOOM = coverZoom;
+    map.setView(imgBounds.getCenter(), coverZoom, { animate: !!animate });
+  }
+
   map.fire('zoom');
 }
 
@@ -1360,21 +1426,17 @@ function initLeafletMap_() {
     maxZoom: 22
   });
 
-  // แสดงภาพแผนผังโรงงาน map1.png
   L.imageOverlay('map1.png', MAP_IMAGE_BOUNDS, {
     interactive: false
   }).addTo(map);
 
-  // เผื่อขอบเขตการเลื่อนออกไป 80% เพื่อให้ย่อ-ขยายและลากดูพื้นที่รอบๆ ได้อิสระ
   map.setMaxBounds(L.latLngBounds(MAP_IMAGE_BOUNDS).pad(0.8));
   map.options.maxBoundsViscosity = 0.5;
 
-  // คำนวณและซูมภาพให้เต็มกรอบหน้าจอตอนเริ่มต้น
   fitMapCover_(false);
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  // ปุ่ม Reset View มุมขวาล่างเหนือปุ่ม + / -
   var resetViewControl = L.control({ position: 'bottomright' });
   resetViewControl.onAdd = function() {
     var btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control scada-reset-map-btn');
@@ -1406,7 +1468,6 @@ function initLeafletMap_() {
   };
   resetViewControl.addTo(map);
 
-  // กล่องแสดงพิกัดและระยะการซูมมุมซ้ายล่าง
   var coordControl = L.control({ position: 'bottomleft' });
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
@@ -1461,7 +1522,6 @@ function initLeafletMap_() {
       card.className = "posCard";
       card.style.transform = "translate(" + p.labelDx + "px," + p.labelDy + "px)";
 
-      // สร้างรายการสายพานเริ่มต้นแสดงในการ์ดทันที ไม่ต้องรอโหลดเสร็จ
       var initLines = "";
       if (p.belts && p.belts.length) {
         for (var bIdx = 0; bIdx < p.belts.length; bIdx++) {
@@ -2478,7 +2538,6 @@ function toDriveImgUrl_(u) {
   else if (/^[a-zA-Z0-9_-]{10,}$/.test(u)) id = u;
 
   if (id) {
-    // =s0 สั่งให้ Google Drive ส่งภาพความละเอียดต้นฉบับ 100% คมชัดสูงสุดบนจอ TV
     return "https://lh3.googleusercontent.com/d/" + id + "=s0";
   }
   return u;
@@ -2594,7 +2653,7 @@ function fileToBase64_(file) {
     reader.onload = function(e) {
       var img = new Image();
       img.onload = function() {
-        var MAX_DIM = 2560; // ความละเอียดสูงระดับ 2K คมชัดเต็มจอ TV
+        var MAX_DIM = 2560;
         var w = img.width;
         var h = img.height;
 
@@ -2616,7 +2675,7 @@ function fileToBase64_(file) {
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, w, h);
 
-        var dataUrl = canvas.toDataURL("image/jpeg", 0.92); // คุณภาพ 92% คมชัดสูง
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.92);
         var comma = dataUrl.indexOf(",");
         var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 
@@ -2928,7 +2987,6 @@ window.addEventListener("load", function(){
   }, 50);
 });
 
-// รีเฟรชหน้าอัตโนมัติทุก 6 ชั่วโมง ป้องกัน Smart TV แรมเต็ม
 setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
 // =========================================================
@@ -2965,7 +3023,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 })();
 
 // =========================================================
-// 20. IDLE AUTO-HIDE HEADER (15 SECONDS - DESKTOP/TV ONLY)
+// 20. IDLE AUTO-HIDE HEADER (KEEP LIVE LOG VISIBLE)
 // =========================================================
 (function() {
   var hideBtn = document.getElementById("toggleHeaderBtn");
@@ -2991,7 +3049,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     if (isMobileView()) isHidden = false;
 
     var currentlyHidden = document.body.classList.contains("header-hidden");
-    if (currentlyHidden === isHidden) return;
+    if (currentlyHidden === !!isHidden) return;
 
     if (isHidden) {
       if (isUserBusy()) {
@@ -3008,7 +3066,11 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setTimeout(function() {
       if (typeof map !== "undefined" && map) {
         map.invalidateSize(true);
-        fitMapCover_(false);
+        if (typeof fitMapCover_ === "function") {
+          fitMapCover_(false);
+        } else if (typeof adjustCardPositions_ === "function") {
+          adjustCardPositions_();
+        }
       }
     }, 100);
   }
@@ -3140,7 +3202,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     if (p.__dragBound) return;
     p.__dragBound = true;
 
-    // 1. ลากจุด POS (เปลี่ยนค่า Lat, Lng)
     p.__el.addEventListener("mousedown", function(e) {
       if (!__EDIT_LAYOUT_MODE__) return;
       e.preventDefault();
@@ -3165,7 +3226,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       window.addEventListener("mouseup", onUp);
     });
 
-    // 2. ลากกล่องการ์ด (เปลี่ยนค่า labelDx, labelDy)
     p.__card.addEventListener("mousedown", function(e) {
       if (!__EDIT_LAYOUT_MODE__) return;
       e.preventDefault();
@@ -3212,7 +3272,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setEditMode(false);
   });
 
-  // ปุ่มบันทึกพิกัดลง Google Sheets โดยตรง
   document.getElementById("saveLayoutSheetBtn").addEventListener("click", function() {
     Swal.fire({
       title: "บันทึกตำแหน่งลง Google Sheets",
