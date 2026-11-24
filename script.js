@@ -116,7 +116,7 @@ window.addEventListener("error",function(e){ hardCrashScreen("SCADA UI crashed",
 window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA Promise crashed",(e&&e.reason)||"Unknown",""); });
 
 // =========================================================
-// 4. MOBILE MENU & THEME (AUTO NIGHT AT NIGHT)
+// 4. MOBILE MENU & THEME (AUTO / MANUAL DAY & NIGHT)
 // =========================================================
 (function(){
   var btn = $id("hamburgerBtn");
@@ -164,13 +164,48 @@ function getAutoThemeByTime_() {
   return (hr >= 18 || hr < 6) ? "night" : "day";
 }
 
-function setTheme(theme, isManual) {
-  document.body.setAttribute("data-theme", theme);
-  localStorage.setItem("belt_theme", theme);
-  if (isManual) {
-    localStorage.setItem("belt_theme_manual_hr", String(new Date().getHours()));
+function getThemeControlMode_() {
+  try {
+    var m = localStorage.getItem("belt_theme_mode");
+    return (m === "manual") ? "manual" : "auto";
+  } catch (e) {
+    return "auto";
   }
-  var txt = (theme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
+}
+
+function updateThemeModeButtons_() {
+  var mode = getThemeControlMode_();
+  var txt = (mode === "manual") ? "✋ Theme Mode: MANUAL" : "🕒 Theme Mode: AUTO";
+  ["themeModeBtn", "themeModeBtn2"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  });
+}
+
+function setThemeControlMode(mode, applyNow) {
+  var normalized = (mode === "manual") ? "manual" : "auto";
+  try {
+    localStorage.setItem("belt_theme_mode", normalized);
+  } catch (e) {}
+  updateThemeModeButtons_();
+
+  if (normalized === "auto" && applyNow !== false) {
+    setTheme(getAutoThemeByTime_(), false);
+  }
+}
+
+function setTheme(theme, isManual) {
+  var finalTheme = (theme === "day") ? "day" : "night";
+  document.body.setAttribute("data-theme", finalTheme);
+  try {
+    localStorage.setItem("belt_theme", finalTheme);
+  } catch (e) {}
+
+  if (isManual) {
+    setThemeControlMode("manual", false);
+  }
+
+  var txt = (finalTheme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
   ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
     var e = document.getElementById(id);
     if (e) e.textContent = txt;
@@ -178,35 +213,47 @@ function setTheme(theme, isManual) {
 }
 
 function applyAutoThemeIfNeeded_() {
+  if (getThemeControlMode_() !== "auto") return;
   var autoTheme = getAutoThemeByTime_();
   var curTheme = document.body.getAttribute("data-theme") || "night";
-  var manualHr = localStorage.getItem("belt_theme_manual_hr");
-  var curHr = String(new Date().getHours());
-
-  if (manualHr !== null && manualHr === curHr) {
-    return;
-  }
-
-  localStorage.removeItem("belt_theme_manual_hr");
   if (curTheme !== autoTheme) {
     setTheme(autoTheme, false);
   }
 }
 
-setTheme(getAutoThemeByTime_(), false);
-setInterval(applyAutoThemeIfNeeded_, 60000);
-
-(function(){
-  function bindTheme(id){ 
-    var b = document.getElementById(id); 
-    if(!b) return; 
-    b.addEventListener("click", function(){ 
-      var cur = document.body.getAttribute("data-theme")||"night"; 
-      setTheme(cur==="day" ? "night" : "day", true); 
-    }); 
+(function initThemeSystem_() {
+  var controlMode = getThemeControlMode_();
+  var savedTheme = localStorage.getItem("belt_theme") || "night";
+  if (controlMode === "auto") {
+    setTheme(getAutoThemeByTime_(), false);
+  } else {
+    setTheme(savedTheme, false);
   }
-  bindTheme("themeBtnToggle"); 
-  bindTheme("themeBtnToggle2");
+  updateThemeModeButtons_();
+  setInterval(applyAutoThemeIfNeeded_, 60000);
+
+  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
+    var b = document.getElementById(id);
+    if (!b) return;
+    b.addEventListener("click", function() {
+      var cur = document.body.getAttribute("data-theme") || "night";
+      setTheme(cur === "day" ? "night" : "day", true);
+    });
+  });
+
+  ["themeModeBtn", "themeModeBtn2"].forEach(function(id) {
+    var mb = document.getElementById(id);
+    if (!mb) return;
+    mb.addEventListener("click", function() {
+      var nextMode = (getThemeControlMode_() === "auto") ? "manual" : "auto";
+      setThemeControlMode(nextMode, true);
+      showToast(
+        nextMode === "auto" ? "Theme Mode: AUTO" : "Theme Mode: MANUAL",
+        "ok",
+        nextMode === "auto" ? "สลับธีมตามเวลากลางวัน/กลางคืน" : "ล็อกธีมตามที่เลือกไว้"
+      );
+    });
+  });
 })();
 
 // =========================================================
@@ -2925,32 +2972,52 @@ function reportRefresh_(){
 })();
 
 // =========================================================
-// 18. LIVE TICKER ONLY (ลบกล่องแจ้งเตือนด้านข้างออกแล้ว)
+// 18. LIVE TICKER (SMOOTH SPEED & ANTI-FLICKER)
 // =========================================================
+var __LAST_TICKER_TEXT__ = "";
+var __LAST_TICKER_RENDER_AT__ = 0;
+
 function updateGlobalLeftAlarms_() {
-  if (!window.__LAST_DATA__) return; 
+  if (!window.__LAST_DATA__) return;
+
+  var now = Date.now();
+  if (__LAST_TICKER_TEXT__ && (now - __LAST_TICKER_RENDER_AT__ < 30000)) {
+    return;
+  }
+
   var rows = buildAiRows_(window.__LAST_DATA__);
 
   var oldPanel = document.getElementById("leftAlarmPanel");
   if (oldPanel) oldPanel.remove();
 
+  var seenMap = {};
   var activeAlarms = rows.filter(function(r) {
     var isAlarm = r.level === "CRITICAL" || r.level === "HIGH" || r.level === "MEDIUM";
     var isAlert = r.status === "ALERT" || r.status === "WARN";
-    return isAlarm && isAlert;
+    if (!isAlarm || !isAlert) return false;
+    var key = String(r.belt || "") + "|" + String(r.alarmType || "");
+    if (seenMap[key]) return false;
+    seenMap[key] = true;
+    return true;
   });
 
-  var ticker = document.getElementById("liveTickerContent");
-  if (ticker) {
-    var tickerHtml = '<span>';
-    if (activeAlarms.length === 0) {
-      tickerHtml += '✅ [' + new Date().toLocaleTimeString('th-TH') + '] SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.';
-    } else {
-      var msgs = activeAlarms.map(a => '⚠️ ' + a.belt + ': ' + (a.alarmMsg || a.alarmType));
-      tickerHtml += msgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ');
+  var nextText = "";
+  if (activeAlarms.length === 0) {
+    nextText = "✅ SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.";
+  } else {
+    var msgs = activeAlarms.map(function(a) {
+      return "⚠️ " + a.belt + " [" + a.level + "]: " + (a.alarmMsg || a.alarmType);
+    });
+    nextText = msgs.join("     •     ");
+  }
+
+  if (nextText !== __LAST_TICKER_TEXT__) {
+    __LAST_TICKER_TEXT__ = nextText;
+    __LAST_TICKER_RENDER_AT__ = now;
+    var ticker = document.getElementById("liveTickerContent");
+    if (ticker) {
+      ticker.innerHTML = "<span>" + esc(nextText) + "</span>";
     }
-    tickerHtml += '</span>';
-    ticker.innerHTML = tickerHtml;
   }
 }
 
@@ -3028,7 +3095,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 (function() {
   var hideBtn = document.getElementById("toggleHeaderBtn");
   var floatBtn = document.getElementById("floatingHeaderToggle");
-  var IDLE_TIMEOUT_MS = 15000; // 15 วินาที
+  var IDLE_TIMEOUT_MS = 15000;
   var idleTimer = null;
   var lastMoveTime = 0;
 
