@@ -4,9 +4,6 @@
 // 🛑 นำ URL ของ Google Apps Script Web App ที่ Deploy ใหม่มาใส่ตรงนี้ 🛑
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwvucmeMFhcN_6wIyOGg33kd6XKKe3K66T311r8nm7GtlA29-qmisdoo5a6Rm5q690V/exec";
 
-// 🛑 นำ URL หรือชื่อไฟล์หน้า Vibration Dashboard มาใส่ตรงนี้ (เช่น "vib.html" หรือลิงก์เว็บ) 🛑
-const VIB_DASH_URL = " https://thirasab.github.io/vibration-dashboard/";
-
 // กรอบพิกัดภาพ map1.png (ปรับค่า Lat, Lng 2 มุมนี้ให้ตรงกับขอบภาพที่แคปมา)
 const MAP_IMAGE_BOUNDS = [
   [8.11150, 99.67100], // มุมซ้ายบน (Top-Left: Lat สูง, Lng ต่ำ)
@@ -119,7 +116,7 @@ window.addEventListener("error",function(e){ hardCrashScreen("SCADA UI crashed",
 window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA Promise crashed",(e&&e.reason)||"Unknown",""); });
 
 // =========================================================
-// 4. MOBILE MENU & THEME (AUTO / MANUAL DAY & NIGHT)
+// 4. MOBILE MENU & THEME
 // =========================================================
 (function(){
   var btn = $id("hamburgerBtn");
@@ -161,102 +158,28 @@ window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA
   });
 })();
 
-function getAutoThemeByTime_() {
-  var hr = new Date().getHours();
-  // 18:00 - 05:59 = กลางคืน (night), 06:00 - 17:59 = กลางวัน (day)
-  return (hr >= 18 || hr < 6) ? "night" : "day";
-}
-
-function getThemeControlMode_() {
-  try {
-    var m = localStorage.getItem("belt_theme_mode");
-    return (m === "manual") ? "manual" : "auto";
-  } catch (e) {
-    return "auto";
-  }
-}
-
-function updateThemeModeButtons_() {
-  var mode = getThemeControlMode_();
-  var txt = (mode === "manual") ? "✋ Theme Mode: MANUAL" : "🕒 Theme Mode: AUTO";
-  ["themeModeBtn", "themeModeBtn2"].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.textContent = txt;
+function setTheme(theme){
+  document.body.setAttribute("data-theme",theme);
+  localStorage.setItem("belt_theme",theme);
+  var txt = (theme==="day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
+  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id){
+    var e = document.getElementById(id); 
+    if(e) e.textContent = txt;
   });
 }
+setTheme(localStorage.getItem("belt_theme")||"night");
 
-function setThemeControlMode(mode, applyNow) {
-  var normalized = (mode === "manual") ? "manual" : "auto";
-  try {
-    localStorage.setItem("belt_theme_mode", normalized);
-  } catch (e) {}
-  updateThemeModeButtons_();
-
-  if (normalized === "auto" && applyNow !== false) {
-    setTheme(getAutoThemeByTime_(), false);
+(function(){
+  function bindTheme(id){ 
+    var b = document.getElementById(id); 
+    if(!b) return; 
+    b.addEventListener("click", function(){ 
+      var cur = document.body.getAttribute("data-theme")||"night"; 
+      setTheme(cur==="day" ? "night" : "day"); 
+    }); 
   }
-}
-
-function setTheme(theme, isManual) {
-  var finalTheme = (theme === "day") ? "day" : "night";
-  document.body.setAttribute("data-theme", finalTheme);
-  try {
-    localStorage.setItem("belt_theme", finalTheme);
-  } catch (e) {}
-
-  if (isManual) {
-    setThemeControlMode("manual", false);
-  }
-
-  var txt = (finalTheme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
-  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
-    var e = document.getElementById(id);
-    if (e) e.textContent = txt;
-  });
-}
-
-function applyAutoThemeIfNeeded_() {
-  if (getThemeControlMode_() !== "auto") return;
-  var autoTheme = getAutoThemeByTime_();
-  var curTheme = document.body.getAttribute("data-theme") || "night";
-  if (curTheme !== autoTheme) {
-    setTheme(autoTheme, false);
-  }
-}
-
-(function initThemeSystem_() {
-  var controlMode = getThemeControlMode_();
-  var savedTheme = localStorage.getItem("belt_theme") || "night";
-  if (controlMode === "auto") {
-    setTheme(getAutoThemeByTime_(), false);
-  } else {
-    setTheme(savedTheme, false);
-  }
-  updateThemeModeButtons_();
-  setInterval(applyAutoThemeIfNeeded_, 60000);
-
-  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
-    var b = document.getElementById(id);
-    if (!b) return;
-    b.addEventListener("click", function() {
-      var cur = document.body.getAttribute("data-theme") || "night";
-      setTheme(cur === "day" ? "night" : "day", true);
-    });
-  });
-
-  ["themeModeBtn", "themeModeBtn2"].forEach(function(id) {
-    var mb = document.getElementById(id);
-    if (!mb) return;
-    mb.addEventListener("click", function() {
-      var nextMode = (getThemeControlMode_() === "auto") ? "manual" : "auto";
-      setThemeControlMode(nextMode, true);
-      showToast(
-        nextMode === "auto" ? "Theme Mode: AUTO" : "Theme Mode: MANUAL",
-        "ok",
-        nextMode === "auto" ? "สลับธีมตามเวลากลางวัน/กลางคืน" : "ล็อกธีมตามที่เลือกไว้"
-      );
-    });
-  });
+  bindTheme("themeBtnToggle"); 
+  bindTheme("themeBtnToggle2");
 })();
 
 // =========================================================
@@ -423,7 +346,7 @@ var ov=$id("overlay"); if(ov) ov.addEventListener("click",function(e){ if(e.targ
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
 
 // =========================================================
-// 7. RISK ENGINE (FOR LIVE LOG & ALERTS)
+// 7. AI ENGINE
 // =========================================================
 function aiToNum_(v){ if(v===null||v===undefined||v==="") return null; var n=Number(v); return isFinite(n)?n:null; }
 function aiReasonCause_(type){
@@ -531,7 +454,7 @@ function buildAiRows_(data){
 
   if(window.__LAST_VIB_DATA__) {
      function addVibAi(vibData, name, limitWarn, limitDanger) {
-       if(!vibData || !vibData.length) return;
+       if(!vibData.length) return;
        var latest = vibData[vibData.length-1];
        if(!latest || latest.level === "NORMAL" || latest.level === "IDLE") return;
        if (latest.level.includes("CHECK") && (latest.reason.includes("ค้าง") || latest.reason.includes("Frozen"))) return;
@@ -640,9 +563,78 @@ function buildAiRows_(data){
 }
 
 function setSectionVisibility_(){
-  var mapSec=$id("mapSection"), dashSec=$id("vibDashboardSection");
-  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"none":"flex";
+  var mapSec=$id("mapSection"), aiSec=$id("aiSection"), dashSec=$id("vibDashboardSection");
+  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH")?"none":"flex";
+  if(aiSec) aiSec.classList.toggle("open", __PAGE_MODE__==="AI");
   if(dashSec) dashSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"flex":"none";
+}
+
+function renderAiAnalysis_(data){
+  var rows=buildAiRows_(data);
+  var c={CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,NORMAL:0};
+  for(var i=0;i<rows.length;i++){
+    var lv=rows[i].level||"NORMAL";
+    c[lv]=(c[lv]||0)+1;
+  }
+  setText("aiKpiCritical", c.CRITICAL||0);
+  setText("aiKpiHigh", c.HIGH||0);
+  setText("aiKpiMedium", c.MEDIUM||0);
+  setText("aiKpiWatch", (c.LOW||0) + ((data&&Array.isArray(data.belts)) ? data.belts.filter(function(it){return String(it&&it.currentStatus||"")==="NO_DATA";}).length : 0));
+  var normalTotal=(data&&Array.isArray(data.belts)) ?
+    Math.max(0, data.belts.length - rows.filter(function(r){return r.level!=="NORMAL" && r.group!=="Environment" && r.group!=="Vibration Gear";}).length) : 0;
+  setText("aiKpiNormal", normalTotal);
+  setText("aiGeneratedAt", "Generated: " + new Date().toLocaleString("th-TH"));
+
+  var tb=$id("aiTbody");
+  if(tb){
+    if(!rows.length){
+      tb.innerHTML='<tr><td colspan="7" class="rMut empty-row">No AI findings</td></tr>';
+    }else{
+      var html="";
+      var topRows=rows.slice(0,15); 
+      for(var j=0;j<topRows.length;j++){
+        var r=topRows[j];
+        var bgStyle = "";
+        if (r.level === "CRITICAL") bgStyle = 'style="background:rgba(255,59,48,0.15);"';
+        else if (r.level === "HIGH") bgStyle = 'style="background:rgba(255,159,10,0.10);"';
+
+        html+='<tr ' + bgStyle + '>'+
+          '<td class="mono"><b>'+esc(String(r.score))+'</b></td>'+
+          '<td><span class="aiLevel '+esc(r.level)+'">'+esc(r.level)+'</span></td>'+
+          '<td class="mono"><b>'+esc(r.belt)+'</b><div class="aiTiny" style="color:var(--text);">'+esc(r.group||"-")+'</div></td>'+
+          '<td class="mono">'+(r.group==="Environment" ? "-" : (r.run===1?'RUN':'STOP'))+(r.isAcked?'<div class="aiTiny">ACK</div>':'')+'</td>'+
+          '<td class="mono">'+esc(r.alarmType||"-")+(r.alarmMsg?'<div class="aiTiny" style="color:#ff3b30;">'+esc(r.alarmMsg)+'</div>':'')+'</td>'+
+          '<td>'+esc(r.cause)+'</td>'+
+          '<td style="color:var(--scada-cyan);">'+esc(r.action)+'</td>'+
+        '</tr>';
+      }
+      tb.innerHTML=html;
+    }
+  }
+
+  var list=$id("aiReasonList");
+  if(list){
+    if(!rows.length){
+      list.innerHTML='<div class="aiEmpty">No AI findings</div>';
+    }else{
+      var out="";
+      var top=rows.slice(0,5);
+      for(var k=0;k<top.length;k++){
+        var rr=top[k];
+        var borderGlow = rr.level === "CRITICAL" ? "border-color: #ff3b30; box-shadow: 0 0 10px rgba(255,59,48,0.2);" : "";
+        out+='<div class="aiReasonItem" style="' + borderGlow + '">'+
+          '<div class="aiReasonTop">'+
+            '<div class="aiReasonBelt mono">'+esc(rr.belt)+' <span class="aiTiny">'+esc(rr.group||"")+'</span></div>'+
+            '<span class="aiLevel '+esc(rr.level)+'">'+esc(rr.level)+' • '+esc(String(rr.score))+'</span>'+
+          '</div>'+
+          '<div class="aiReasonMsg"><b>Alarm:</b> '+esc(rr.alarmType||"-")+(rr.alarmMsg?(' • '+esc(rr.alarmMsg)):'')+'</div>'+
+          '<div class="aiReasonMsg"><b>Why:</b> '+esc(rr.reasonText||rr.cause)+'</div>'+
+          '<div class="aiReasonMsg" style="color:var(--scada-cyan);"><b>Action:</b> '+esc(rr.action)+'</div>'+
+        '</div>';
+      }
+      list.innerHTML=out;
+    }
+  }
 }
 
 // =========================================================
@@ -675,7 +667,7 @@ function refreshVibStatus_(){
       if(timeRange === "5d") window.__TREND_VIB_DATA__ = res;
       window.__LAST_VIB_DATA__ = res; 
 
-      if (typeof updateGlobalLeftAlarms_ === "function") updateGlobalLeftAlarms_();
+      if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
       setTimeout(adjustCardPositions_, 100);
     })
     .catch(err => console.error("Vib Fetch Error:", err));
@@ -849,7 +841,7 @@ function fetchStatus(){
      fetchPm10SnapshotAll_();
   }
 
-  if(__PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
+  if(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
 
   callGasAPI('getStatusAll')
     .then(data => {
@@ -1198,54 +1190,15 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 // 11. MAP & POPUP RENDERERS (ZOOMABLE STATIC IMAGE map1.png)
 // =========================================================
 
-// ฟังก์ชันเช็กจุด POS ทั้งหมดในโหมดปัจจุบัน แล้วปรับซูมให้เห็นครบทุกจุดในหน้าจอเดียว
+// ฟังก์ชันคำนวณซูมเริ่มต้นให้เต็มกรอบหน้าจอ แต่ปลดล็อกให้ย่อ-ขยายได้อิสระ
 function fitMapCover_(animate) {
   if (typeof map === 'undefined' || !map) return;
-
-  var imgBounds = L.latLngBounds(MAP_IMAGE_BOUNDS);
-  var coverZoom = map.getBoundsZoom(imgBounds, true);
-  map.options.minZoom = Math.max(12, coverZoom - 2);
+  var bounds = L.latLngBounds(MAP_IMAGE_BOUNDS);
+  var coverZoom = map.getBoundsZoom(bounds, true); // true = ขยายเต็มพื้นที่ตอนเริ่มต้น
+  map.options.minZoom = Math.max(12, coverZoom - 2); // อนุญาตให้ย่อภาพออกได้อีก 2 ระดับ
   map.options.maxZoom = 22;
-
-  var posBounds = L.latLngBounds();
-  var count = 0;
-
-  if (Array.isArray(MAP_POINTS)) {
-    for (var i = 0; i < MAP_POINTS.length; i++) {
-      var p = MAP_POINTS[i];
-      if (!p || !p.modes || !p.modes.includes(__PAGE_MODE__)) continue;
-      if (isFinite(Number(p.lat)) && isFinite(Number(p.lng)) && (p.lat !== 0 || p.lng !== 0)) {
-        posBounds.extend([Number(p.lat), Number(p.lng)]);
-        count++;
-      }
-    }
-  }
-
-  if (count > 0 && posBounds.isValid()) {
-    var isMobile = window.innerWidth <= 768;
-    var padTopLeft = isMobile ? [40, 40] : [80, 70];
-    var padBottomRight = isMobile ? [40, 40] : [180, 110];
-
-    var targetZoom = map.getBoundsZoom(posBounds, false, L.point(
-      padTopLeft[0] + padBottomRight[0],
-      padTopLeft[1] + padBottomRight[1]
-    ));
-
-    targetZoom = Math.min(targetZoom, 18);
-    targetZoom = Math.max(targetZoom, coverZoom);
-
-    map.__BASE_ZOOM = targetZoom;
-    map.fitBounds(posBounds, {
-      paddingTopLeft: padTopLeft,
-      paddingBottomRight: padBottomRight,
-      maxZoom: targetZoom,
-      animate: !!animate
-    });
-  } else {
-    map.__BASE_ZOOM = coverZoom;
-    map.setView(imgBounds.getCenter(), coverZoom, { animate: !!animate });
-  }
-
+  map.__BASE_ZOOM = coverZoom;
+  map.setView(bounds.getCenter(), coverZoom, { animate: !!animate });
   map.fire('zoom');
 }
 
@@ -1407,17 +1360,21 @@ function initLeafletMap_() {
     maxZoom: 22
   });
 
+  // แสดงภาพแผนผังโรงงาน map1.png
   L.imageOverlay('map1.png', MAP_IMAGE_BOUNDS, {
     interactive: false
   }).addTo(map);
 
+  // เผื่อขอบเขตการเลื่อนออกไป 80% เพื่อให้ย่อ-ขยายและลากดูพื้นที่รอบๆ ได้อิสระ
   map.setMaxBounds(L.latLngBounds(MAP_IMAGE_BOUNDS).pad(0.8));
   map.options.maxBoundsViscosity = 0.5;
 
+  // คำนวณและซูมภาพให้เต็มกรอบหน้าจอตอนเริ่มต้น
   fitMapCover_(false);
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+  // ปุ่ม Reset View มุมขวาล่างเหนือปุ่ม + / -
   var resetViewControl = L.control({ position: 'bottomright' });
   resetViewControl.onAdd = function() {
     var btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control scada-reset-map-btn');
@@ -1449,6 +1406,7 @@ function initLeafletMap_() {
   };
   resetViewControl.addTo(map);
 
+  // กล่องแสดงพิกัดและระยะการซูมมุมซ้ายล่าง
   var coordControl = L.control({ position: 'bottomleft' });
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
@@ -1503,6 +1461,7 @@ function initLeafletMap_() {
       card.className = "posCard";
       card.style.transform = "translate(" + p.labelDx + "px," + p.labelDy + "px)";
 
+      // สร้างรายการสายพานเริ่มต้นแสดงในการ์ดทันที ไม่ต้องรอโหลดเสร็จ
       var initLines = "";
       if (p.belts && p.belts.length) {
         for (var bIdx = 0; bIdx < p.belts.length; bIdx++) {
@@ -2225,7 +2184,7 @@ function setPageMode(mode){
   clearMapDotStateCache_();
 
   if (typeof map !== 'undefined' && map) {
-    var isNewMapVisible = (mode !== "VIB_DASH");
+    var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
 
     var syncTvMapView_ = function() {
       if (!isNewMapVisible) return;
@@ -2275,15 +2234,11 @@ function setPageMode(mode){
   } else if(mode === "AI"){
     setText("title", "Monitor");
     setText("subtitle", "Noise Sensor");
+    if(window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
     refreshVibStatus_(); 
   } else if(mode === "VIB_DASH"){
     setText("title", "Monitor");
     setText("subtitle", "Vibration Dashboard");
-    var vibIframe = $id("vibDashIframe");
-    if (vibIframe && VIB_DASH_URL && vibIframe.dataset.loaded !== "1") {
-      vibIframe.src = VIB_DASH_URL;
-      vibIframe.dataset.loaded = "1";
-    }
   } else {
     if(window.__LAST_DATA__){
       setText("title", window.__LAST_DATA__.title || "Monitor");
@@ -2344,7 +2299,7 @@ function autoSwitchTick_(){
   
   if(__AUTO_SWITCH_REMAINING__ <= 0){
     __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC;
-    var seq=["BELT","PM10","VIB_DASH"];
+    var seq=["BELT","PM10","VIB_DASH","AI"];
     var idx=seq.indexOf(__PAGE_MODE__);
     if(idx<0) idx=0;
     setPageMode(seq[(idx+1)%seq.length]);
@@ -2523,6 +2478,7 @@ function toDriveImgUrl_(u) {
   else if (/^[a-zA-Z0-9_-]{10,}$/.test(u)) id = u;
 
   if (id) {
+    // =s0 สั่งให้ Google Drive ส่งภาพความละเอียดต้นฉบับ 100% คมชัดสูงสุดบนจอ TV
     return "https://lh3.googleusercontent.com/d/" + id + "=s0";
   }
   return u;
@@ -2638,7 +2594,7 @@ function fileToBase64_(file) {
     reader.onload = function(e) {
       var img = new Image();
       img.onload = function() {
-        var MAX_DIM = 2560;
+        var MAX_DIM = 2560; // ความละเอียดสูงระดับ 2K คมชัดเต็มจอ TV
         var w = img.width;
         var h = img.height;
 
@@ -2660,7 +2616,7 @@ function fileToBase64_(file) {
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, w, h);
 
-        var dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.92); // คุณภาพ 92% คมชัดสูง
         var comma = dataUrl.indexOf(",");
         var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 
@@ -2910,52 +2866,32 @@ function reportRefresh_(){
 })();
 
 // =========================================================
-// 18. LIVE TICKER (SMOOTH SPEED & ANTI-FLICKER)
+// 18. LIVE TICKER ONLY (ลบกล่องแจ้งเตือนด้านข้างออกแล้ว)
 // =========================================================
-var __LAST_TICKER_TEXT__ = "";
-var __LAST_TICKER_RENDER_AT__ = 0;
-
 function updateGlobalLeftAlarms_() {
-  if (!window.__LAST_DATA__) return;
-
-  var now = Date.now();
-  if (__LAST_TICKER_TEXT__ && (now - __LAST_TICKER_RENDER_AT__ < 30000)) {
-    return;
-  }
-
+  if (!window.__LAST_DATA__) return; 
   var rows = buildAiRows_(window.__LAST_DATA__);
 
   var oldPanel = document.getElementById("leftAlarmPanel");
   if (oldPanel) oldPanel.remove();
 
-  var seenMap = {};
   var activeAlarms = rows.filter(function(r) {
     var isAlarm = r.level === "CRITICAL" || r.level === "HIGH" || r.level === "MEDIUM";
     var isAlert = r.status === "ALERT" || r.status === "WARN";
-    if (!isAlarm || !isAlert) return false;
-    var key = String(r.belt || "") + "|" + String(r.alarmType || "");
-    if (seenMap[key]) return false;
-    seenMap[key] = true;
-    return true;
+    return isAlarm && isAlert;
   });
 
-  var nextText = "";
-  if (activeAlarms.length === 0) {
-    nextText = "✅ SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.";
-  } else {
-    var msgs = activeAlarms.map(function(a) {
-      return "⚠️ " + a.belt + " [" + a.level + "]: " + (a.alarmMsg || a.alarmType);
-    });
-    nextText = msgs.join("     •     ");
-  }
-
-  if (nextText !== __LAST_TICKER_TEXT__) {
-    __LAST_TICKER_TEXT__ = nextText;
-    __LAST_TICKER_RENDER_AT__ = now;
-    var ticker = document.getElementById("liveTickerContent");
-    if (ticker) {
-      ticker.innerHTML = "<span>" + esc(nextText) + "</span>";
+  var ticker = document.getElementById("liveTickerContent");
+  if (ticker) {
+    var tickerHtml = '<span>';
+    if (activeAlarms.length === 0) {
+      tickerHtml += '✅ [' + new Date().toLocaleTimeString('th-TH') + '] SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.';
+    } else {
+      var msgs = activeAlarms.map(a => '⚠️ ' + a.belt + ': ' + (a.alarmMsg || a.alarmType));
+      tickerHtml += msgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ');
     }
+    tickerHtml += '</span>';
+    ticker.innerHTML = tickerHtml;
   }
 }
 
@@ -2968,7 +2904,6 @@ document.addEventListener("DOMContentLoaded", function() {
   loadLogo(); 
   
   var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
-  if (savedMode === "AI") savedMode = "PM10";
   __PAGE_MODE__ = savedMode;
   document.body.setAttribute("data-mode", savedMode);
 
@@ -2993,6 +2928,7 @@ window.addEventListener("load", function(){
   }, 50);
 });
 
+// รีเฟรชหน้าอัตโนมัติทุก 6 ชั่วโมง ป้องกัน Smart TV แรมเต็ม
 setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
 // =========================================================
@@ -3029,12 +2965,12 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 })();
 
 // =========================================================
-// 20. IDLE AUTO-HIDE HEADER (KEEP LIVE LOG VISIBLE)
+// 20. IDLE AUTO-HIDE HEADER (15 SECONDS - DESKTOP/TV ONLY)
 // =========================================================
 (function() {
   var hideBtn = document.getElementById("toggleHeaderBtn");
   var floatBtn = document.getElementById("floatingHeaderToggle");
-  var IDLE_TIMEOUT_MS = 15000;
+  var IDLE_TIMEOUT_MS = 15000; // 15 วินาที
   var idleTimer = null;
   var lastMoveTime = 0;
 
@@ -3055,7 +2991,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     if (isMobileView()) isHidden = false;
 
     var currentlyHidden = document.body.classList.contains("header-hidden");
-    if (currentlyHidden === !!isHidden) return;
+    if (currentlyHidden === isHidden) return;
 
     if (isHidden) {
       if (isUserBusy()) {
@@ -3072,11 +3008,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setTimeout(function() {
       if (typeof map !== "undefined" && map) {
         map.invalidateSize(true);
-        if (typeof fitMapCover_ === "function") {
-          fitMapCover_(false);
-        } else if (typeof adjustCardPositions_ === "function") {
-          adjustCardPositions_();
-        }
+        fitMapCover_(false);
       }
     }, 100);
   }
@@ -3208,6 +3140,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     if (p.__dragBound) return;
     p.__dragBound = true;
 
+    // 1. ลากจุด POS (เปลี่ยนค่า Lat, Lng)
     p.__el.addEventListener("mousedown", function(e) {
       if (!__EDIT_LAYOUT_MODE__) return;
       e.preventDefault();
@@ -3232,6 +3165,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       window.addEventListener("mouseup", onUp);
     });
 
+    // 2. ลากกล่องการ์ด (เปลี่ยนค่า labelDx, labelDy)
     p.__card.addEventListener("mousedown", function(e) {
       if (!__EDIT_LAYOUT_MODE__) return;
       e.preventDefault();
@@ -3278,6 +3212,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setEditMode(false);
   });
 
+  // ปุ่มบันทึกพิกัดลง Google Sheets โดยตรง
   document.getElementById("saveLayoutSheetBtn").addEventListener("click", function() {
     Swal.fire({
       title: "บันทึกตำแหน่งลง Google Sheets",
