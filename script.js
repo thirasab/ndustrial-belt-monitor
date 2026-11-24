@@ -2759,7 +2759,7 @@ window.addEventListener("resize", function() {
 })();
 
 // =========================================================
-// 17. REPORT LOGIC (HIGH-RES 2560px & ORIGINAL =s0)
+// 17. REPORT LOGIC (AUTO-COMPRESS 1600px @ 0.82 & ORIGINAL =s0)
 // =========================================================
 const DELETE_PASSWORD="1234";
 
@@ -2902,7 +2902,7 @@ function fileToBase64_(file) {
     reader.onload = function(e) {
       var img = new Image();
       img.onload = function() {
-        var MAX_DIM = 2560; // ความละเอียดสูงระดับ 2K คมชัดเต็มจอ TV
+        var MAX_DIM = 1600; // คมชัดบนจอ TV และมือถือ แต่ลดขนาดไฟล์เหลือ ~300 KB
         var w = img.width;
         var h = img.height;
 
@@ -2924,7 +2924,7 @@ function fileToBase64_(file) {
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, w, h);
 
-        var dataUrl = canvas.toDataURL("image/jpeg", 0.92); // คุณภาพ 92% คมชัดสูง
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.82); // คุณภาพ 82% ส่งผ่านเน็ตมือถือเร็วขึ้นมาก
         var comma = dataUrl.indexOf(",");
         var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 
