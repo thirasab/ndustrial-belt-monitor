@@ -27,42 +27,119 @@ let __PM10_LATEST__ = {}, __PM10_SERIES__ = {}, __PM10_SERIES_FETCHED_AT__ = {};
 let __AI_ROWS__ = [];
 
 // =========================================================
-// 2. HELPER API CALLER (แทนที่ google.script.run)
+// 2. HELPER API CALLER (AbortController กันยิงซ้ำซ้อน)
 // =========================================================
-async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) {
+const __GAS_ABORT_CONTROLLERS__ = {};
+
+async function callGasAPI(action, params = {}, method = 'GET', bodyData = null, options = {}) {
+  const cancelPrevious = options.cancelPrevious !== false;
+  const controller = new AbortController();
+
+  if (cancelPrevious && __GAS_ABORT_CONTROLLERS__[action]) {
+    try {
+      __GAS_ABORT_CONTROLLERS__[action].abort();
+    } catch (_) {}
+  }
+
+  if (cancelPrevious) {
+    __GAS_ABORT_CONTROLLERS__[action] = controller;
+  }
+
   try {
     let url = new URL(GAS_URL);
     url.searchParams.append('action', action);
-    
+
     if (method === 'GET') {
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.append(key, value);
       }
     }
 
-    const options = {
+    const fetchOptions = {
       method: method,
+      signal: controller.signal
     };
 
     if (method === 'POST' && bodyData) {
-      options.body = JSON.stringify(bodyData);
-      options.headers = { "Content-Type": "text/plain;charset=utf-8" };
+      fetchOptions.body = JSON.stringify(bodyData);
+      fetchOptions.headers = { "Content-Type": "text/plain;charset=utf-8" };
     }
 
-    const response = await fetch(url, options);
+    const response = await fetch(url, fetchOptions);
     const data = await response.json();
     return data;
   } catch (error) {
+    if (error && error.name === 'AbortError') {
+      return { ok: false, aborted: true, error: "Request aborted" };
+    }
     throw new Error(error.message || "Network Error");
+  } finally {
+    if (cancelPrevious && __GAS_ABORT_CONTROLLERS__[action] === controller) {
+      delete __GAS_ABORT_CONTROLLERS__[action];
+    }
   }
 }
 
 // =========================================================
-// 3. HELPERS & MEMORY CLEANUP
+// 3. HELPERS, OFFLINE CACHE & MEMORY CLEANUP
 // =========================================================
 function $id(id){ return document.getElementById(id); }
 function setText(id,val){ var el=$id(id); if(!el) return false; el.textContent=(val==null?"":val); return true; }
 function setHTML(id,html){ var el=$id(id); if(!el) return false; el.innerHTML=(html==null?"":html); return true; }
+
+const GAS_CACHE_PREFIX_ = "scada_gas_cache_v1_";
+
+function readGasCache_(key) {
+  try {
+    var raw = localStorage.getItem(GAS_CACHE_PREFIX_ + key);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!parsed || !parsed.data) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeGasCache_(key, data) {
+  try {
+    if (!data) return;
+    var payload = JSON.stringify({
+      savedAt: Date.now(),
+      data: data
+    });
+    if (payload.length > 1500000) return;
+    localStorage.setItem(GAS_CACHE_PREFIX_ + key, payload);
+  } catch (e) {}
+}
+
+function setCachedBadge_(isCached, savedAt) {
+  var badge = $id("cachedBadge");
+  if (!badge) {
+    var conn = $id("connBadge");
+    if (!conn || !conn.parentNode) return;
+    badge = document.createElement("span");
+    badge.id = "cachedBadge";
+    badge.className = "pill mono";
+    badge.style.cssText = "display:none; color:#ff9f0a; border-color:rgba(255,159,10,.45); font-weight:900;";
+    conn.parentNode.insertBefore(badge, conn.nextSibling);
+  }
+
+  if (!isCached) {
+    badge.style.display = "none";
+    badge.textContent = "";
+    return;
+  }
+
+  var tStr = "";
+  if (savedAt) {
+    try {
+      tStr = " @ " + new Date(savedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+    } catch (_) {}
+  }
+  badge.style.display = "inline-flex";
+  badge.textContent = "CACHED" + tStr;
+}
 
 function destroyAllModalCharts_() {
   if (typeof __VIB_CHARTS__ !== 'undefined') {
@@ -538,6 +615,36 @@ function setSectionVisibility_(){
   if(dashSec) dashSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"flex":"none";
 }
 
+function syncIframesForMode_(mode) {
+  var pairs = [
+    { modeKey: "AI", sectionId: "aiSection" },
+    { modeKey: "VIB_DASH", sectionId: "vibDashboardSection" }
+  ];
+
+  for (var i = 0; i < pairs.length; i++) {
+    var sec = $id(pairs[i].sectionId);
+    if (!sec) continue;
+    var ifr = sec.querySelector("iframe");
+    if (!ifr) continue;
+
+    var targetSrc = ifr.getAttribute("data-src") || ifr.getAttribute("src") || "";
+    if (targetSrc && targetSrc !== "about:blank" && !ifr.getAttribute("data-src")) {
+      ifr.setAttribute("data-src", targetSrc);
+    }
+
+    var shouldLoad = (mode === pairs[i].modeKey);
+    if (shouldLoad) {
+      if (targetSrc && ifr.getAttribute("src") !== targetSrc) {
+        ifr.setAttribute("src", targetSrc);
+      }
+    } else {
+      if (ifr.getAttribute("src") && ifr.getAttribute("src") !== "about:blank") {
+        ifr.setAttribute("src", "about:blank");
+      }
+    }
+  }
+}
+
 function renderAiAnalysis_(data){
   var rows=buildAiRows_(data);
   var c={CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,NORMAL:0};
@@ -607,20 +714,38 @@ function renderAiAnalysis_(data){
 }
 
 // =========================================================
-// 8. DATA FETCHING (REST API via fetch)
+// 8. DATA FETCHING (REST API + OFFLINE FALLBACK)
 // =========================================================
 
 function fetchHistory(beltName){
+  var cacheKey = "history_24h_" + String(beltName || "");
   setText("modalTitle","History 24h — "+beltName);
   setHTML("modalBody","<div class='skeleton' style='height:30px;margin-bottom:6px;'></div><div class='skeleton' style='height:20px;margin-bottom:4px;'></div><div class='skeleton' style='height:20px;'></div>");
   openModal();
   
   callGasAPI('getHistory24h', {beltName: beltName})
     .then(data => {
-      if(!data||data.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((data&&data.error)?data.error:"unknown")+'</div>'); return;}
+      if(data && data.aborted) return;
+      if(!data||data.ok===false){
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          renderHistory(cached.data);
+          return;
+        }
+        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((data&&data.error)?data.error:"unknown")+'</div>');
+        return;
+      }
+      writeGasCache_(cacheKey, data);
       renderHistory(data);
     })
     .catch(err => {
+      var cached = readGasCache_(cacheKey);
+      if(cached && cached.data){
+        setCachedBadge_(true, cached.savedAt);
+        renderHistory(cached.data);
+        return;
+      }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
     });
 }
@@ -629,23 +754,34 @@ var _vibPollCount = 0;
 function refreshVibStatus_(){
   var timeRange = (_vibPollCount % 30 === 0) ? "5d" : "4h";
   _vibPollCount++;
+  var cacheKey = "vib_" + timeRange;
 
   callGasAPI('getVibData', {rangeKey: timeRange})
     .then(res => {
-      if(!res || res.ok === false) return;
+      if(!res || res.aborted || res.ok === false) return;
+      writeGasCache_(cacheKey, res);
       if(timeRange === "5d") window.__TREND_VIB_DATA__ = res;
       window.__LAST_VIB_DATA__ = res; 
 
       if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
       setTimeout(adjustCardPositions_, 100);
     })
-    .catch(err => console.error("Vib Fetch Error:", err));
+    .catch(err => {
+      var cached = readGasCache_(cacheKey);
+      if(cached && cached.data){
+        if(timeRange === "5d") window.__TREND_VIB_DATA__ = cached.data;
+        window.__LAST_VIB_DATA__ = cached.data;
+        if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
+      }
+      console.error("Vib Fetch Error:", err);
+    });
 }
 
 function fetchVibData(rangeKey, pos) {
   rangeKey = rangeKey || "4h";
   pos = pos || window.__CURRENT_VIB_POS__ || 1; 
   window.__CURRENT_VIB_POS__ = pos;
+  var cacheKey = "vib_" + rangeKey;
   
   var titleText = (pos == 2) ? "Vibration & Sound ก้นกะพ้อ CM11_6532" : 
                   (pos == 3) ? "Vibration & Sound CM9_542.22" : 
@@ -658,12 +794,42 @@ function fetchVibData(rangeKey, pos) {
 
   callGasAPI('getVibData', {rangeKey: rangeKey})
     .then(res => {
-      if(!res||res.ok===false){ setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>'); return; }
+      if(res && res.aborted) return;
+      if(!res||res.ok===false){
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          renderVibModal_(cached.data, rangeKey, pos);
+          return;
+        }
+        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
+        return;
+      }
+      writeGasCache_(cacheKey, res);
       renderVibModal_(res, rangeKey, pos);
     })
     .catch(err => {
+      var cached = readGasCache_(cacheKey);
+      if(cached && cached.data){
+        setCachedBadge_(true, cached.savedAt);
+        renderVibModal_(cached.data, rangeKey, pos);
+        return;
+      }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
     });
+}
+
+function applyPm10SnapshotData_(dataObj) {
+  if(!dataObj) return;
+  for (var posKey in dataObj) {
+    var posNum = Number(posKey);
+    var latestData = dataObj[posKey]; 
+    setPm10Latest_(posNum, latestData);
+    updateMapDotPm10_(posNum);
+  }
+  if(__PAGE_MODE__ === "PM10") {
+    updatePosCards_PM10_();
+  }
 }
 
 function fetchPm10SnapshotAll_() {
@@ -691,19 +857,26 @@ function fetchPm10SnapshotAll_() {
 
   callGasAPI('getPm10SnapshotAll')
     .then(res => {
+       if(res && res.aborted) return;
        if(res && res.ok && res.data) {
-         for (var posKey in res.data) {
-           var posNum = Number(posKey);
-           var latestData = res.data[posKey]; 
-           setPm10Latest_(posNum, latestData);
-           updateMapDotPm10_(posNum);
-         }
-         if(__PAGE_MODE__ === "PM10") {
-             updatePosCards_PM10_();
+         writeGasCache_("pm10_snapshot_all", res.data);
+         applyPm10SnapshotData_(res.data);
+       } else {
+         var cached = readGasCache_("pm10_snapshot_all");
+         if(cached && cached.data){
+           setCachedBadge_(true, cached.savedAt);
+           applyPm10SnapshotData_(cached.data);
          }
        }
     })
-    .catch(err => console.error("PM10 Batch Fetch error: ", err));
+    .catch(err => {
+      var cached = readGasCache_("pm10_snapshot_all");
+      if(cached && cached.data){
+        setCachedBadge_(true, cached.savedAt);
+        applyPm10SnapshotData_(cached.data);
+      }
+      console.error("PM10 Batch Fetch error: ", err);
+    });
 }
 
 function fetchPm10ForPos_(pos, forceRefresh, days){
@@ -711,6 +884,7 @@ function fetchPm10ForPos_(pos, forceRefresh, days){
   window.__PM10_CURRENT_DAYS__ = currentDays;
   
   var cacheKey = pos + "_" + currentDays;
+  var storageKey = "pm10_series_" + cacheKey;
   var hasCache = hasUsablePm10Series_(cacheKey);
   var canUseCache = hasCache && !forceRefresh && isFreshPm10SeriesCache_(cacheKey);
 
@@ -736,16 +910,24 @@ function fetchPm10ForPos_(pos, forceRefresh, days){
   callGasAPI('getPm10Latest100', { pos: pos, days: currentDays })
     .then(res => {
       __PM_FETCH_LOCK__=false;
+      if(res && res.aborted) return;
       if(!res||res.ok===false){
         if(hasCache){
           renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
           showToast("PM10 cached","warn","showing cached data");
           return;
         }
+        var stored = readGasCache_(storageKey);
+        if(stored && stored.data){
+          setCachedBadge_(true, stored.savedAt);
+          renderPm10Modal_(pos, stored.data, currentDays);
+          return;
+        }
         setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
         return;
       }
       
+      writeGasCache_(storageKey, res);
       cachePm10Series_(cacheKey, res.rows || []);
       var latest = pickLatestPm10Row_(res.rows);
       if(latest) setPm10Latest_(pos, latest);
@@ -759,6 +941,12 @@ function fetchPm10ForPos_(pos, forceRefresh, days){
       if(hasCache){
         renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
         showToast("PM10 cached","warn","showing cached data");
+        return;
+      }
+      var stored = readGasCache_(storageKey);
+      if(stored && stored.data){
+        setCachedBadge_(true, stored.savedAt);
+        renderPm10Modal_(pos, stored.data, currentDays);
         return;
       }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
@@ -775,7 +963,7 @@ function loadLogo(){
   }
   callGasAPI('getLogoBase64')
     .then(res => {
-      if(!res||res.ok===false) return;
+      if(!res || res.aborted || res.ok===false) return;
       img.src=res.dataUrl; img.style.display="block";
       try{ localStorage.setItem("scada_logo", res.dataUrl); }catch(e){}
     })
@@ -788,7 +976,9 @@ function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 function startPolling(){stopPolling();pollTimer=setInterval(fetchStatus,REFRESH_SECONDS*1000);}
 function recordFetchOK(){
   if(failStreak>=2) showToast("Connection recovered","ok","fetch ok");
-  failStreak=0; setConnBadge("ok","LIVE");
+  failStreak=0;
+  setCachedBadge_(false);
+  setConnBadge("ok","LIVE");
 }
 function recordFetchFail(reason){
   failStreak++;
@@ -815,6 +1005,7 @@ function fetchStatus(){
   callGasAPI('getStatusAll')
     .then(data => {
       if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false;
+      if(data && data.aborted) return;
       setText("lastFetch",new Date().toLocaleString("th-TH"));
       if(!data||data.ok===false){
         if (data && data.error === "SYSTEM_WARMING_UP") {
@@ -823,13 +1014,25 @@ function fetchStatus(){
         } else {
            recordFetchFail(data&&data.error?data.error:"server error");
         }
+        var cachedAll = readGasCache_("status_all");
+        if (cachedAll && cachedAll.data) {
+          setCachedBadge_(true, cachedAll.savedAt);
+          render(cachedAll.data);
+        }
         return;
       }
+      writeGasCache_("status_all", data);
       recordFetchOK(); 
       render(data);
     })
     .catch(err => {
-      if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false; recordFetchFail(String(err));
+      if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false;
+      recordFetchFail(String(err));
+      var cachedAll = readGasCache_("status_all");
+      if (cachedAll && cachedAll.data) {
+        setCachedBadge_(true, cachedAll.savedAt);
+        render(cachedAll.data);
+      }
     });
 }
 
@@ -1334,6 +1537,22 @@ function showPosCards_(pos, anchorEl) {
   pop.style.left = left + "px"; pop.style.top = top + "px";
 }
 
+function applyMapPointsData_(points) {
+  MAP_POINTS = points || [];
+  mapCoords = {};
+  MAP_POINTS.forEach(p => {
+    mapCoords[p.pos] = { lat: p.lat, lng: p.lng };
+  });
+  initLeafletMap_();
+  if (window.__LAST_DATA__) {
+    updateMapDots_(window.__LAST_DATA__);
+    updatePosCards_(window.__LAST_DATA__);
+  } else {
+    fetchStatus();
+  }
+  fetchPm10SnapshotAll_();
+}
+
 function buildMapDotsOnce_() {
   var canvas = $id("mapCanvas"); 
   if(!canvas || canvas.__dotsBuilt) return;
@@ -1342,21 +1561,26 @@ function buildMapDotsOnce_() {
 
   callGasAPI('getMapPointsData')
     .then(points => {
-      MAP_POINTS = points;
-      mapCoords = {};
-      points.forEach(p => {
-        mapCoords[p.pos] = { lat: p.lat, lng: p.lng };
-      });
-      initLeafletMap_();
-      if (window.__LAST_DATA__) {
-        updateMapDots_(window.__LAST_DATA__);
-        updatePosCards_(window.__LAST_DATA__);
+      if(points && points.aborted) return;
+      if(Array.isArray(points) && points.length){
+        writeGasCache_("map_points", points);
+        applyMapPointsData_(points);
       } else {
-        fetchStatus();
+        var cached = readGasCache_("map_points");
+        if(cached && Array.isArray(cached.data)){
+          setCachedBadge_(true, cached.savedAt);
+          applyMapPointsData_(cached.data);
+        }
       }
-      fetchPm10SnapshotAll_(); 
     })
-    .catch(err => console.error("Map points fetch error:", err));
+    .catch(err => {
+      var cached = readGasCache_("map_points");
+      if(cached && Array.isArray(cached.data)){
+        setCachedBadge_(true, cached.savedAt);
+        applyMapPointsData_(cached.data);
+      }
+      console.error("Map points fetch error:", err);
+    });
 }
 
 function initLeafletMap_() {
@@ -2191,6 +2415,7 @@ function setPageMode(mode){
   try { localStorage.setItem("scada_page_mode", mode); } catch (e) {}
 
   setSectionVisibility_();
+  syncIframesForMode_(mode);
   setModeButtons_();
   setLegendForMode_();
   hideMapPopup_();
@@ -2380,22 +2605,62 @@ function renderSimpleTable_(title, rows){
   }
   function openBasicModal_(title){setText("modalTitle",title);setHTML("modalBody","<div class='skeleton' style='height:20px;margin-bottom:5px;'></div><div class='skeleton' style='height:20px;margin-bottom:5px;'></div><div class='skeleton' style='height:20px;'></div>");openModal();}
   function fetchAlarmLog24h_(){
+    var cacheKey = "alarm_log_24h";
     openBasicModal_("Alarm Log 24h");
     callGasAPI('getAlarmLog24h', {page: 'overview'})
       .then(res => {
-        if(!res||res.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');return;}
+        if(res && res.aborted) return;
+        if(!res||res.ok===false){
+          var cached = readGasCache_(cacheKey);
+          if(cached && cached.data){
+            setCachedBadge_(true, cached.savedAt);
+            renderSimpleTable_("Alarm Log 24h", cached.data.rows || []);
+            return;
+          }
+          setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
+          return;
+        }
+        writeGasCache_(cacheKey, res);
         renderSimpleTable_("Alarm Log 24h",res.rows||[]);
       })
-      .catch(err => {setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');});
+      .catch(err => {
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          renderSimpleTable_("Alarm Log 24h", cached.data.rows || []);
+          return;
+        }
+        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
+      });
   }
   function fetchEventList24h_(){
+    var cacheKey = "event_list_24h";
     openBasicModal_("Event List 24h");
     callGasAPI('getEventList24h', {page: 'overview'})
       .then(res => {
-        if(!res||res.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');return;}
+        if(res && res.aborted) return;
+        if(!res||res.ok===false){
+          var cached = readGasCache_(cacheKey);
+          if(cached && cached.data){
+            setCachedBadge_(true, cached.savedAt);
+            renderSimpleTable_("Event List 24h", cached.data.rows || []);
+            return;
+          }
+          setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
+          return;
+        }
+        writeGasCache_(cacheKey, res);
         renderSimpleTable_("Event List 24h",res.rows||[]);
       })
-      .catch(err => {setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');});
+      .catch(err => {
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          renderSimpleTable_("Event List 24h", cached.data.rows || []);
+          return;
+        }
+        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
+      });
   }
   bind("alarmLogBtn",fetchAlarmLog24h_); bind("alarmLogBtn2",fetchAlarmLog24h_);
   bind("eventListBtn",fetchEventList24h_); bind("eventListBtn2",fetchEventList24h_);
@@ -2771,7 +3036,7 @@ async function reportSave_(){
         setUploadProgress_(Math.round(((i)/fileArr.length)*100),true);
         try{
           const meta=await fileToBase64_(fileArr[i]);
-          const res = await callGasAPI('uploadReportImage', {}, 'POST', meta);
+          const res = await callGasAPI('uploadReportImage', {}, 'POST', meta, { cancelPrevious: false });
           if(!res||res.ok===false) throw new Error((res&&res.error)?res.error:"upload error");
           imgUrls["img"+(i+1)]=toDriveImgUrl_(res.viewUrl||res.fileId||"");
         }catch(e){
@@ -2787,7 +3052,7 @@ async function reportSave_(){
     var payload={id:__REPORT_EDIT_ID__||"",checkTimeMs:checkMs,code:code,detail:detail,images:imgUrls,operator:op.name||"",shift:op.shift||""};
     if(!__REPORT_EDIT_ID__){
       var saveLoader=makeDelayedLoader(350,"Saving…","Please wait");
-      callGasAPI('reportCreate', {}, 'POST', payload)
+      callGasAPI('reportCreate', {}, 'POST', payload, { cancelPrevious: false })
         .then(res => {
           saveLoader.close();
           if(!res||res.ok===false){showToast("Create failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -2805,7 +3070,7 @@ async function reportSave_(){
     }).then((result)=>{
       if(!result.isConfirmed) return;
       var upLoader=makeDelayedLoader(350,"Updating…","Please wait");
-      callGasAPI('reportUpdate', {}, 'POST', payload)
+      callGasAPI('reportUpdate', {}, 'POST', payload, { cancelPrevious: false })
         .then(res => {
           upLoader.close();
           if(!res||res.ok===false){showToast("Update failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -2826,7 +3091,7 @@ function reportDelete_(){
   }).then((result)=>{
     if(!result.isConfirmed) return;
     var id=__REPORT_EDIT_ID__,loader=makeDelayedLoader(200,"Deleting…",id);
-    callGasAPI('reportDelete', {}, 'POST', {id: id})
+    callGasAPI('reportDelete', {}, 'POST', {id: id}, { cancelPrevious: false })
       .then(res => {
         loader.close();
         if(!res||res.ok===false){showToast("Delete failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -2873,14 +3138,35 @@ function reportRender_(rows){
 }
 
 function reportRefresh_(){
+  var cacheKey = "report_list_200";
   var loader = makeDelayedLoader(200, "Loading reports…", "Please wait");
   callGasAPI('reportList', {limit: 200})
     .then(res => {
       loader.close();
-      if(!res || res.ok === false){ showToast("Fetch failed", "err", (res && res.error) ? res.error : ""); return; }
+      if(res && res.aborted) return;
+      if(!res || res.ok === false){
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          reportRender_(cached.data.rows || []);
+          return;
+        }
+        showToast("Fetch failed", "err", (res && res.error) ? res.error : "");
+        return;
+      }
+      writeGasCache_(cacheKey, res);
       reportRender_(res.rows || []);
     })
-    .catch(err => { loader.close(); showToast("Fetch failed", "err", String(err)); });
+    .catch(err => {
+      loader.close();
+      var cached = readGasCache_(cacheKey);
+      if(cached && cached.data){
+        setCachedBadge_(true, cached.savedAt);
+        reportRender_(cached.data.rows || []);
+        return;
+      }
+      showToast("Fetch failed", "err", String(err));
+    });
 }
 
 (function bindReportButtons_(){
@@ -3291,7 +3577,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       });
 
       var loader = makeDelayedLoader(150, "กำลังบันทึกพิกัด...", "กรุณารอสักครู่");
-      callGasAPI('saveMapPoints', {}, 'POST', { points: pointsPayload })
+      callGasAPI('saveMapPoints', {}, 'POST', { points: pointsPayload }, { cancelPrevious: false })
         .then(function(res) {
           loader.close();
           if (!res || res.ok === false) {
