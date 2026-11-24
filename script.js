@@ -420,7 +420,7 @@ var ov=$id("overlay"); if(ov) ov.addEventListener("click",function(e){ if(e.targ
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
 
 // =========================================================
-// 7. AI ENGINE
+// 7. RISK ENGINE (FOR LIVE LOG & ALERTS)
 // =========================================================
 function aiToNum_(v){ if(v===null||v===undefined||v==="") return null; var n=Number(v); return isFinite(n)?n:null; }
 function aiReasonCause_(type){
@@ -637,78 +637,9 @@ function buildAiRows_(data){
 }
 
 function setSectionVisibility_(){
-  var mapSec=$id("mapSection"), aiSec=$id("aiSection"), dashSec=$id("vibDashboardSection");
-  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH")?"none":"flex";
-  if(aiSec) aiSec.classList.toggle("open", __PAGE_MODE__==="AI");
+  var mapSec=$id("mapSection"), dashSec=$id("vibDashboardSection");
+  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"none":"flex";
   if(dashSec) dashSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"flex":"none";
-}
-
-function renderAiAnalysis_(data){
-  var rows=buildAiRows_(data);
-  var c={CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,NORMAL:0};
-  for(var i=0;i<rows.length;i++){
-    var lv=rows[i].level||"NORMAL";
-    c[lv]=(c[lv]||0)+1;
-  }
-  setText("aiKpiCritical", c.CRITICAL||0);
-  setText("aiKpiHigh", c.HIGH||0);
-  setText("aiKpiMedium", c.MEDIUM||0);
-  setText("aiKpiWatch", (c.LOW||0) + ((data&&Array.isArray(data.belts)) ? data.belts.filter(function(it){return String(it&&it.currentStatus||"")==="NO_DATA";}).length : 0));
-  var normalTotal=(data&&Array.isArray(data.belts)) ?
-    Math.max(0, data.belts.length - rows.filter(function(r){return r.level!=="NORMAL" && r.group!=="Environment" && r.group!=="Vibration Gear";}).length) : 0;
-  setText("aiKpiNormal", normalTotal);
-  setText("aiGeneratedAt", "Generated: " + new Date().toLocaleString("th-TH"));
-
-  var tb=$id("aiTbody");
-  if(tb){
-    if(!rows.length){
-      tb.innerHTML='<tr><td colspan="7" class="rMut empty-row">No AI findings</td></tr>';
-    }else{
-      var html="";
-      var topRows=rows.slice(0,15); 
-      for(var j=0;j<topRows.length;j++){
-        var r=topRows[j];
-        var bgStyle = "";
-        if (r.level === "CRITICAL") bgStyle = 'style="background:rgba(255,59,48,0.15);"';
-        else if (r.level === "HIGH") bgStyle = 'style="background:rgba(255,159,10,0.10);"';
-
-        html+='<tr ' + bgStyle + '>'+
-          '<td class="mono"><b>'+esc(String(r.score))+'</b></td>'+
-          '<td><span class="aiLevel '+esc(r.level)+'">'+esc(r.level)+'</span></td>'+
-          '<td class="mono"><b>'+esc(r.belt)+'</b><div class="aiTiny" style="color:var(--text);">'+esc(r.group||"-")+'</div></td>'+
-          '<td class="mono">'+(r.group==="Environment" ? "-" : (r.run===1?'RUN':'STOP'))+(r.isAcked?'<div class="aiTiny">ACK</div>':'')+'</td>'+
-          '<td class="mono">'+esc(r.alarmType||"-")+(r.alarmMsg?'<div class="aiTiny" style="color:#ff3b30;">'+esc(r.alarmMsg)+'</div>':'')+'</td>'+
-          '<td>'+esc(r.cause)+'</td>'+
-          '<td style="color:var(--scada-cyan);">'+esc(r.action)+'</td>'+
-        '</tr>';
-      }
-      tb.innerHTML=html;
-    }
-  }
-
-  var list=$id("aiReasonList");
-  if(list){
-    if(!rows.length){
-      list.innerHTML='<div class="aiEmpty">No AI findings</div>';
-    }else{
-      var out="";
-      var top=rows.slice(0,5);
-      for(var k=0;k<top.length;k++){
-        var rr=top[k];
-        var borderGlow = rr.level === "CRITICAL" ? "border-color: #ff3b30; box-shadow: 0 0 10px rgba(255,59,48,0.2);" : "";
-        out+='<div class="aiReasonItem" style="' + borderGlow + '">'+
-          '<div class="aiReasonTop">'+
-            '<div class="aiReasonBelt mono">'+esc(rr.belt)+' <span class="aiTiny">'+esc(rr.group||"")+'</span></div>'+
-            '<span class="aiLevel '+esc(rr.level)+'">'+esc(rr.level)+' • '+esc(String(rr.score))+'</span>'+
-          '</div>'+
-          '<div class="aiReasonMsg"><b>Alarm:</b> '+esc(rr.alarmType||"-")+(rr.alarmMsg?(' • '+esc(rr.alarmMsg)):'')+'</div>'+
-          '<div class="aiReasonMsg"><b>Why:</b> '+esc(rr.reasonText||rr.cause)+'</div>'+
-          '<div class="aiReasonMsg" style="color:var(--scada-cyan);"><b>Action:</b> '+esc(rr.action)+'</div>'+
-        '</div>';
-      }
-      list.innerHTML=out;
-    }
-  }
 }
 
 // =========================================================
@@ -741,7 +672,7 @@ function refreshVibStatus_(){
       if(timeRange === "5d") window.__TREND_VIB_DATA__ = res;
       window.__LAST_VIB_DATA__ = res; 
 
-      if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
+      if (typeof updateGlobalLeftAlarms_ === "function") updateGlobalLeftAlarms_();
       setTimeout(adjustCardPositions_, 100);
     })
     .catch(err => console.error("Vib Fetch Error:", err));
@@ -915,7 +846,7 @@ function fetchStatus(){
      fetchPm10SnapshotAll_();
   }
 
-  if(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
+  if(__PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
 
   callGasAPI('getStatusAll')
     .then(data => {
@@ -2291,7 +2222,7 @@ function setPageMode(mode){
   clearMapDotStateCache_();
 
   if (typeof map !== 'undefined' && map) {
-    var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
+    var isNewMapVisible = (mode !== "VIB_DASH");
 
     var syncTvMapView_ = function() {
       if (!isNewMapVisible) return;
@@ -2341,7 +2272,6 @@ function setPageMode(mode){
   } else if(mode === "AI"){
     setText("title", "Monitor");
     setText("subtitle", "Noise Sensor");
-    if(window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
     refreshVibStatus_(); 
   } else if(mode === "VIB_DASH"){
     setText("title", "Monitor");
@@ -2406,7 +2336,7 @@ function autoSwitchTick_(){
   
   if(__AUTO_SWITCH_REMAINING__ <= 0){
     __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC;
-    var seq=["BELT","PM10","VIB_DASH","AI"];
+    var seq=["BELT","PM10","VIB_DASH"];
     var idx=seq.indexOf(__PAGE_MODE__);
     if(idx<0) idx=0;
     setPageMode(seq[(idx+1)%seq.length]);
@@ -3030,6 +2960,7 @@ document.addEventListener("DOMContentLoaded", function() {
   loadLogo(); 
   
   var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
+  if (savedMode === "AI") savedMode = "PM10";
   __PAGE_MODE__ = savedMode;
   document.body.setAttribute("data-mode", savedMode);
 
