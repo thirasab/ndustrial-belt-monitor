@@ -2439,6 +2439,36 @@ window.addEventListener("resize", function() {
 });
 
 // =========================================================
+// MOBILE HAMBURGER MENU TOGGLE
+// =========================================================
+(function() {
+  var hamBtn = document.getElementById("hamburgerBtn");
+  var mobMenu = document.getElementById("mobileMenu");
+  if (!hamBtn || !mobMenu) return;
+
+  hamBtn.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    mobMenu.classList.toggle("open");
+  });
+
+  document.addEventListener("click", function(e) {
+    if (!mobMenu.classList.contains("open")) return;
+    if (!mobMenu.contains(e.target) && !hamBtn.contains(e.target)) {
+      mobMenu.classList.remove("open");
+    }
+  });
+
+  mobMenu.addEventListener("click", function(e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    setTimeout(function() {
+      mobMenu.classList.remove("open");
+    }, 120);
+  });
+})();
+
+// =========================================================
 // 16. QR ZOOM
 // =========================================================
 (function(){
