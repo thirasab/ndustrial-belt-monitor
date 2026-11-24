@@ -18,7 +18,7 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
   <!-- Project Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=16" />
+  <link rel="stylesheet" href="style.css?v=17" />
 </head>
 <body data-theme="night" data-mode="PM10">
 
@@ -139,85 +139,6 @@
       </div>
       <div class="iframeWrap">
         <iframe id="vibDashIframe" src="about:blank" loading="lazy" referrerpolicy="no-referrer"></iframe>
-      </div>
-    </section>
-
-    <!-- 3. AI / NOISE SENSOR ANALYSIS SECTION -->
-    <section id="aiSection" class="section aiSection">
-      <div class="secHead">
-        <div class="secTitle">
-          <span class="dot ok"></span>
-          <span>AI Risk &amp; Anomaly Analysis</span>
-        </div>
-        <div class="secMeta mono">
-          <span id="aiGeneratedAt">Generated: -</span>
-        </div>
-      </div>
-      <div class="aiWrap">
-        <div class="aiGrid">
-          <div class="aiCard kpi-critical">
-            <div class="aiKicker">Critical</div>
-            <div id="aiKpiCritical" class="aiValue mono">0</div>
-            <div class="aiSub">Immediate action</div>
-          </div>
-          <div class="aiCard kpi-high">
-            <div class="aiKicker">High</div>
-            <div id="aiKpiHigh" class="aiValue mono">0</div>
-            <div class="aiSub">Priority check</div>
-          </div>
-          <div class="aiCard kpi-medium">
-            <div class="aiKicker">Medium</div>
-            <div id="aiKpiMedium" class="aiValue mono">0</div>
-            <div class="aiSub">Monitor closely</div>
-          </div>
-          <div class="aiCard kpi-watch">
-            <div class="aiKicker">Watch / No Data</div>
-            <div id="aiKpiWatch" class="aiValue mono">0</div>
-            <div class="aiSub">Low / Stale</div>
-          </div>
-          <div class="aiCard kpi-normal">
-            <div class="aiKicker">Normal</div>
-            <div id="aiKpiNormal" class="aiValue mono">0</div>
-            <div class="aiSub">Operating normally</div>
-          </div>
-        </div>
-
-        <div class="aiMain">
-          <div class="aiPanel">
-            <div class="aiPanelHead">
-              <div class="aiPanelTitle">Top Risk Findings</div>
-              <div class="aiPanelMeta mono">Sorted by AI Score</div>
-            </div>
-            <div class="aiTableWrap">
-              <table class="aiTable">
-                <thead>
-                  <tr>
-                    <th style="width:68px;">Score</th>
-                    <th style="width:105px;">Level</th>
-                    <th style="width:125px;">Asset</th>
-                    <th style="width:85px;">Run</th>
-                    <th style="width:120px;">Alarm</th>
-                    <th>Probable Cause</th>
-                    <th>Recommended Action</th>
-                  </tr>
-                </thead>
-                <tbody id="aiTbody">
-                  <tr><td colspan="7" class="rMut">Loading AI findings...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="aiPanel">
-            <div class="aiPanelHead">
-              <div class="aiPanelTitle">AI Reasoning &amp; Diagnostics</div>
-              <div class="aiPanelMeta mono">Top 5 Priority</div>
-            </div>
-            <div id="aiReasonList" class="aiReasonList">
-              <div class="aiEmpty">No AI findings</div>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -343,6 +264,6 @@
   </div>
 
   <!-- Project Script -->
-  <script src="script.js?v=16"></script>
+  <script src="script.js?v=17"></script>
 </body>
 </html>
