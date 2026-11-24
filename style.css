@@ -49,6 +49,7 @@
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; 
 }
+
 html, body {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
@@ -476,7 +477,7 @@ body {
 .runTag.runAnim::before{
   content:"";width:8px;height:8px;border-radius:50%;display:inline-block;
   margin-right:7px;background:currentColor;box-shadow:0 0 9px currentColor;
-  animation:runPulse 1.0s ease-in-out infinite;vertical-middle;
+  animation:runPulse 1.0s ease-in-out infinite;vertical-align:middle;
 }
 .runTag.runAnim::after{
   content:"";position:absolute;top:-30%;left:0;width:50%;height:160%;
