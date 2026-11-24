@@ -6,13 +6,13 @@
   
   <!-- Preconnect & DNS Prefetch -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr">
   
   <!-- External CSS Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <!-- Main CSS -->
-  <link rel="stylesheet" href="style.css?v=17" />
+  <link rel="stylesheet" href="style.css?v=18" />
   <title>Industrial Belt Monitor</title>
 
   <!-- External JS Libraries -->
@@ -23,10 +23,10 @@
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
   <!-- Main JS -->
-  <script defer src="script.js?v=17"></script>
+  <script defer src="script.js?v=18"></script>
 </head>
 
-<body data-theme="night" data-mode="PM10">
+<body data-theme="night" data-mode="BELT">
   
   <!-- ปุ่มลอยสำหรับเรียกเมนูคืนเมื่ออยู่ในโหมดซ่อน Header (เฉพาะจอใหญ่ TV/PC) -->
   <button id="floatingHeaderToggle" class="floating-header-btn" title="Show Header">☰ Menu</button>
@@ -58,7 +58,7 @@
       <button class="btn modeBtn vibBtn" id="modeVibDashBtn" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button>
       <button class="btn modeBtn" id="modeAiBtn" style="background-color: #0d9488; border-color: #0f766e; color: #fff; font-weight: 1000;">Noise Sensor</button>
 
-      <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .3px;">🔄 Auto: ON 30s</button>
+      <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .3px;">⏸ Auto: OFF</button>
 
       <div class="dropdown">
         <button class="btn dropbtn" data-target="ddMainMenu" style="font-weight: 1000;">⚙️ Menu ▾</button>
@@ -101,7 +101,7 @@
       </div>
       
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-        <button class="btn" id="autoSwitchBtn2" style="font-weight: 1000; letter-spacing: .5px;">🔄 Auto: ON 30s</button>
+        <button class="btn" id="autoSwitchBtn2" style="font-weight: 1000; letter-spacing: .5px;">⏸ Auto: OFF</button>
         <button class="btn" id="qrBtn2" style="font-weight: 1000; letter-spacing: .5px;">📱 QR code webapp</button>
         <button class="btn" id="opBtn2">👤 Operator: -</button>
         <button class="btn" id="muteBtn2">🔊 Beep: ON</button>
@@ -142,7 +142,7 @@
         <div class="secMeta mono" id="aiHint">Live Dashboard from External Source</div>
       </div>
       <div class="iframeWrap">
-        <iframe src="https://thirasab.github.io/-noisesensor/" loading="lazy"></iframe>
+        <iframe data-src="https://thirasab.github.io/-noisesensor/" loading="lazy"></iframe>
       </div>
     </div>
 
@@ -156,7 +156,7 @@
         <div class="secMeta mono">Live Dashboard from External Source</div>
       </div>
       <div class="iframeWrap">
-        <iframe src="https://thirasab.github.io/vibration-dashboard/"></iframe>
+        <iframe data-src="https://thirasab.github.io/vibration-dashboard/" loading="lazy"></iframe>
       </div>
     </div>
   </div>
