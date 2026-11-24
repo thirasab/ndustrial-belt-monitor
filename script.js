@@ -5,8 +5,8 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwvucmeMFhcN_6wIyOGg33kd6XKKe3K66T311r8nm7GtlA29-qmisdoo5a6Rm5q690V/exec";
 
 // 🛑 นำ URL หรือชื่อไฟล์หน้า Vibration Dashboard มาใส่ตรงนี้ (เช่น "vib.html" หรือลิงก์เว็บ) 🛑
-const VIB_DASH_URL = "vib.html";
 
+const VIB_DASH_URL = "https://thirasab.github.io/ชื่อ-repo-vibration/";
 // กรอบพิกัดภาพ map1.png (ปรับค่า Lat, Lng 2 มุมนี้ให้ตรงกับขอบภาพที่แคปมา)
 const MAP_IMAGE_BOUNDS = [
   [8.11150, 99.67100], // มุมซ้ายบน (Top-Left: Lat สูง, Lng ต่ำ)
