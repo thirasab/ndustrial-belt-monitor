@@ -398,7 +398,7 @@ body {
 .mapPopupBody { padding: 8px; display: flex; flex-direction: column; gap: 8px; max-height: 48vh; overflow: auto; }
 
 /* ========================================================= */
-/* 7. CARDS (POS, Mini) */
+/* 7. CARDS (POS, Mini, AI) */
 /* ========================================================= */
 .posCard {
   position: absolute; z-index: 40; min-width: 155px; max-width: 260px;
@@ -506,13 +506,68 @@ body {
 .rpmDash{color:var(--muted);}
 
 /* ========================================================= */
-/* 8. AI SECTION (REMOVED / PERMANENTLY HIDDEN)              */
+/* 8. AI ANALYSIS SECTION */
 /* ========================================================= */
-.aiSection,
-.aiSection.open,
-#aiSection {
-  display: none !important;
+.aiSection { display: none; position: relative; z-index: 1; }
+.aiSection.open { display: block; }
+.aiWrap { padding: clamp(8px, 1.5vw, 16px); display: flex; flex-direction: column; gap: clamp(8px, 1.5vw, 16px); }
+
+.aiGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: clamp(8px, 1.5vw, 12px); }
+.aiCard {
+  border: 1px solid var(--border); border-radius: 12px; padding: clamp(12px, 1.5vw, 16px);
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  box-shadow: 0 8px 18px rgba(0,0,0,.24); min-height: 90px; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center;
 }
+.aiCard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--offline); opacity: .95; }
+.aiCard.kpi-critical::before { background: var(--open); }
+.aiCard.kpi-high::before { background: var(--stuck); }
+.aiCard.kpi-medium::before { background: var(--other); }
+.aiCard.kpi-watch::before { background: var(--scada-cyan); }
+.aiCard.kpi-normal::before { background: var(--ok); }
+
+.aiKicker { font-size: clamp(11px, 1vw, 14px); font-weight: 1000; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; }
+.aiValue { margin-top: 6px; font-size: clamp(24px, 3vw, 36px); line-height: 1; font-weight: 1000; }
+.aiSub { margin-top: 6px; font-size: clamp(11px, 1vw, 13px); color: var(--muted); font-weight: 800; }
+
+.aiMain { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(320px,1fr); gap: clamp(8px, 1.5vw, 12px); }
+.aiPanel {
+  border: 1px solid var(--border); border-radius: 12px;
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  box-shadow: 0 8px 18px rgba(0,0,0,.24); overflow: hidden; display: flex; flex-direction: column;
+}
+.aiPanelHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: clamp(10px, 1.5vw, 14px) clamp(12px, 1.5vw, 16px); border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.03); flex-wrap: wrap;
+}
+[data-theme="day"] .aiPanelHead { background: rgba(10,18,32,.03); }
+.aiPanelTitle { font-size: clamp(14px, 1.2vw, 16px); font-weight: 1000; letter-spacing: .4px; }
+.aiPanelMeta { font-size: clamp(11px, 1vw, 13px); color: var(--muted); font-weight: 800; }
+
+.aiTableWrap { padding: clamp(8px, 1vw, 12px); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.aiTable { width: 100%; min-width: 600px; } 
+.aiTable td, .aiTable th { font-size: clamp(12px, 1vw, 14px); padding: clamp(8px, 1vw, 12px) 8px; }
+
+.aiLevel {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 78px;
+  padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); font-weight: 1000; letter-spacing: .4px;
+  background: rgba(255,255,255,.04); font-size: clamp(11px, 1vw, 13px);
+}
+.aiLevel.CRITICAL { color: var(--open); }
+.aiLevel.HIGH { color: var(--stuck); }
+.aiLevel.MEDIUM { color: var(--other); }
+.aiLevel.LOW { color: var(--scada-cyan); }
+.aiLevel.NORMAL { color: var(--ok); }
+
+.aiReasonList { padding: clamp(8px, 1vw, 12px); display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; }
+.aiReasonItem { border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.03); padding: clamp(10px, 1.2vw, 14px); }
+[data-theme="day"] .aiReasonItem { background: rgba(10,18,32,.03); }
+.aiReasonTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.aiReasonBelt { font-weight: 1000; font-size: clamp(13px, 1.2vw, 15px); }
+.aiReasonMsg { margin-top: 6px; font-size: clamp(12px, 1vw, 14px); line-height: 1.4; color: var(--muted); }
+.aiEmpty { padding: 16px; border: 1px dashed var(--border); border-radius: 12px; text-align: center; color: var(--muted); font-weight: 900; font-size: clamp(13px, 1.2vw, 15px); }
+.aiTiny { font-size: clamp(11px, 0.9vw, 12px); color: var(--muted); font-weight: 800; margin-top: 3px; }
 
 /* ========================================================= */
 /* 9. STICKY HEADERS & TABLES */
@@ -523,14 +578,14 @@ th { background: rgba(255,255,255,.04); color: var(--muted); font-weight: 900; }
 [data-theme="day"] th { background: rgba(10,18,32,.04); }
 tr:last-child td { border-bottom: none; }
 
-table th {
+table th, .aiTable th {
   position: sticky;
   top: 0; 
   z-index: 20 !important;
   background-color: var(--panel) !important;
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2) !important;
 }
-[data-theme="day"] table th {
+[data-theme="day"] table th, [data-theme="day"] .aiTable th {
   background-color: #ffffff !important; 
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05) !important;
 }
@@ -708,6 +763,10 @@ table th {
 /* ========================================================= */
 /* 11. MEDIA QUERIES (BASE MOBILE & TABLET) */
 /* ========================================================= */
+@media (max-width: 1024px) {
+  .aiMain { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 768px) {
   .top {
     display: flex;
@@ -733,6 +792,12 @@ table th {
     border-radius: 8px;
   }
   .mobileMenu.open .right { display: flex !important; }
+
+  .aiGrid { grid-template-columns: repeat(2, 1fr); }
+  .aiCard:last-child { grid-column: 1 / -1; }
+  .aiMain { display: grid !important; grid-template-columns: 1fr !important; width: 100% !important; max-width: 100% !important; }
+  .aiObservations, .aiObsPanel, .aiCard { width: 100% !important; max-width: 100% !important; }
+  .aiObsList, .aiObsGrid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important; gap: 12px !important; }
 
   .qrOverlay { padding-top: 12vh; } 
   .qrZoomBox { 
@@ -790,7 +855,7 @@ table th {
 }
 
 /* ========================================================= */
-/* 13. LIVE TICKER (SMOOTH SPEED & HOVER PAUSE)              */
+/* 13. LIVE TICKER (ข้อความวิ่ง) */
 /* ========================================================= */
 .scada-ticker-wrap {
   display: flex; align-items: center; background: rgba(0,0,0,0.4); 
@@ -813,11 +878,7 @@ table th {
 
 .scada-ticker-content span {
   display: inline-block; padding-left: 100%; 
-  animation: tickerMove 50s linear infinite;
-  will-change: transform;
-}
-.scada-ticker-wrap:hover .scada-ticker-content span {
-  animation-play-state: paused;
+  animation: tickerMove 20s linear infinite;
 }
 @keyframes tickerMove {
   0% { transform: translateX(0); }
@@ -987,10 +1048,15 @@ body[data-mode="PM10"] .posCard {
   flex-direction: column;
 }
 
+#aiSection:not(.open) {
+  display: none !important;
+}
+
 .mainViewport > .section[style*="display: none"] {
   display: none !important;
 }
 
+.aiSection.open,
 #vibDashboardSection[style*="block"],
 #vibDashboardSection[style*="flex"] {
   display: flex !important;
@@ -1116,6 +1182,7 @@ html {
 /* 19. MOBILE RESPONSIVE OVERRIDES (ALL-IN-ONE <= 768px)      */
 /* ========================================================= */
 @media (max-width: 768px) {
+  /* 1. โครงสร้างหลักเต็มความสูงหน้าจอมือถือ ไม่เลื่อนเด้ง */
   html, body {
     height: 100dvh !important;
     margin: 0 !important;
@@ -1125,6 +1192,7 @@ html {
     overflow: hidden !important;
   }
 
+  /* 2. ป้องกันระบบ Auto-Hide ซ่อน Header บนมือถือ */
   .top {
     padding: 6px 8px !important;
     border-radius: 10px !important;
@@ -1144,6 +1212,7 @@ html {
     display: none !important;
   }
 
+  /* 3. เมนูมือถือแบบลอยทับหน้าจอ ไม่ดันพื้นที่แผนที่ */
   .mobileMenu.open {
     position: fixed !important;
     top: 56px !important;
@@ -1162,6 +1231,7 @@ html {
     background: rgba(255, 255, 255, 0.97) !important;
   }
 
+  /* 4. ขยายพื้นที่แผนที่และ Iframe (Noise / Vib Dashboard) ให้เต็มจอ */
   .mainViewport {
     flex: 1 !important;
     min-height: 0 !important;
@@ -1193,6 +1263,7 @@ html {
     min-height: 0 !important;
   }
 
+  /* 5. ขยายจุดบนแผนที่และปุ่มควบคุม (+, -, 🎯) ให้กดง่ายด้วยนิ้ว */
   .mapDot {
     width: 28px !important;
     height: 28px !important;
@@ -1213,6 +1284,7 @@ html {
     font-size: 18px !important;
   }
 
+  /* 6. การ์ดสถานะบนแผนที่ (ซ่อนเป็นค่าเริ่มต้น โชว์เฉพาะจุดที่แตะ) */
   body:not([data-mode="PM10"]) .posCard {
     display: none !important;
   }
@@ -1229,6 +1301,7 @@ html {
     background: rgba(255, 255, 255, 0.92) !important;
   }
 
+  /* 7. Popup รายละเอียดสายพาน (Bottom Sheet ด้านล่างจอ) */
   .mapPopup {
     position: fixed !important;
     left: 8px !important;
@@ -1241,6 +1314,7 @@ html {
     box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.75) !important;
   }
 
+  /* 8. Modal เต็มตาบนมือถือแนวตั้ง */
   .overlay {
     padding: 4px !important;
   }
@@ -1260,6 +1334,7 @@ html {
     padding: 8px !important;
   }
 
+  /* 9. ตาราง History / Alarm Log / PM10 แบบตรึงคอลัมน์เวลาซ้ายสุด */
   .modalBody table {
     display: block !important;
     width: 100% !important;
@@ -1303,6 +1378,7 @@ html {
     background-color: rgba(10, 18, 32, 0.025);
   }
 
+  /* 10. กราฟ Chart.js และการ์ดสรุปค่า PM10 */
   .modalBody div[style*="height:240px"] {
     height: 260px !important;
     margin-left: -4px !important;
@@ -1325,6 +1401,7 @@ html {
     font-size: 9px !important;
   }
 
+  /* 11. ป้องกันเบราว์เซอร์มือถือซูมหน้าจออัตโนมัติเวลาแตะช่องกรอกข้อมูล */
   .rInput, .rText, select {
     font-size: 16px !important;
   }
