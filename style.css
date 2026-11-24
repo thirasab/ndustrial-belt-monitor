@@ -44,7 +44,7 @@
   --shadow: rgba(20, 30, 50, .18);
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; 
@@ -262,7 +262,7 @@ body {
 .hamburger {
   display: none; cursor: pointer; user-select: none;
   padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border);
-  background: rgba(255,255,255,.04); font-size: 18px; line-height: 1;
+  background: rgba(255,255,255,.04); color: var(--text); font-size: 18px; line-height: 1;
 }
 
 .mobileMenu {
@@ -767,46 +767,67 @@ table th, .aiTable th {
   .aiMain { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 768px) {
-  .top {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: nowrap;
-    width: 100%;
+/* 3. เมนูมือถือแบบลอยทับหน้าจอ พร้อมแอนิเมชันเปิด-ปิดนุ่มนวล */
+  .mobileMenu {
+    display: flex !important;
+    position: fixed !important;
+    top: 56px !important;
+    left: 6px !important;
+    right: 6px !important;
+    background: rgba(12, 18, 27, 0.97) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 14px !important;
+    padding: 12px !important;
+    margin-top: 0 !important;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.85) !important;
+    z-index: 10010 !important;
+    max-height: 80dvh !important;
+    overflow-y: auto !important;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-10px) scale(0.98);
+    transform-origin: top center;
+    transition: opacity 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+                transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                visibility 0s linear 0.24s;
   }
-  .top .left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-  .brand { min-width: auto; flex: 1; overflow: hidden; }
-  #logoImg { height: 36px !important; padding: 2px 5px !important; }
-  .h1 { font-size: 14px; }
-  .sub { font-size: 11px; }
-
-  .right { display: none !important; }
-  .hamburger {
-    display: inline-flex;
-    margin-left: auto;
-    padding: 8px 12px;
-    font-size: 20px;
-    background: rgba(255,255,255,0.06);
-    border-radius: 8px;
+  .mobileMenu.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    transition: opacity 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+                transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                visibility 0s linear 0s;
   }
-  .mobileMenu.open .right { display: flex !important; }
-
-  .aiGrid { grid-template-columns: repeat(2, 1fr); }
-  .aiCard:last-child { grid-column: 1 / -1; }
-  .aiMain { display: grid !important; grid-template-columns: 1fr !important; width: 100% !important; max-width: 100% !important; }
-  .aiObservations, .aiObsPanel, .aiCard { width: 100% !important; max-width: 100% !important; }
-  .aiObsList, .aiObsGrid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important; gap: 12px !important; }
-
-  .qrOverlay { padding-top: 12vh; } 
-  .qrZoomBox { 
-    width: min(320px, 85vw); height: min(320px, 85vw);
-    margin-top: 0; margin-left: calc(-1 * min(160px, 42.5vw));
-    top: 18vh;
+  [data-theme="day"] .mobileMenu {
+    background: rgba(255, 255, 255, 0.97) !important;
+    box-shadow: 0 14px 32px rgba(20, 30, 50, 0.22) !important;
   }
-  .qrZoomHint { bottom: -28px; font-size: 12px; }
-}
+
+  /* จัดระยะห่างและขนาดปุ่มในเมนูมือถือให้กดง่าย */
+  .mobileMenu .right {
+    gap: 8px !important;
+  }
+  .mobileMenu .right > div[style*="grid-template-columns"] {
+    gap: 8px !important;
+    margin-bottom: 10px !important;
+  }
+  .mobileMenu .btn,
+  .mobileMenu .modeBtn {
+    min-height: 42px !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+    border-radius: 10px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .mobileMenu .btn:active,
+  .mobileMenu .modeBtn:active {
+    transform: scale(0.97) !important;
+  }
 
 @media(max-width: 380px) {
   .h1 { font-size: 12px; }
