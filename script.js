@@ -16,9 +16,8 @@ let mapCoords = {};
 let map;
 let __PAGE_MODE__ = "PM10";
 let AUTO_SWITCH_SEC = 60;
-let __AUTO_SWITCH_ENABLED__ = (function(){
-  try{ return localStorage.getItem("scada_auto_switch") !== "0"; }catch(e){ return true; }
-})();
+let __AUTO_SWITCH_ENABLED__ = false; // บังคับเป็น Manual (ปิด Auto Switch) ทุกครั้งที่เปิด/รีเฟรชหน้า
+try { localStorage.removeItem("scada_auto_switch"); } catch (e) {}
 let __AUTO_SWITCH_TIMER__ = null;
 let __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC; 
 let PM10_WARN = 50, PM10_BAD = 120;
@@ -115,21 +114,13 @@ function hardCrashScreen(title,msg,stack){
 window.addEventListener("error",function(e){ hardCrashScreen("SCADA UI crashed",(e&&e.message)||"Unknown",(e&&e.error&&e.error.stack)||""); });
 window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA Promise crashed",(e&&e.reason)||"Unknown",""); });
 
-function getAutoThemeByTime_() {
-  var hr = new Date().getHours();
-  // 18:00 - 05:59 = กลางคืน (night), 06:00 - 17:59 = กลางวัน (day)
-  return (hr >= 18 || hr < 6) ? "night" : "day";
-}
-
-function setTheme(theme, isManual) {
+function setTheme(theme) {
+  theme = (theme === "day") ? "day" : "night";
   document.body.setAttribute("data-theme", theme);
-  // บันทึกโหมดที่ผู้ใช้เลือกด้วยมือไว้ชั่วคราว (หรือล้างเมื่อเข้าช่วงเวลาใหม่)
-  if (isManual) {
+  try {
     localStorage.setItem("belt_theme", theme);
-    localStorage.setItem("belt_theme_manual_hr", String(new Date().getHours()));
-  } else {
-    localStorage.setItem("belt_theme", theme);
-  }
+  } catch (e) {}
+
   var txt = (theme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
   ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
     var e = document.getElementById(id);
@@ -137,27 +128,14 @@ function setTheme(theme, isManual) {
   });
 }
 
-function applyAutoThemeIfNeeded_() {
-  var autoTheme = getAutoThemeByTime_();
-  var curTheme = document.body.getAttribute("data-theme") || "night";
-  var manualHr = localStorage.getItem("belt_theme_manual_hr");
-  var curHr = String(new Date().getHours());
-
-  // ถ้าผู้ใช้กดเปลี่ยนธีมเองในชั่วโมงนี้ ให้เคารพการเลือกของผู้ใช้จนกว่าจะเปลี่ยนชั่วโมงใหม่
-  if (manualHr !== null && manualHr === curHr) {
-    return;
-  }
-
-  // พ้นชั่วโมงที่กดเลือกเองแล้ว ให้กลับเข้าสู่โหมดอัตโนมัติตามเวลากลางวัน/กลางคืน
-  localStorage.removeItem("belt_theme_manual_hr");
-  if (curTheme !== autoTheme) {
-    setTheme(autoTheme, false);
-  }
-}
-
-// เริ่มต้นตามเวลากลางวัน/กลางคืนทันที และตรวจเช็กทุก 1 นาที
-setTheme(getAutoThemeByTime_(), false);
-setInterval(applyAutoThemeIfNeeded_, 60000);
+// บังคับเป็นธีมกลางคืน ("night") เสมอทุกครั้งที่เปิดหรือรีเฟรชหน้าเว็บ
+(function initTheme_() {
+  try {
+    localStorage.removeItem("belt_theme");
+    localStorage.removeItem("belt_theme_manual_hr");
+  } catch (e) {}
+  setTheme("night");
+})();
 
 (function() {
   function bindTheme(id) {
@@ -165,12 +143,13 @@ setInterval(applyAutoThemeIfNeeded_, 60000);
     if (!b) return;
     b.addEventListener("click", function() {
       var cur = document.body.getAttribute("data-theme") || "night";
-      setTheme(cur === "day" ? "night" : "day", true);
+      setTheme(cur === "day" ? "night" : "day");
     });
   }
   bindTheme("themeBtnToggle");
   bindTheme("themeBtnToggle2");
 })();
+
 // =========================================================
 // 5. OPERATOR & BEEP & TOAST
 // =========================================================
