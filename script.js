@@ -4,6 +4,9 @@
 // 🛑 นำ URL ของ Google Apps Script Web App ที่ Deploy ใหม่มาใส่ตรงนี้ 🛑
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwvucmeMFhcN_6wIyOGg33kd6XKKe3K66T311r8nm7GtlA29-qmisdoo5a6Rm5q690V/exec";
 
+// 🛑 นำ URL หรือชื่อไฟล์หน้า Vibration Dashboard มาใส่ตรงนี้ (เช่น "vib.html" หรือลิงก์เว็บ) 🛑
+const VIB_DASH_URL = "vib.html";
+
 // กรอบพิกัดภาพ map1.png (ปรับค่า Lat, Lng 2 มุมนี้ให้ตรงกับขอบภาพที่แคปมา)
 const MAP_IMAGE_BOUNDS = [
   [8.11150, 99.67100], // มุมซ้ายบน (Top-Left: Lat สูง, Lng ต่ำ)
@@ -528,7 +531,7 @@ function buildAiRows_(data){
 
   if(window.__LAST_VIB_DATA__) {
      function addVibAi(vibData, name, limitWarn, limitDanger) {
-       if(!vibData.length) return;
+       if(!vibData || !vibData.length) return;
        var latest = vibData[vibData.length-1];
        if(!latest || latest.level === "NORMAL" || latest.level === "IDLE") return;
        if (latest.level.includes("CHECK") && (latest.reason.includes("ค้าง") || latest.reason.includes("Frozen"))) return;
@@ -2276,6 +2279,11 @@ function setPageMode(mode){
   } else if(mode === "VIB_DASH"){
     setText("title", "Monitor");
     setText("subtitle", "Vibration Dashboard");
+    var vibIframe = $id("vibDashIframe");
+    if (vibIframe && VIB_DASH_URL && vibIframe.dataset.loaded !== "1") {
+      vibIframe.src = VIB_DASH_URL;
+      vibIframe.dataset.loaded = "1";
+    }
   } else {
     if(window.__LAST_DATA__){
       setText("title", window.__LAST_DATA__.title || "Monitor");
