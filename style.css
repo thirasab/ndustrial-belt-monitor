@@ -687,7 +687,7 @@ table th, .aiTable th {
 .rMut { color: var(--muted); font-weight: 900; }
 .rSmallMono { font-family: ui-monospace, Menlo, Consolas, monospace; }
 
-.rTableWrap { margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.rTableWrap { margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .rTable { width: 100%; border-collapse: collapse; }
 .rTable th, .rTable td { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; font-size: 11px; }
 .rTable th { background: rgba(255,255,255,.04); color: var(--muted); font-weight: 1000; }
@@ -1408,6 +1408,48 @@ html {
   }
   .modalBody {
     padding: 8px !important;
+  }
+
+  /* หน้าต่าง Report และตาราง .rTable บนมือถือให้แสดงครบทุกคอลัมน์และเลื่อนซ้าย-ขวาได้ */
+  .reportOverlay {
+    padding: 4px !important;
+  }
+  .reportModal {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 95dvh !important;
+    max-height: 95dvh !important;
+    border-radius: 12px !important;
+  }
+  .reportBody {
+    padding: 8px !important;
+  }
+  .rTableWrap {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .rTable {
+    display: table !important;
+    min-width: 620px !important;
+    width: 100% !important;
+  }
+  .rTable th,
+  .rTable td {
+    padding: 7px 6px !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+    vertical-align: middle !important;
+  }
+  .rTable td:nth-child(3) {
+    white-space: normal !important;
+    min-width: 150px !important;
+    max-width: 220px !important;
+    line-height: 1.3 !important;
+  }
+  .reportFormBox {
+    width: 98vw !important;
+    max-height: 94dvh !important;
   }
 
   /* 8. ตาราง History / Alarm Log / PM10 แบบตรึงคอลัมน์เวลาซ้ายสุด */
