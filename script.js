@@ -14,7 +14,8 @@ const MAP_IMAGE_BOUNDS = [
 let MAP_POINTS = [];
 let mapCoords = {};
 let map;
-let __PAGE_MODE__ = "PM10";
+let __PAGE_MODE__ = "BELT"; // บังคับหน้าจอเริ่มต้นเป็นโหมด BELT ทุกครั้งที่เปิด/รีเฟรชหน้า
+try { localStorage.removeItem("scada_page_mode"); } catch (e) {}
 let AUTO_SWITCH_SEC = 60;
 let __AUTO_SWITCH_ENABLED__ = false; // บังคับเป็น Manual (ปิด Auto Switch) ทุกครั้งที่เปิด/รีเฟรชหน้า
 try { localStorage.removeItem("scada_auto_switch"); } catch (e) {}
@@ -2187,7 +2188,7 @@ function setLegendForMode_(){
 function setPageMode(mode){
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
-  localStorage.setItem("scada_page_mode", mode);
+  try { localStorage.setItem("scada_page_mode", mode); } catch (e) {}
 
   setSectionVisibility_();
   setModeButtons_();
@@ -2944,10 +2945,10 @@ document.addEventListener("DOMContentLoaded", function() {
   refreshOperatorPill();
   updateMuteBtn();
   loadLogo(); 
-  
-  var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
-  __PAGE_MODE__ = savedMode;
-  document.body.setAttribute("data-mode", savedMode);
+
+  try { localStorage.removeItem("scada_page_mode"); } catch (e) {}
+  __PAGE_MODE__ = "BELT";
+  document.body.setAttribute("data-mode", "BELT");
 
   var canvas = document.getElementById("mapCanvas");
   if(canvas) {
@@ -2957,7 +2958,7 @@ document.addEventListener("DOMContentLoaded", function() {
     setTimeout(buildMapDotsOnce_, 500); 
   }
 
-  setPageMode(savedMode);
+  setPageMode("BELT");
   setAutoSwitchButtons_();
   if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
 });
