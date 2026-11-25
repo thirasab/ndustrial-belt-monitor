@@ -1,291 +1,147 @@
-<!doctype html>
-<html lang="th">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+let __PURGE_PREV_ALARM_IDS__ = {};
 
-  <!-- Preconnect & DNS Prefetch -->
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr">
+  function syncPurgeAlarmsToUi_() {
+    const lowAlarms = [];
+    const now = Date.now();
+    const currentAlarmIds = {};
 
-  <!-- External CSS Libraries -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%2300e0ff'/></svg>" />
-  <!-- Main CSS -->
-  <link rel="stylesheet" href="style.css?v=20" />
-  <title>Industrial Belt Monitor</title>
+    for (let i = 0; i < PURGE_NODES.length; i++) {
+      const n = PURGE_NODES[i];
+      if (isPurgeAlarmLow_(n.val, n.updatedAt)) {
+        const vStr = Number(n.val).toFixed(2);
+        currentAlarmIds[n.id] = true;
+        lowAlarms.push({
+          id: n.id,
+          name: n.name,
+          sheetCol: n.sheetCol,
+          val: Number(n.val),
+          msg: `PURGE LOW ${vStr} Bar (<4.0)`
+        });
 
-  <!-- External JS Libraries -->
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  <script defer src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
+        const prevToast = __PURGE_LAST_TOAST_AT__[n.id] || 0;
+        if (now - prevToast >= PURGE_ALARM_COOLDOWN_MS) {
+          __PURGE_LAST_TOAST_AT__[n.id] = now;
+          if (typeof showToast === "function") {
+            showToast(`Alarm Purge Air ${n.name}`, "err", `ความดันลม ${vStr} Bar (ต่ำกว่า 4.0 Bar)`);
+          }
+          if (!document.hidden && typeof beepOnce === "function") {
+            beepOnce();
+          }
+        }
+      }
+    }
 
-  <!-- Main JS -->
-  <script defer src="script.js?v=20"></script>
-</head>
+    // ตรวจจับว่ามีจุดที่เพิ่งเข้าสู่สภาวะ Alarm (< 4.0 Bar) ใหม่หรือไม่
+    let hasNewlyTriggeredAlarm = false;
+    for (const id in currentAlarmIds) {
+      if (!__PURGE_PREV_ALARM_IDS__[id]) {
+        hasNewlyTriggeredAlarm = true;
+        break;
+      }
+    }
+    __PURGE_PREV_ALARM_IDS__ = currentAlarmIds;
 
-<body data-theme="night" data-mode="BELT">
+    window.__PURGE_LOW_ALARMS__ = lowAlarms;
 
-  <!-- ปุ่มลอยสำหรับเรียกเมนูคืนเมื่ออยู่ในโหมดซ่อน Header (เฉพาะจอใหญ่ TV/PC) -->
-  <button id="floatingHeaderToggle" class="floating-header-btn" title="Show Header">☰ Menu</button>
+    // หากมีจุดที่ความดันลมต่ำกว่า 4.0 Bar ให้กางกล่องออกทันที แม้พับอยู่หรืออยู่ในโหมด Dashboard
+    if (lowAlarms.length > 0 && (__PURGE_COLLAPSED__ || hasNewlyTriggeredAlarm)) {
+      __PURGE_COLLAPSED__ = false;
+      applyPurgeCollapseState_();
+    }
 
-  <!-- ================= TOP BAR (COMPACT SINGLE LINE) ================= -->
-  <div class="top">
-    <div class="left">
-      <div class="brand">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <img id="logoImg" alt="logo" />
-          <div style="display:flex;flex-direction:column;gap:1px;">
-            <div class="h1" id="title">Monitor</div>
-            <div class="sub" id="subtitle">focus Cement transport</div>
-          </div>
-        </div>
-      </div>
-      <div class="connBadge ok" id="connBadge">
-        <span class="connDot"></span><span id="connTxt">LIVE</span>
-      </div>
-    </div>
+    const ticker = document.getElementById("liveTickerContent");
+    if (ticker) {
+      const purgeMsgs = lowAlarms.map(a => `🚨 Purge ${a.name} (${a.sheetCol}): ${a.val.toFixed(2)} Bar (<4.0 Bar)`);
+      let beltMsgs = [];
+      if (window.__LAST_DATA__ && typeof buildAiRows_ === "function") {
+        const aiRows = buildAiRows_(window.__LAST_DATA__);
+        beltMsgs = aiRows
+          .filter(r => (r.level === "CRITICAL" || r.level === "HIGH" || r.level === "MEDIUM") && (r.status === "ALERT" || r.status === "WARN"))
+          .map(a => `⚠️ ${a.belt}: ${a.alarmMsg || a.alarmType}`);
+      }
 
-    <div class="right">
-      <div class="pill" id="legendPill">
-        <span class="lg open">OPEN</span> • <span class="lg stuck">STUCK</span> • <span class="lg stale">STALE</span>
-      </div>
+      const allMsgs = purgeMsgs.concat(beltMsgs);
+      if (allMsgs.length === 0) {
+        ticker.innerHTML = `<span>✅ [${new Date().toLocaleTimeString('th-TH')}] SYSTEM NORMAL: All sensors, transport belts, and purge air (<4.0 Bar) are normal.</span>`;
+      } else {
+        ticker.innerHTML = `<span>${allMsgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ')}</span>`;
+      }
+    }
+  }
 
-      <button class="btn modeBtn headBtn primary" id="modeBeltBtn">Damaged belt</button>
-      <button class="btn modeBtn pmBtn" id="modePm10Btn">PM10</button>
-      <button class="btn modeBtn vibBtn" id="modeVibDashBtn" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button>
-      <button class="btn modeBtn" id="modeAiBtn" style="background-color: #0d9488; border-color: #0f766e; color: #fff; font-weight: 1000;">Noise Sensor</button>
+  function ensureHeaderControls_() {
+    const head = document.querySelector("#purgePressureOverlay .purge-panel-head");
+    if (!head) return;
 
-      <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .3px;">⏸ Auto: OFF</button>
+    let ctrlWrap = head.querySelector(".purge-head-controls");
+    if (!ctrlWrap) {
+      ctrlWrap = document.createElement("div");
+      ctrlWrap.className = "purge-head-controls";
 
-      <div class="dropdown">
-        <button class="btn dropbtn" data-target="ddMainMenu" style="font-weight: 1000;">⚙️ Menu ▾</button>
-        <div class="dropdown-content" id="ddMainMenu">
-          <button id="toggleHeaderBtn">👁️ Hide Header Now</button>
-          <button id="tvFullscreenBtn">🖥️ Fullscreen</button>
-          <button id="editLayoutBtn">🛠️ Edit POS & Card</button>
-          <button id="qrBtn">📱 QR code webapp</button>
-          <div style="border-top:1px solid rgba(150,160,180,0.15); margin: 4px 0;"></div>
-          <button id="opBtn">👤 Operator: -</button>
-          <button id="muteBtn">🔊 Beep: ON</button>
-          <button id="themeBtnToggle">🌙 Theme: NIGHT</button>
-          <div style="border-top:1px solid rgba(150,160,180,0.15); margin: 4px 0;"></div>
-          <button id="reportBtn">📝 Report Form</button>
-          <button id="alarmLogBtn">🚨 Alarm Log 24h</button>
-          <button id="eventListBtn">📜 Event List 24h</button>
-        </div>
-      </div>
-    </div>
+      const cmpBtn = document.createElement("button");
+      cmpBtn.type = "button";
+      cmpBtn.id = "purgeCompareAllBtn";
+      cmpBtn.className = "purge-compare-btn";
+      cmpBtn.title = "เปรียบเทียบความดันลมทั้ง 8 จุดในกราฟเดียว";
+      cmpBtn.textContent = "📊 All 8";
+      cmpBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        window.openPurgeCompareModal(24);
+      });
 
-    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">☰</button>
-  </div>
+      const tglBtn = document.createElement("button");
+      tglBtn.type = "button";
+      tglBtn.id = "purgeToggleCollapseBtn";
+      tglBtn.className = "purge-toggle-btn";
+      tglBtn.textContent = "▾";
+      tglBtn.title = "พับเก็บกล่อง Purge Air";
+      tglBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        __PURGE_COLLAPSED__ = !__PURGE_COLLAPSED__;
+        applyPurgeCollapseState_();
+      });
 
-  <!-- ================= TICKER BAR (Live Feed) ================= -->
-  <div class="scada-ticker-wrap">
-    <div class="scada-ticker-label">LIVE LOG</div>
-    <div class="scada-ticker-content" id="liveTickerContent">
-      <span>Waiting for telemetry data...</span>
-    </div>
-  </div>
+      const dot = head.querySelector(".purge-mqtt-dot");
+      ctrlWrap.appendChild(cmpBtn);
+      ctrlWrap.appendChild(tglBtn);
+      if (dot) {
+        head.removeChild(dot);
+        ctrlWrap.appendChild(dot);
+      }
+      head.appendChild(ctrlWrap);
+    }
 
-  <!-- ================= MOBILE MENU ================= -->
-  <div class="mobileMenu" id="mobileMenu">
-    <div class="right">
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
-        <button class="btn modeBtn headBtn primary" id="modeBeltBtn2">Damaged belt</button>
-        <button class="btn modeBtn pmBtn" id="modePm10Btn2">PM10</button>
-        <button class="btn modeBtn vibBtn" id="modeVibDashBtn2" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button>
-        <button class="btn modeBtn" id="modeAiBtn2" style="background-color: #0d9488; border-color: #0f766e; color: #fff; font-weight: 1000;">Noise Sensor</button>
-      </div>
+    let alarmBadge = document.getElementById("purgeCollapsedAlarmBadge");
+    const lowCount = Array.isArray(window.__PURGE_LOW_ALARMS__) ? window.__PURGE_LOW_ALARMS__.length : 0;
+    if (lowCount > 0) {
+      if (!alarmBadge) {
+        alarmBadge = document.createElement("span");
+        alarmBadge.id = "purgeCollapsedAlarmBadge";
+        alarmBadge.className = "purge-alarm-pill";
+        head.insertBefore(alarmBadge, ctrlWrap);
+      }
+      alarmBadge.textContent = `🚨 ${lowCount}`;
+    } else if (alarmBadge) {
+      alarmBadge.remove();
+    }
 
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-        <button class="btn" id="autoSwitchBtn2" style="font-weight: 1000; letter-spacing: .5px;">⏸ Auto: OFF</button>
-        <button class="btn" id="qrBtn2" style="font-weight: 1000; letter-spacing: .5px;">📱 QR code webapp</button>
-        <button class="btn" id="opBtn2">👤 Operator: -</button>
-        <button class="btn" id="muteBtn2">🔊 Beep: ON</button>
-        <button class="btn" id="themeBtnToggle2">🌙 Theme: NIGHT</button>
+    applyPurgeCollapseState_();
+  }
 
-        <div style="grid-column: span 2; border-top:1px dashed var(--border); margin: 2px 0;"></div>
-
-        <button class="btn btn-report" id="reportBtn2" style="grid-column: span 2;">📝 Report Form</button>
-        <button class="btn" id="alarmLogBtn2" style="background:rgba(255,59,48,0.15); border-color:rgba(255,59,48,0.3); color:#ff3b30;">🚨 Alarm Log</button>
-        <button class="btn" id="eventListBtn2">📜 Event List</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= MAIN VIEWPORT WRAPPER ================= -->
-  <div class="mainViewport">
-    <!-- MAP SECTION -->
-    <div class="section" id="mapSection">
-      <div class="secHead">
-        <div class="secTitle">
-          <span class="dot ok"></span>
-          <span id="mapTitle">Plant Map • หัวสายพานชำรุด Check Points</span>
-        </div>
-        <div class="secMeta mono" id="mapHint">Click dot/card to view details</div>
-      </div>
-      <div class="mapOuter">
-        <div class="mapCanvas" id="mapCanvas"></div>
-
-        <!-- กล่องแสดงค่า Purge Air Pressure 8 จุด มุมขวาบนของแผนที่ -->
-        <div class="purge-overlay-panel" id="purgePressureOverlay">
-          <div class="purge-panel-head">
-            <span>💨 PURGE AIR (BAR)</span>
-            <span class="purge-mqtt-dot" id="purgeMqttStatus" title="MQTT Status"></span>
-          </div>
-          <div class="purge-grid" id="purgePressureGrid"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- NOISE SENSOR SECTION -->
-    <div class="section aiSection" id="aiSection">
-      <div class="secHead">
-        <div class="secTitle">
-          <span class="dot ok"></span>
-          <span id="aiTitle">Noise Sensor Analysis</span>
-        </div>
-        <div class="secMeta mono" id="aiHint">Live Dashboard from External Source</div>
-      </div>
-      <div class="iframeWrap">
-        <iframe data-src="https://thirasab.github.io/-noisesensor/" loading="lazy"></iframe>
-      </div>
-    </div>
-
-    <!-- VIBRATION DASHBOARD SECTION -->
-    <div class="section" id="vibDashboardSection" style="display: none;">
-      <div class="secHead">
-        <div class="secTitle">
-          <span class="dot ok"></span>
-          <span id="vibDashTitle">Vibration Gear-Motor Dashboard</span>
-        </div>
-        <div class="secMeta mono">Live Dashboard from External Source</div>
-      </div>
-      <div class="iframeWrap">
-        <iframe data-src="https://thirasab.github.io/vibration-dashboard/" loading="lazy"></iframe>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= MODALS & OVERLAYS ================= -->
-
-  <!-- History / Vib / Purge Modal -->
-  <div class="overlay" id="overlay">
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modalHead">
-        <div class="modalTitle" id="modalTitle">History</div>
-        <button class="closeBtn" id="closeBtn">✕ Close</button>
-      </div>
-      <div class="modalBody" id="modalBody">Loading...</div>
-    </div>
-  </div>
-
-  <!-- Toast Wrap -->
-  <div class="toastWrap" id="toastWrap"></div>
-
-  <!-- QR Code Overlay -->
-  <div class="qrOverlay" id="qrOverlay" aria-hidden="true">
-    <div class="qrZoomBox" id="qrZoomBox">
-      <img id="qrZoomImg"
-           src="https://lh3.googleusercontent.com/d/1OLkLLT-nnUsJK6FeIS8x9kQwav53za-t"
-           alt="QR Zoom"
-           referrerpolicy="no-referrer" />
-      <div class="qrZoomHint">Click to close • ESC</div>
-    </div>
-  </div>
-
-  <!-- Report Data Table Overlay -->
-  <div class="reportOverlay" id="reportOverlay">
-    <div class="reportModal" role="dialog" aria-modal="true">
-      <div class="reportHead">
-        <div class="ttl">REPORT • รายงานเช็คหัวสายพาน</div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;">
-          <button class="rBtn primary" id="reportOpenFormBtn">+ New</button>
-          <button class="rBtn" id="reportRefreshBtn">Refresh</button>
-          <button class="rBtn danger" id="reportCloseBtn">✕ Close</button>
-        </div>
-      </div>
-      <div class="reportBody">
-        <div class="rCard">
-          <div style="display:flex;justify-content:space-between;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-            <div class="rLabel">Data table</div>
-            <div class="rMut rSmallMono" id="r_count">-</div>
-          </div>
-          <div class="rTableWrap">
-            <table class="rTable">
-              <thead><tr>
-                <th style="width:155px;">Check time</th>
-                <th style="width:100px;">Code</th>
-                <th>Detail</th>
-                <th style="width:130px;">Images</th>
-                <th style="width:120px;">OP</th>
-                <th style="width:130px;">Action</th>
-              </tr></thead>
-              <tbody id="r_tbody"><tr><td colspan="6" class="rMut">Loading...</td></tr></tbody>
-            </table>
-          </div>
-          <div class="rMut" style="font-size:10px;margin-top:8px;">✅ คลิกรูปเพื่อขยาย • Edit เพื่อแก้ไข</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Report Form Overlay -->
-  <div class="reportFormOverlay" id="reportFormOverlay">
-    <div class="reportFormBox" role="dialog" aria-modal="true">
-      <div class="reportFormHead">
-        <div class="ttl" id="formHeadTitle">FORM • กรอก/แก้ไข รายงาน</div>
-        <button class="reportFormCloseBtn" id="reportFormCloseBtn">✕</button>
-      </div>
-      <div class="reportFormBody">
-        <div class="rRow">
-          <div class="rLabel">เวลาเช็ค (Indochina time)</div>
-          <input class="rInput" id="r_checkTime" type="datetime-local" />
-        </div>
-        <div class="rRow">
-          <div class="rLabel">Code</div>
-          <input class="rInput" id="r_code" placeholder="เช่น 542.21 / POS6" maxlength="80" />
-        </div>
-        <div class="rRow">
-          <div class="rLabel">รายละเอียด</div>
-          <textarea class="rText" id="r_detail" placeholder="พิมพ์รายละเอียด..." maxlength="2000"></textarea>
-        </div>
-        <div class="rRow">
-          <div class="rLabel">แนบรูป (1–4 รูป)</div>
-          <input class="rInput" id="r_files" type="file" accept="image/*" multiple />
-          <div class="uploadBar" id="uploadBar"><div class="uploadBarFill" id="uploadBarFill"></div></div>
-          <div class="rThumbs" id="r_imgThumbs"></div>
-        </div>
-        <div class="rActions">
-          <button class="rBtn primary" id="r_saveBtn">💾 Save</button>
-          <button class="rBtn" id="r_clearBtn">Clear</button>
-          <button class="rBtn danger" id="r_deleteBtn" style="display:none;">🗑 Delete</button>
-          <button class="rBtn" id="r_formCancelBtn">Close</button>
-          <span class="rMut rSmallMono" id="r_editId" style="font-size:10px;"></span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Fullscreen Image Viewer -->
-  <div class="imgViewer" id="imgViewer">
-    <div class="imgViewerBox">
-      <div class="imgViewerHead">
-        <div class="imgViewerTitle" id="imgViewerTitle">Image</div>
-        <button class="imgViewerClose" id="imgViewerClose">✕ Close</button>
-      </div>
-      <div class="imgViewerBody" id="imgViewerBody">
-        <div class="imgViewerStage" id="imgViewerStage">
-          <img id="imgViewerImg" alt="preview" />
-          <div class="imgViewerHint">ลากเพื่อเลื่อน • ใช้ 2 นิ้วเพื่อย่อ/ขยาย • ดับเบิลแตะเพื่อซูม</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</body>
-</html>
+  function hookModeChangeForPurgePanel_() {
+    if (typeof window.setPageMode !== "function" || window.setPageMode.__purgeHooked) return;
+    const origSetPageMode = window.setPageMode;
+    window.setPageMode = function (mode) {
+      origSetPageMode.apply(this, arguments);
+      const hasLowAlarm = Array.isArray(window.__PURGE_LOW_ALARMS__) && window.__PURGE_LOW_ALARMS__.length > 0;
+      if (hasLowAlarm) {
+        // มี Alarm < 4.0 Bar ให้กางค้างไว้แม้เปลี่ยนไปโหมด Dashboard
+        __PURGE_COLLAPSED__ = false;
+      } else {
+        // ไม่มี Alarm ให้พับอัตโนมัติในโหมด VIB_DASH หรือ AI และกางในโหมดปกติ
+        __PURGE_COLLAPSED__ = (mode === "VIB_DASH" || mode === "AI");
+      }
+      applyPurgeCollapseState_();
+    };
+    window.setPageMode.__purgeHooked = true;
+  }
