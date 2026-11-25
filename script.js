@@ -14,55 +14,132 @@ const MAP_IMAGE_BOUNDS = [
 let MAP_POINTS = [];
 let mapCoords = {};
 let map;
-let __PAGE_MODE__ = "PM10";
+let __PAGE_MODE__ = "BELT"; // บังคับหน้าจอเริ่มต้นเป็นโหมด BELT ทุกครั้งที่เปิด/รีเฟรชหน้า
+try { localStorage.removeItem("scada_page_mode"); } catch (e) {}
 let AUTO_SWITCH_SEC = 60;
-let __AUTO_SWITCH_ENABLED__ = (function(){
-  try{ return localStorage.getItem("scada_auto_switch") !== "0"; }catch(e){ return true; }
-})();
+let __AUTO_SWITCH_ENABLED__ = false; // บังคับเป็น Manual (ปิด Auto Switch) ทุกครั้งที่เปิด/รีเฟรชหน้า
+try { localStorage.removeItem("scada_auto_switch"); } catch (e) {}
 let __AUTO_SWITCH_TIMER__ = null;
-let __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC; 
+let __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC;
 let PM10_WARN = 50, PM10_BAD = 120;
 let __PM_FETCH_LOCK__ = false;
 let __PM10_LATEST__ = {}, __PM10_SERIES__ = {}, __PM10_SERIES_FETCHED_AT__ = {};
 let __AI_ROWS__ = [];
 
 // =========================================================
-// 2. HELPER API CALLER (แทนที่ google.script.run)
+// 2. HELPER API CALLER (AbortController กันยิงซ้ำซ้อน)
 // =========================================================
-async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) {
+const __GAS_ABORT_CONTROLLERS__ = {};
+
+async function callGasAPI(action, params = {}, method = 'GET', bodyData = null, options = {}) {
+  const cancelPrevious = options.cancelPrevious !== false;
+  const controller = new AbortController();
+
+  if (cancelPrevious && __GAS_ABORT_CONTROLLERS__[action]) {
+    try {
+      __GAS_ABORT_CONTROLLERS__[action].abort();
+    } catch (_) {}
+  }
+
+  if (cancelPrevious) {
+    __GAS_ABORT_CONTROLLERS__[action] = controller;
+  }
+
   try {
     let url = new URL(GAS_URL);
     url.searchParams.append('action', action);
-    
+
     if (method === 'GET') {
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.append(key, value);
       }
     }
 
-    const options = {
+    const fetchOptions = {
       method: method,
+      signal: controller.signal
     };
 
     if (method === 'POST' && bodyData) {
-      options.body = JSON.stringify(bodyData);
-      options.headers = { "Content-Type": "text/plain;charset=utf-8" };
+      fetchOptions.body = JSON.stringify(bodyData);
+      fetchOptions.headers = { "Content-Type": "text/plain;charset=utf-8" };
     }
 
-    const response = await fetch(url, options);
+    const response = await fetch(url, fetchOptions);
     const data = await response.json();
     return data;
   } catch (error) {
+    if (error && error.name === 'AbortError') {
+      return { ok: false, aborted: true, error: "Request aborted" };
+    }
     throw new Error(error.message || "Network Error");
+  } finally {
+    if (cancelPrevious && __GAS_ABORT_CONTROLLERS__[action] === controller) {
+      delete __GAS_ABORT_CONTROLLERS__[action];
+    }
   }
 }
 
 // =========================================================
-// 3. HELPERS & MEMORY CLEANUP
+// 3. HELPERS, OFFLINE CACHE & MEMORY CLEANUP
 // =========================================================
 function $id(id){ return document.getElementById(id); }
 function setText(id,val){ var el=$id(id); if(!el) return false; el.textContent=(val==null?"":val); return true; }
 function setHTML(id,html){ var el=$id(id); if(!el) return false; el.innerHTML=(html==null?"":html); return true; }
+
+const GAS_CACHE_PREFIX_ = "scada_gas_cache_v1_";
+
+function readGasCache_(key) {
+  try {
+    var raw = localStorage.getItem(GAS_CACHE_PREFIX_ + key);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!parsed || !parsed.data) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeGasCache_(key, data) {
+  try {
+    if (!data) return;
+    var payload = JSON.stringify({
+      savedAt: Date.now(),
+      data: data
+    });
+    if (payload.length > 1500000) return;
+    localStorage.setItem(GAS_CACHE_PREFIX_ + key, payload);
+  } catch (e) {}
+}
+
+function setCachedBadge_(isCached, savedAt) {
+  var badge = $id("cachedBadge");
+  if (!badge) {
+    var conn = $id("connBadge");
+    if (!conn || !conn.parentNode) return;
+    badge = document.createElement("span");
+    badge.id = "cachedBadge";
+    badge.className = "pill mono";
+    badge.style.cssText = "display:none; color:#ff9f0a; border-color:rgba(255,159,10,.45); font-weight:900;";
+    conn.parentNode.insertBefore(badge, conn.nextSibling);
+  }
+
+  if (!isCached) {
+    badge.style.display = "none";
+    badge.textContent = "";
+    return;
+  }
+
+  var tStr = "";
+  if (savedAt) {
+    try {
+      tStr = " @ " + new Date(savedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+    } catch (_) {}
+  }
+  badge.style.display = "inline-flex";
+  badge.textContent = "CACHED" + tStr;
+}
 
 function destroyAllModalCharts_() {
   if (typeof __VIB_CHARTS__ !== 'undefined') {
@@ -92,11 +169,9 @@ function formatShortTimeMobile_(rawVal) {
   var s = String(rawVal == null ? "" : rawVal).trim();
   if (window.innerWidth > 768 || !s) return s;
 
-  // รูปแบบ DD/MM/YYYY HH:mm:ss หรือ DD/MM/YYYY HH:mm -> DD/MM HH:mm
   var m1 = s.match(/^(\d{2}\/\d{2})\/\d{4}[ T](\d{2}:\d{2})(?::\d{2})?$/);
   if (m1) return m1[1] + " " + m1[2];
 
-  // รูปแบบ YYYY-MM-DD HH:mm:ss หรือ YYYY-MM-DD HH:mm -> DD/MM HH:mm
   var m2 = s.match(/^\d{4}-(\d{2})-(\d{2})[ T](\d{2}:\d{2})(?::\d{2})?$/);
   if (m2) return m2[2] + "/" + m2[1] + " " + m2[3];
 
@@ -115,145 +190,39 @@ function hardCrashScreen(title,msg,stack){
 window.addEventListener("error",function(e){ hardCrashScreen("SCADA UI crashed",(e&&e.message)||"Unknown",(e&&e.error&&e.error.stack)||""); });
 window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA Promise crashed",(e&&e.reason)||"Unknown",""); });
 
-// =========================================================
-// 4. MOBILE MENU & THEME (AUTO / MANUAL DAY & NIGHT)
-// =========================================================
-(function(){
-  var btn = $id("hamburgerBtn");
-  var menu = $id("mobileMenu");
-  if(!btn || !menu) return;
-
-  function closeMobileMenu(){
-    menu.classList.remove("open");
-    btn.textContent = "☰";
-  }
-
-  function toggleMobileMenu(){
-    menu.classList.toggle("open");
-    btn.textContent = menu.classList.contains("open") ? "✕" : "☰";
-  }
-
-  btn.addEventListener("click", function(e){
-    e.preventDefault(); e.stopPropagation(); toggleMobileMenu();
-  });
-
-  menu.addEventListener("click", function(e){
-    var targetBtn = e.target.closest("button");
-    if(!targetBtn) return;
-    setTimeout(closeMobileMenu, 120);
-  });
-
-  document.addEventListener("click", function(e){
-    if(!menu.classList.contains("open")) return;
-    if(menu.contains(e.target) || btn.contains(e.target)) return;
-    closeMobileMenu();
-  });
-
-  document.addEventListener("keydown", function(e){
-    if(e.key === "Escape") closeMobileMenu();
-  });
-
-  window.addEventListener("resize", function(){
-    if(window.innerWidth > 768) closeMobileMenu();
-  });
-})();
-
-function getAutoThemeByTime_() {
-  var hr = new Date().getHours();
-  // 18:00 - 05:59 = กลางคืน (night), 06:00 - 17:59 = กลางวัน (day)
-  return (hr >= 18 || hr < 6) ? "night" : "day";
-}
-
-function getThemeControlMode_() {
+function setTheme(theme) {
+  theme = (theme === "day") ? "day" : "night";
+  document.body.setAttribute("data-theme", theme);
   try {
-    var m = localStorage.getItem("belt_theme_mode");
-    return (m === "manual") ? "manual" : "auto";
-  } catch (e) {
-    return "auto";
-  }
-}
-
-function updateThemeModeButtons_() {
-  var mode = getThemeControlMode_();
-  var txt = (mode === "manual") ? "✋ Theme Mode: MANUAL" : "🕒 Theme Mode: AUTO";
-  ["themeModeBtn", "themeModeBtn2"].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.textContent = txt;
-  });
-}
-
-function setThemeControlMode(mode, applyNow) {
-  var normalized = (mode === "manual") ? "manual" : "auto";
-  try {
-    localStorage.setItem("belt_theme_mode", normalized);
-  } catch (e) {}
-  updateThemeModeButtons_();
-
-  if (normalized === "auto" && applyNow !== false) {
-    setTheme(getAutoThemeByTime_(), false);
-  }
-}
-
-function setTheme(theme, isManual) {
-  var finalTheme = (theme === "day") ? "day" : "night";
-  document.body.setAttribute("data-theme", finalTheme);
-  try {
-    localStorage.setItem("belt_theme", finalTheme);
+    localStorage.setItem("belt_theme", theme);
   } catch (e) {}
 
-  if (isManual) {
-    setThemeControlMode("manual", false);
-  }
-
-  var txt = (finalTheme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
+  var txt = (theme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
   ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
     var e = document.getElementById(id);
     if (e) e.textContent = txt;
   });
 }
 
-function applyAutoThemeIfNeeded_() {
-  if (getThemeControlMode_() !== "auto") return;
-  var autoTheme = getAutoThemeByTime_();
-  var curTheme = document.body.getAttribute("data-theme") || "night";
-  if (curTheme !== autoTheme) {
-    setTheme(autoTheme, false);
-  }
-}
+(function initTheme_() {
+  try {
+    localStorage.removeItem("belt_theme");
+    localStorage.removeItem("belt_theme_manual_hr");
+  } catch (e) {}
+  setTheme("night");
+})();
 
-(function initThemeSystem_() {
-  var controlMode = getThemeControlMode_();
-  var savedTheme = localStorage.getItem("belt_theme") || "night";
-  if (controlMode === "auto") {
-    setTheme(getAutoThemeByTime_(), false);
-  } else {
-    setTheme(savedTheme, false);
-  }
-  updateThemeModeButtons_();
-  setInterval(applyAutoThemeIfNeeded_, 60000);
-
-  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
+(function() {
+  function bindTheme(id) {
     var b = document.getElementById(id);
     if (!b) return;
     b.addEventListener("click", function() {
       var cur = document.body.getAttribute("data-theme") || "night";
-      setTheme(cur === "day" ? "night" : "day", true);
+      setTheme(cur === "day" ? "night" : "day");
     });
-  });
-
-  ["themeModeBtn", "themeModeBtn2"].forEach(function(id) {
-    var mb = document.getElementById(id);
-    if (!mb) return;
-    mb.addEventListener("click", function() {
-      var nextMode = (getThemeControlMode_() === "auto") ? "manual" : "auto";
-      setThemeControlMode(nextMode, true);
-      showToast(
-        nextMode === "auto" ? "Theme Mode: AUTO" : "Theme Mode: MANUAL",
-        "ok",
-        nextMode === "auto" ? "สลับธีมตามเวลากลางวัน/กลางคืน" : "ล็อกธีมตามที่เลือกไว้"
-      );
-    });
-  });
+  }
+  bindTheme("themeBtnToggle");
+  bindTheme("themeBtnToggle2");
 })();
 
 // =========================================================
@@ -343,7 +312,7 @@ function beepOnce(){
   tone(1100,t0+0.00,0.10,0.18); tone(900,t0+0.14,0.12,0.14);
 }
 function handleBeepFromData(data){
-  if(document.hidden || (__PAGE_MODE__ !== "BELT" && __PAGE_MODE__ !== "AI")) return;  
+  if(document.hidden || (__PAGE_MODE__ !== "BELT" && __PAGE_MODE__ !== "AI")) return;
   if(!data||!data.belts||!data.belts.length) return;
   var hasOpen=false,openNew=false;
   for(var i=0;i<data.belts.length;i++){
@@ -409,9 +378,9 @@ function buildSwayHtml(item){
 }
 
 function openModal(){ var o=$id("overlay"); if(o) o.style.display="flex"; }
-function closeModal(){ 
-  var o=$id("overlay"); 
-  if(o) o.style.display="none"; 
+function closeModal(){
+  var o=$id("overlay");
+  if(o) o.style.display="none";
   destroyAllModalCharts_();
   setHTML("modalBody", "");
 }
@@ -420,7 +389,7 @@ var ov=$id("overlay"); if(ov) ov.addEventListener("click",function(e){ if(e.targ
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
 
 // =========================================================
-// 7. RISK ENGINE (FOR LIVE LOG & ALERTS)
+// 7. AI ENGINE
 // =========================================================
 function aiToNum_(v){ if(v===null||v===undefined||v==="") return null; var n=Number(v); return isFinite(n)?n:null; }
 function aiReasonCause_(type){
@@ -434,7 +403,7 @@ function aiReasonCause_(type){
 function scoreAiRow_(it){
   it=it||{};
   var score=0, reasons=[];
-  
+
   var status=String(it.currentStatus||"");
   var type=String(it.currentAlarmType||"").toUpperCase();
   var run=Number(it.run||0);
@@ -452,16 +421,16 @@ function scoreAiRow_(it){
     score+=15; reasons.push("ไม่มีข้อมูล");
   }
 
-  if(run===1){ 
+  if(run===1){
     if(status==="ALERT"){
-      score+=30; 
+      score+=30;
       reasons.push("อันตราย: เครื่อง RUN ขณะมี Alarm");
       if(type==="STUCK") {
         score+=20;
         reasons.push("🔥 เสี่ยงสายพานไหม้/ขาด (มอเตอร์หมุนแต่สายพานหยุด)");
       }
     } else {
-      score+=10; 
+      score+=10;
       reasons.push("เครื่องยัง RUN");
     }
   }
@@ -475,17 +444,17 @@ function scoreAiRow_(it){
   if(status!=="ALERT" && swayCount>0){
     score+=15; reasons.push("เริ่มมีแนวโน้มผิดปกติ (Pre-Alarm)");
   }
-  if(type==="STALE" && run===1){ 
-    score+=25; 
-    reasons.push("ความเสี่ยงสูง: RUN แต่ข้อมูลหาย"); 
+  if(type==="STALE" && run===1){
+    score+=25;
+    reasons.push("ความเสี่ยงสูง: RUN แต่ข้อมูลหาย");
   }
-  if(acked && type!=="STALE"){ 
-    score-=30; 
-    reasons.push("มีการ ACK แล้ว"); 
+  if(acked && type!=="STALE"){
+    score-=30;
+    reasons.push("มีการ ACK แล้ว");
   }
 
   score=Math.max(0,Math.min(100,Math.round(score)));
-  
+
   var level="NORMAL";
   if(score>=90) level="CRITICAL";
   else if(score>=70) level="HIGH";
@@ -519,7 +488,7 @@ function scoreAiRow_(it){
 function buildAiRows_(data){
   var src=(data&&Array.isArray(data.belts))?data.belts:[];
   var rows=[];
-  
+
   for(var i=0;i<src.length;i++){
     var r=scoreAiRow_(src[i]);
     if(r.score<=0 && r.status!=="ALERT" && r.status!=="NO_DATA") continue;
@@ -534,23 +503,23 @@ function buildAiRows_(data){
        if (latest.level.includes("CHECK") && (latest.reason.includes("ค้าง") || latest.reason.includes("Frozen"))) return;
 
        var currentVib = Number(latest.acc) || 0;
-       if (currentVib <= (limitWarn || 30)) return; 
+       if (currentVib <= (limitWarn || 30)) return;
 
        var level = "LOW";
        var baseScore = latest.score || 50;
-       
+
        if(currentVib > (limitDanger || 60)) { level = "CRITICAL"; baseScore = Math.max(baseScore, 92); }
        else if(currentVib > (limitWarn || 30)) { level = "HIGH"; baseScore = Math.max(baseScore, 75); }
        else if(latest.level.includes("CHECK")) { level = "MEDIUM"; baseScore = Math.max(baseScore, 45); }
 
        rows.push({
-          belt: name, group: "Vibration Gear", status: "ALERT", alarmType: "VIB_" + level, run: 1, 
-          score: baseScore, level: level, isAcked: false, cause: latest.reason, action: latest.advice, 
+          belt: name, group: "Vibration Gear", status: "ALERT", alarmType: "VIB_" + level, run: 1,
+          score: baseScore, level: level, isAcked: false, cause: latest.reason, action: latest.advice,
           reasonText: "เกินเกณฑ์ที่ตั้งไว้ (>" + limitWarn + " mm/s)", alarmMsg: "Peak: " + (latest.acc||0).toFixed(2) + " mm/s",
           sortKey: (level==="CRITICAL"?500:level==="HIGH"?400:level==="MEDIUM"?300:level==="LOW"?200:100) + baseScore
        });
      }
-     
+
      function getLimits(posNum) {
         var p = MAP_POINTS.find(function(m){return m.pos === posNum && m.modes && m.modes.includes("VIB");});
         return { w: p ? (p.vibWarn || 30) : 30, d: p ? (p.vibDanger || 60) : 60 };
@@ -582,19 +551,19 @@ function buildAiRows_(data){
 
      function addVibAiTrend(vibData, name) {
         if(!vibData || vibData.length < 2000) return;
-        var chunk = Math.floor(vibData.length / 5); 
+        var chunk = Math.floor(vibData.length / 5);
         var oldData = vibData.slice(0, chunk);
         var newData = vibData.slice(vibData.length - chunk);
 
         var oldAvg = oldData.reduce(function(acc, val){ return acc + (val.baseAcc||0); }, 0) / chunk;
         var newAvg = newData.reduce(function(acc, val){ return acc + (val.baseAcc||0); }, 0) / chunk;
 
-        if(oldAvg > 0.03) { 
+        if(oldAvg > 0.03) {
             var increasePct = ((newAvg - oldAvg) / oldAvg) * 100;
             if(increasePct >= 25 && newAvg >= 20) {
                 var isCrit = increasePct >= 50 && newAvg >= 30;
                 rows.push({
-                   belt: name, group: "Predictive Maint.", status: "WARN", alarmType: "TREND_UP", run: 1, 
+                   belt: name, group: "Predictive Maint.", status: "WARN", alarmType: "TREND_UP", run: 1,
                    score: isCrit ? 85 : 65, level: isCrit ? "CRITICAL" : "HIGH", isAcked: false,
                    cause: "📈 ระดับพลังงานการสั่นสะเทือน (RMS) ไต่ระดับเพิ่มขึ้น " + increasePct.toFixed(1) + "%",
                    action: "ตรวจสอบตลับลูกปืน, การหล่อลื่น (จาระบี) และ Alignment เพื่อป้องกัน Break down",
@@ -615,15 +584,15 @@ function buildAiRows_(data){
       if (pm && pm.v != null && !isPm10Stale_(pm)) {
         var v = Number(pm.v);
         var displayName = pm.loc ? pm.loc : pos;
-        
+
         if (v >= PM10_BAD) {
           rows.push({
-            belt: "PM10 " + displayName, group: "Environment", status: "ALERT", alarmType: "DUST_BAD", run: 0, score: 85, level: "HIGH", isAcked: false, 
+            belt: "PM10 " + displayName, group: "Environment", status: "ALERT", alarmType: "DUST_BAD", run: 0, score: 85, level: "HIGH", isAcked: false,
             cause: "⚠️ ฝุ่นสะสมหนาแน่นเกินมาตรฐานอันตราย", action: "ตรวจสอบ Bag Filter และระบบพรมน้ำด่วน", reasonText: "เกิน 120 µg/m³", alarmMsg: v.toFixed(0) + " µg/m³", sortKey: 485
           });
         } else if (v >= PM10_WARN) {
           rows.push({
-            belt: "PM10 " + displayName, group: "Environment", status: "WARN", alarmType: "DUST_WARN", run: 0, score: 45, level: "MEDIUM", isAcked: false, 
+            belt: "PM10 " + displayName, group: "Environment", status: "WARN", alarmType: "DUST_WARN", run: 0, score: 45, level: "MEDIUM", isAcked: false,
             cause: "ฝุ่นเริ่มฟุ้งกระจายในพื้นที่", action: "ตรวจสอบจุดรั่วไหลของฝุ่น", reasonText: "เกิน 50 µg/m³", alarmMsg: v.toFixed(0) + " µg/m³", sortKey: 345
           });
         }
@@ -637,26 +606,142 @@ function buildAiRows_(data){
 }
 
 function setSectionVisibility_(){
-  var mapSec=$id("mapSection"), dashSec=$id("vibDashboardSection");
-  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"none":"flex";
+  var mapSec=$id("mapSection"), aiSec=$id("aiSection"), dashSec=$id("vibDashboardSection");
+  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH")?"none":"flex";
+  if(aiSec) aiSec.classList.toggle("open", __PAGE_MODE__==="AI");
   if(dashSec) dashSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"flex":"none";
 }
 
-// =========================================================
-// 8. DATA FETCHING (REST API via fetch)
-// =========================================================
+function syncIframesForMode_(mode) {
+  var pairs = [
+    { modeKey: "AI", sectionId: "aiSection" },
+    { modeKey: "VIB_DASH", sectionId: "vibDashboardSection" }
+  ];
 
+  for (var i = 0; i < pairs.length; i++) {
+    var sec = $id(pairs[i].sectionId);
+    if (!sec) continue;
+    var ifr = sec.querySelector("iframe");
+    if (!ifr) continue;
+
+    var targetSrc = ifr.getAttribute("data-src") || ifr.getAttribute("src") || "";
+    if (targetSrc && targetSrc !== "about:blank" && !ifr.getAttribute("data-src")) {
+      ifr.setAttribute("data-src", targetSrc);
+    }
+
+    var shouldLoad = (mode === pairs[i].modeKey);
+    if (shouldLoad) {
+      if (targetSrc && ifr.getAttribute("src") !== targetSrc) {
+        ifr.setAttribute("src", targetSrc);
+      }
+    } else {
+      if (ifr.getAttribute("src") && ifr.getAttribute("src") !== "about:blank") {
+        ifr.setAttribute("src", "about:blank");
+      }
+    }
+  }
+}
+
+function renderAiAnalysis_(data){
+  var rows=buildAiRows_(data);
+  var c={CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,NORMAL:0};
+  for(var i=0;i<rows.length;i++){
+    var lv=rows[i].level||"NORMAL";
+    c[lv]=(c[lv]||0)+1;
+  }
+  setText("aiKpiCritical", c.CRITICAL||0);
+  setText("aiKpiHigh", c.HIGH||0);
+  setText("aiKpiMedium", c.MEDIUM||0);
+  setText("aiKpiWatch", (c.LOW||0) + ((data&&Array.isArray(data.belts)) ? data.belts.filter(function(it){return String(it&&it.currentStatus||"")==="NO_DATA";}).length : 0));
+  var normalTotal=(data&&Array.isArray(data.belts)) ?
+    Math.max(0, data.belts.length - rows.filter(function(r){return r.level!=="NORMAL" && r.group!=="Environment" && r.group!=="Vibration Gear";}).length) : 0;
+  setText("aiKpiNormal", normalTotal);
+  setText("aiGeneratedAt", "Generated: " + new Date().toLocaleString("th-TH"));
+
+  var tb=$id("aiTbody");
+  if(tb){
+    if(!rows.length){
+      tb.innerHTML='<tr><td colspan="7" class="rMut empty-row">No AI findings</td></tr>';
+    }else{
+      var html="";
+      var topRows=rows.slice(0,15);
+      for(var j=0;j<topRows.length;j++){
+        var r=topRows[j];
+        var bgStyle = "";
+        if (r.level === "CRITICAL") bgStyle = 'style="background:rgba(255,59,48,0.15);"';
+        else if (r.level === "HIGH") bgStyle = 'style="background:rgba(255,159,10,0.10);"';
+
+        html+='<tr ' + bgStyle + '>'+
+          '<td class="mono"><b>'+esc(String(r.score))+'</b></td>'+
+          '<td><span class="aiLevel '+esc(r.level)+'">'+esc(r.level)+'</span></td>'+
+          '<td class="mono"><b>'+esc(r.belt)+'</b><div class="aiTiny" style="color:var(--text);">'+esc(r.group||"-")+'</div></td>'+
+          '<td class="mono">'+(r.group==="Environment" ? "-" : (r.run===1?'RUN':'STOP'))+(r.isAcked?'<div class="aiTiny">ACK</div>':'')+'</td>'+
+          '<td class="mono">'+esc(r.alarmType||"-")+(r.alarmMsg?'<div class="aiTiny" style="color:#ff3b30;">'+esc(r.alarmMsg)+'</div>':'')+'</td>'+
+          '<td>'+esc(r.cause)+'</td>'+
+          '<td style="color:var(--scada-cyan);">'+esc(r.action)+'</td>'+
+        '</tr>';
+      }
+      tb.innerHTML=html;
+    }
+  }
+
+  var list=$id("aiReasonList");
+  if(list){
+    if(!rows.length){
+      list.innerHTML='<div class="aiEmpty">No AI findings</div>';
+    }else{
+      var out="";
+      var top=rows.slice(0,5);
+      for(var k=0;k<top.length;k++){
+        var rr=top[k];
+        var borderGlow = rr.level === "CRITICAL" ? "border-color: #ff3b30; box-shadow: 0 0 10px rgba(255,59,48,0.2);" : "";
+        out+='<div class="aiReasonItem" style="' + borderGlow + '">'+
+          '<div class="aiReasonTop">'+
+            '<div class="aiReasonBelt mono">'+esc(rr.belt)+' <span class="aiTiny">'+esc(rr.group||"")+'</span></div>'+
+            '<span class="aiLevel '+esc(rr.level)+'">'+esc(rr.level)+' • '+esc(String(rr.score))+'</span>'+
+          '</div>'+
+          '<div class="aiReasonMsg"><b>Alarm:</b> '+esc(rr.alarmType||"-")+(rr.alarmMsg?(' • '+esc(rr.alarmMsg)):'')+'</div>'+
+          '<div class="aiReasonMsg"><b>Why:</b> '+esc(rr.reasonText||rr.cause)+'</div>'+
+          '<div class="aiReasonMsg" style="color:var(--scada-cyan);"><b>Action:</b> '+esc(rr.action)+'</div>'+
+        '</div>';
+      }
+      list.innerHTML=out;
+    }
+  }
+}
+
+// =========================================================
+// 8. DATA FETCHING (REST API + OFFLINE FALLBACK)
+// =========================================================
 function fetchHistory(beltName){
+  var cacheKey = "history_24h_" + String(beltName || "");
   setText("modalTitle","History 24h — "+beltName);
   setHTML("modalBody","<div class='skeleton' style='height:30px;margin-bottom:6px;'></div><div class='skeleton' style='height:20px;margin-bottom:4px;'></div><div class='skeleton' style='height:20px;'></div>");
   openModal();
-  
+
   callGasAPI('getHistory24h', {beltName: beltName})
     .then(data => {
-      if(!data||data.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((data&&data.error)?data.error:"unknown")+'</div>'); return;}
+      if(data && data.aborted) return;
+      if(!data||data.ok===false){
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          renderHistory(cached.data);
+          return;
+        }
+        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((data&&data.error)?data.error:"unknown")+'</div>');
+        return;
+      }
+      writeGasCache_(cacheKey, data);
       renderHistory(data);
     })
     .catch(err => {
+      var cached = readGasCache_(cacheKey);
+      if(cached && cached.data){
+        setCachedBadge_(true, cached.savedAt);
+        renderHistory(cached.data);
+        return;
+      }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
     });
 }
@@ -665,28 +750,39 @@ var _vibPollCount = 0;
 function refreshVibStatus_(){
   var timeRange = (_vibPollCount % 30 === 0) ? "5d" : "4h";
   _vibPollCount++;
+  var cacheKey = "vib_" + timeRange;
 
   callGasAPI('getVibData', {rangeKey: timeRange})
     .then(res => {
-      if(!res || res.ok === false) return;
+      if(!res || res.aborted || res.ok === false) return;
+      writeGasCache_(cacheKey, res);
       if(timeRange === "5d") window.__TREND_VIB_DATA__ = res;
-      window.__LAST_VIB_DATA__ = res; 
+      window.__LAST_VIB_DATA__ = res;
 
-      if (typeof updateGlobalLeftAlarms_ === "function") updateGlobalLeftAlarms_();
+      if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
       setTimeout(adjustCardPositions_, 100);
     })
-    .catch(err => console.error("Vib Fetch Error:", err));
+    .catch(err => {
+      var cached = readGasCache_(cacheKey);
+      if(cached && cached.data){
+        if(timeRange === "5d") window.__TREND_VIB_DATA__ = cached.data;
+        window.__LAST_VIB_DATA__ = cached.data;
+        if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
+      }
+      console.error("Vib Fetch Error:", err);
+    });
 }
 
 function fetchVibData(rangeKey, pos) {
   rangeKey = rangeKey || "4h";
-  pos = pos || window.__CURRENT_VIB_POS__ || 1; 
+  pos = pos || window.__CURRENT_VIB_POS__ || 1;
   window.__CURRENT_VIB_POS__ = pos;
-  
-  var titleText = (pos == 2) ? "Vibration & Sound ก้นกะพ้อ CM11_6532" : 
-                  (pos == 3) ? "Vibration & Sound CM9_542.22" : 
+  var cacheKey = "vib_" + rangeKey;
+
+  var titleText = (pos == 2) ? "Vibration & Sound ก้นกะพ้อ CM11_6532" :
+                  (pos == 3) ? "Vibration & Sound CM9_542.22" :
                   (pos == 4) ? "Vibration & Sound Gyp_6413.03" : "Vibration & Sound ก้นกะพ้อ CM10_6522";
-                  
+
   setText("modalTitle", titleText);
   destroyAllModalCharts_();
   setHTML("modalBody","<div class='skeleton' style='height:40px;margin-bottom:8px;'></div><div class='skeleton' style='height:240px;margin-bottom:8px;'></div><div class='skeleton' style='height:240px;'></div>");
@@ -694,12 +790,42 @@ function fetchVibData(rangeKey, pos) {
 
   callGasAPI('getVibData', {rangeKey: rangeKey})
     .then(res => {
-      if(!res||res.ok===false){ setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>'); return; }
+      if(res && res.aborted) return;
+      if(!res||res.ok===false){
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          renderVibModal_(cached.data, rangeKey, pos);
+          return;
+        }
+        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
+        return;
+      }
+      writeGasCache_(cacheKey, res);
       renderVibModal_(res, rangeKey, pos);
     })
     .catch(err => {
+      var cached = readGasCache_(cacheKey);
+      if(cached && cached.data){
+        setCachedBadge_(true, cached.savedAt);
+        renderVibModal_(cached.data, rangeKey, pos);
+        return;
+      }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
     });
+}
+
+function applyPm10SnapshotData_(dataObj) {
+  if(!dataObj) return;
+  for (var posKey in dataObj) {
+    var posNum = Number(posKey);
+    var latestData = dataObj[posKey];
+    setPm10Latest_(posNum, latestData);
+    updateMapDotPm10_(posNum);
+  }
+  if(__PAGE_MODE__ === "PM10") {
+    updatePosCards_PM10_();
+  }
 }
 
 function fetchPm10SnapshotAll_() {
@@ -727,26 +853,34 @@ function fetchPm10SnapshotAll_() {
 
   callGasAPI('getPm10SnapshotAll')
     .then(res => {
+       if(res && res.aborted) return;
        if(res && res.ok && res.data) {
-         for (var posKey in res.data) {
-           var posNum = Number(posKey);
-           var latestData = res.data[posKey]; 
-           setPm10Latest_(posNum, latestData);
-           updateMapDotPm10_(posNum);
-         }
-         if(__PAGE_MODE__ === "PM10") {
-             updatePosCards_PM10_();
+         writeGasCache_("pm10_snapshot_all", res.data);
+         applyPm10SnapshotData_(res.data);
+       } else {
+         var cached = readGasCache_("pm10_snapshot_all");
+         if(cached && cached.data){
+           setCachedBadge_(true, cached.savedAt);
+           applyPm10SnapshotData_(cached.data);
          }
        }
     })
-    .catch(err => console.error("PM10 Batch Fetch error: ", err));
+    .catch(err => {
+      var cached = readGasCache_("pm10_snapshot_all");
+      if(cached && cached.data){
+        setCachedBadge_(true, cached.savedAt);
+        applyPm10SnapshotData_(cached.data);
+      }
+      console.error("PM10 Batch Fetch error: ", err);
+    });
 }
 
 function fetchPm10ForPos_(pos, forceRefresh, days){
   var currentDays = days || window.__PM10_CURRENT_DAYS__ || 2;
   window.__PM10_CURRENT_DAYS__ = currentDays;
-  
+
   var cacheKey = pos + "_" + currentDays;
+  var storageKey = "pm10_series_" + cacheKey;
   var hasCache = hasUsablePm10Series_(cacheKey);
   var canUseCache = hasCache && !forceRefresh && isFreshPm10SeriesCache_(cacheKey);
 
@@ -772,22 +906,30 @@ function fetchPm10ForPos_(pos, forceRefresh, days){
   callGasAPI('getPm10Latest100', { pos: pos, days: currentDays })
     .then(res => {
       __PM_FETCH_LOCK__=false;
+      if(res && res.aborted) return;
       if(!res||res.ok===false){
         if(hasCache){
           renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
           showToast("PM10 cached","warn","showing cached data");
           return;
         }
+        var stored = readGasCache_(storageKey);
+        if(stored && stored.data){
+          setCachedBadge_(true, stored.savedAt);
+          renderPm10Modal_(pos, stored.data, currentDays);
+          return;
+        }
         setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
         return;
       }
-      
+
+      writeGasCache_(storageKey, res);
       cachePm10Series_(cacheKey, res.rows || []);
       var latest = pickLatestPm10Row_(res.rows);
       if(latest) setPm10Latest_(pos, latest);
       updateMapDotPm10_(pos);
       if(__PAGE_MODE__==="PM10") updatePosCards_PM10_();
-      
+
       renderPm10Modal_(pos, res, currentDays);
     })
     .catch(err => {
@@ -795,6 +937,12 @@ function fetchPm10ForPos_(pos, forceRefresh, days){
       if(hasCache){
         renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
         showToast("PM10 cached","warn","showing cached data");
+        return;
+      }
+      var stored = readGasCache_(storageKey);
+      if(stored && stored.data){
+        setCachedBadge_(true, stored.savedAt);
+        renderPm10Modal_(pos, stored.data, currentDays);
         return;
       }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
@@ -811,7 +959,7 @@ function loadLogo(){
   }
   callGasAPI('getLogoBase64')
     .then(res => {
-      if(!res||res.ok===false) return;
+      if(!res || res.aborted || res.ok===false) return;
       img.src=res.dataUrl; img.style.display="block";
       try{ localStorage.setItem("scada_logo", res.dataUrl); }catch(e){}
     })
@@ -824,7 +972,9 @@ function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 function startPolling(){stopPolling();pollTimer=setInterval(fetchStatus,REFRESH_SECONDS*1000);}
 function recordFetchOK(){
   if(failStreak>=2) showToast("Connection recovered","ok","fetch ok");
-  failStreak=0; setConnBadge("ok","LIVE");
+  failStreak=0;
+  setCachedBadge_(false);
+  setConnBadge("ok","LIVE");
 }
 function recordFetchFail(reason){
   failStreak++;
@@ -832,25 +982,26 @@ function recordFetchFail(reason){
   showToast("Fetch failed","warn",(reason||"unknown")+" • streak "+failStreak+"/3");
 }
 
-var lastPm10FetchTime = 0; 
+var lastPm10FetchTime = 0;
 function fetchStatus(){
   if(reloading||fetchInFlight) return;
   fetchInFlight=true;
   setConnBadge("warn","...");
   var done=false;
   var tmr=setTimeout(function(){if(done) return;done=true;fetchInFlight=false;recordFetchFail("timeout");},20000);
-  
+
   var now = Date.now();
-  if(!__PM_FETCH_LOCK__ && (now - lastPm10FetchTime > 60000)) { 
+  if(!__PM_FETCH_LOCK__ && (now - lastPm10FetchTime > 60000)) {
      lastPm10FetchTime = now;
      fetchPm10SnapshotAll_();
   }
 
-  if(__PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
+  if(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
 
   callGasAPI('getStatusAll')
     .then(data => {
       if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false;
+      if(data && data.aborted) return;
       setText("lastFetch",new Date().toLocaleString("th-TH"));
       if(!data||data.ok===false){
         if (data && data.error === "SYSTEM_WARMING_UP") {
@@ -859,13 +1010,25 @@ function fetchStatus(){
         } else {
            recordFetchFail(data&&data.error?data.error:"server error");
         }
+        var cachedAll = readGasCache_("status_all");
+        if (cachedAll && cachedAll.data) {
+          setCachedBadge_(true, cachedAll.savedAt);
+          render(cachedAll.data);
+        }
         return;
       }
-      recordFetchOK(); 
+      writeGasCache_("status_all", data);
+      recordFetchOK();
       render(data);
     })
     .catch(err => {
-      if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false; recordFetchFail(String(err));
+      if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false;
+      recordFetchFail(String(err));
+      var cachedAll = readGasCache_("status_all");
+      if (cachedAll && cachedAll.data) {
+        setCachedBadge_(true, cachedAll.savedAt);
+        render(cachedAll.data);
+      }
     });
 }
 
@@ -908,16 +1071,16 @@ function renderHistory(history){
   var isMobile = window.innerWidth <= 768;
 
   function fullDirName(d){
-    if(d==="N") return "NORTH"; 
-    if(d==="S") return "SOUTH"; 
-    if(d==="E") return "EAST"; 
-    if(d==="W") return "WEST"; 
+    if(d==="N") return "NORTH";
+    if(d==="S") return "SOUTH";
+    if(d==="E") return "EAST";
+    if(d==="W") return "WEST";
     return "";
   }
 
   var html = '<div class="mono" style="color:var(--muted);margin-bottom:9px;">CM: <b>' + esc(group) + '</b></div>';
-  if(!rows.length){ 
-    html += '<div class="mono" style="color:var(--muted);">No data</div>'; 
+  if(!rows.length){
+    html += '<div class="mono" style="color:var(--muted);">No data</div>';
   } else {
     var thTimeStyle = isMobile ? 'style="width:88px;"' : 'style="width:195px;"';
     var thTypeStyle = isMobile ? 'style="width:72px;"'  : 'style="width:100px;"';
@@ -935,25 +1098,25 @@ function renderHistory(history){
             '</tr></thead><tbody>';
 
     for(var i = 0; i < rows.length; i++){
-      var r = rows[i]; 
+      var r = rows[i];
       var rpmInfo = rpmCellInfo_(r);
       var isStop = false;
-      
+
       if(r.type === "SLEEP"){
         if(!rpmInfo.has) isStop = true;
         else {
-          var nn = Number(rpmInfo.n); 
+          var nn = Number(rpmInfo.n);
           if(!isFinite(nn) || nn <= 0) isStop = true;
         }
       }
-      
-      var dirMini = r.dir ? ("  DIR:" + esc(r.dir)) : ""; 
+
+      var dirMini = r.dir ? ("  DIR:" + esc(r.dir)) : "";
       var msgText = r.msg ? (esc(r.msg) + dirMini) : dirMini;
-      var sc = (r && r.swayCountHour != null) ? Number(r.swayCountHour) : 0; 
+      var sc = (r && r.swayCountHour != null) ? Number(r.swayCountHour) : 0;
       if(!isFinite(sc)) sc = 0;
       var sd = (r && r.swayDirHour != null) ? String(r.swayDirHour).trim().toUpperCase() : "";
-      
-      var scText = (sc > 0) ? (history.belt || "") : "-"; 
+
+      var scText = (sc > 0) ? (history.belt || "") : "-";
       var sdText = (sc > 0 && sd) ? fullDirName(sd) : "-";
       var displayTime = formatShortTimeMobile_(r.time);
 
@@ -968,7 +1131,7 @@ function renderHistory(history){
     }
     html += '</tbody></table>';
   }
-  
+
   setText("modalTitle", "History 24h — " + belt + " (" + group + ")");
   setHTML("modalBody", html);
 }
@@ -984,7 +1147,7 @@ function renderVibModal_(res, currentRange, isGroup2) {
 
   var rawD18 = [], rawD20 = [];
   var name18 = "", name20 = "";
-  var posArg = pos; 
+  var posArg = pos;
 
   if (pos === 2) {
     rawD18 = res.data32_18 || (res[2] ? res[2].data18 : []);
@@ -1073,7 +1236,7 @@ function renderVibModal_(res, currentRange, isGroup2) {
 
 function downsampleVibData_(data, rangeKey) {
   if (!data || data.length === 0) return [];
-  const MAX_POINTS_ON_CHART = 300; 
+  const MAX_POINTS_ON_CHART = 300;
   let step = Math.ceil(data.length / MAX_POINTS_ON_CHART);
   if (step <= 1) return data;
   const result = [];
@@ -1125,9 +1288,9 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
   if (globalMinVib === Infinity) globalMinVib = 0;
   if (globalMinSound === Infinity) globalMinSound = 40;
 
-  let targetMaxVib = Math.max(10, globalMaxVib * 1.1);       
-  let targetMaxSound = Math.max(90, globalMaxSound + 5);   
-  let targetMinVib = Math.max(0, globalMinVib - 0.5); 
+  let targetMaxVib = Math.max(10, globalMaxVib * 1.1);
+  let targetMaxSound = Math.max(90, globalMaxSound + 5);
+  let targetMinVib = Math.max(0, globalMinVib - 0.5);
   let targetMinSound = Math.max(0, globalMinSound - 5);
 
   var labels = data.map(function(r){ return r.time; });
@@ -1154,8 +1317,8 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
       layout: {
         padding: { left: 0, right: 0, top: 4, bottom: 0 }
       },
-      plugins: { 
-        legend: { 
+      plugins: {
+        legend: {
           display: true,
           labels: { color: textColor, boxWidth: 12, font: { size: isMobile ? 10 : 12, weight: 'bold' } }
         },
@@ -1165,26 +1328,26 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
         }
       },
       scales: {
-        x: { 
-          ticks: { 
-            color: textColor, 
+        x: {
+          ticks: {
+            color: textColor,
             maxTicksLimit: isMobile ? 5 : 10,
             maxRotation: 0,
             font: { size: isMobile ? 9 : 11 }
-          }, 
-          grid: { color: gridColor } 
+          },
+          grid: { color: gridColor }
         },
-        y: { 
-          type: 'linear', position: 'left', 
-          ticks: { color: '#e74c3c', font: { size: isMobile ? 9 : 11 }, maxTicksLimit: 6 }, 
-          grid: { color: gridColor }, 
-          suggestedMin: targetMinVib, suggestedMax: targetMaxVib  
+        y: {
+          type: 'linear', position: 'left',
+          ticks: { color: '#e74c3c', font: { size: isMobile ? 9 : 11 }, maxTicksLimit: 6 },
+          grid: { color: gridColor },
+          suggestedMin: targetMinVib, suggestedMax: targetMaxVib
         },
-        y1: { 
-          type: 'linear', position: 'right', 
-          ticks: { color: '#3498db', font: { size: isMobile ? 9 : 11 }, maxTicksLimit: 6 }, 
-          grid: { drawOnChartArea: false }, 
-          suggestedMin: targetMinSound, suggestedMax: targetMaxSound  
+        y1: {
+          type: 'linear', position: 'right',
+          ticks: { color: '#3498db', font: { size: isMobile ? 9 : 11 }, maxTicksLimit: 6 },
+          grid: { drawOnChartArea: false },
+          suggestedMin: targetMinSound, suggestedMax: targetMaxSound
         }
       }
     }
@@ -1194,8 +1357,6 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
 // =========================================================
 // 11. MAP & POPUP RENDERERS (ZOOMABLE STATIC IMAGE map1.png)
 // =========================================================
-
-// ฟังก์ชันเช็กจุด POS ทั้งหมดในโหมดปัจจุบัน แล้วปรับซูมให้เห็นครบทุกจุดในหน้าจอเดียว
 function fitMapCover_(animate) {
   if (typeof map === 'undefined' || !map) return;
 
@@ -1221,7 +1382,7 @@ function fitMapCover_(animate) {
   if (count > 0 && posBounds.isValid()) {
     var isMobile = window.innerWidth <= 768;
     var padTopLeft = isMobile ? [40, 40] : [80, 70];
-    var padBottomRight = isMobile ? [40, 40] : [200, 110];
+    var padBottomRight = isMobile ? [40, 40] : [180, 110];
 
     var targetZoom = map.getBoundsZoom(posBounds, false, L.point(
       padTopLeft[0] + padBottomRight[0],
@@ -1249,7 +1410,7 @@ function fitMapCover_(animate) {
 function adjustCardPositions_() {
   var canvas = document.getElementById("mapCanvas");
   if (!canvas || typeof map === 'undefined' || !map) return;
-  
+
   var cr = canvas.getBoundingClientRect();
   var currentZoom = map.getZoom();
   var BASE_ZOOM = map.__BASE_ZOOM || 16;
@@ -1259,24 +1420,24 @@ function adjustCardPositions_() {
     var p = MAP_POINTS[i];
     if (!p.__card) continue;
 
-    var isVisible = (window.innerWidth <= 768) 
-      ? p.__card.classList.contains("mobile-active") 
+    var isVisible = (window.innerWidth <= 768)
+      ? p.__card.classList.contains("mobile-active")
       : (p.__card.style.display !== "none");
 
     if (isVisible) {
       var dx = p.labelDx || 0;
       var dy = p.labelDy || 0;
       p.__card.style.transform = "translate(" + dx + "px," + dy + "px)";
-      
+
       var rect = p.__card.getBoundingClientRect();
       var shiftX = 0;
       var shiftY = 0;
-      
+
       if (rect.left < cr.left + 12) shiftX = (cr.left + 12 - rect.left) / scaleFactor;
       if (rect.right > cr.right - 12) shiftX = (cr.right - 12 - rect.right) / scaleFactor;
       if (rect.top < cr.top + 12) shiftY = (cr.top + 12 - rect.top) / scaleFactor;
       if (rect.bottom > cr.bottom - 12) shiftY = (cr.bottom - 12 - rect.bottom) / scaleFactor;
-      
+
       if (shiftX !== 0 || shiftY !== 0) {
          p.__card.style.transform = "translate(" + (dx + shiftX) + "px," + (dy + shiftY) + "px)";
       }
@@ -1309,7 +1470,7 @@ function buildMiniCardHtml_(item){
   var lineTime=item.currentTime||"-";
   var swayHtml=buildSwayHtml(item);
   var offlineBadge=isStale?'<span class="badge-offline">OFFLINE</span>':'';
-  
+
   return `
     <div class="miniTitleRow">
       <div class="miniTitle">${esc(item.belt)} ${offlineBadge} ${runHtml}</div>
@@ -1365,29 +1526,50 @@ function showPosCards_(pos, anchorEl) {
   pop.style.left = left + "px"; pop.style.top = top + "px";
 }
 
+function applyMapPointsData_(points) {
+  MAP_POINTS = points || [];
+  mapCoords = {};
+  MAP_POINTS.forEach(p => {
+    mapCoords[p.pos] = { lat: p.lat, lng: p.lng };
+  });
+  initLeafletMap_();
+  if (window.__LAST_DATA__) {
+    updateMapDots_(window.__LAST_DATA__);
+    updatePosCards_(window.__LAST_DATA__);
+  } else {
+    fetchStatus();
+  }
+  fetchPm10SnapshotAll_();
+}
+
 function buildMapDotsOnce_() {
-  var canvas = $id("mapCanvas"); 
+  var canvas = $id("mapCanvas");
   if(!canvas || canvas.__dotsBuilt) return;
   canvas.__dotsBuilt = true;
   ensureMapPopup_();
 
   callGasAPI('getMapPointsData')
     .then(points => {
-      MAP_POINTS = points;
-      mapCoords = {};
-      points.forEach(p => {
-        mapCoords[p.pos] = { lat: p.lat, lng: p.lng };
-      });
-      initLeafletMap_();
-      if (window.__LAST_DATA__) {
-        updateMapDots_(window.__LAST_DATA__);
-        updatePosCards_(window.__LAST_DATA__);
+      if(points && points.aborted) return;
+      if(Array.isArray(points) && points.length){
+        writeGasCache_("map_points", points);
+        applyMapPointsData_(points);
       } else {
-        fetchStatus();
+        var cached = readGasCache_("map_points");
+        if(cached && Array.isArray(cached.data)){
+          setCachedBadge_(true, cached.savedAt);
+          applyMapPointsData_(cached.data);
+        }
       }
-      fetchPm10SnapshotAll_(); 
     })
-    .catch(err => console.error("Map points fetch error:", err));
+    .catch(err => {
+      var cached = readGasCache_("map_points");
+      if(cached && Array.isArray(cached.data)){
+        setCachedBadge_(true, cached.savedAt);
+        applyMapPointsData_(cached.data);
+      }
+      console.error("Map points fetch error:", err);
+    });
 }
 
 function initLeafletMap_() {
@@ -1629,17 +1811,17 @@ function pickLatestPm10Row_(rows){
   }
   return null;
 }
-function setPm10Latest_(pos, row) { 
-  if(row && row.v != null && isFinite(Number(row.v))) { 
+function setPm10Latest_(pos, row) {
+  if(row && row.v != null && isFinite(Number(row.v))) {
     __PM10_LATEST__[pos] = {
       v: Number(row.v),
       time: String(row.time || ""),
       ts: isFinite(Number(row.ts)) ? Number(row.ts) : null,
       loc: row.loc || pos
-    }; 
-  } else { 
-    delete __PM10_LATEST__[pos]; 
-  } 
+    };
+  } else {
+    delete __PM10_LATEST__[pos];
+  }
 }
 function cachePm10Series_(cacheKey, rows){
   __PM10_SERIES__[cacheKey] = Array.isArray(rows) ? rows : [];
@@ -1680,13 +1862,13 @@ function updateMapDotPm10_(pos){
       break;
     }
   }
-  
+
   if(!point || !point.__el) return;
-  
+
   var data = __PM10_LATEST__[pos];
   var nextCls = "stale";
   var nextPulse = false;
-  
+
   if(data && !isPm10Stale_(data)){
     var sev = pm10Severity_(data.v);
     if(sev === "bad"){
@@ -1703,7 +1885,7 @@ function updateMapDotPm10_(pos){
 
   var valStr = "-";
   if (data && data.v != null && !isPm10Stale_(data)) {
-    valStr = Number(data.v).toFixed(0) + " µg"; 
+    valStr = Number(data.v).toFixed(0) + " µg";
   }
 
   var nextSig = nextCls + "|" + (nextPulse ? 1 : 0) + "|" + valStr;
@@ -1713,7 +1895,7 @@ function updateMapDotPm10_(pos){
   if(__PAGE_MODE__ === "PM10"){
     applyMapDotState_(point.__el, "PM10", nextCls, nextPulse);
     point.__el.classList.add("pmFocus");
-    point.__el.innerHTML = valStr; 
+    point.__el.innerHTML = valStr;
   }
 }
 function updateMapDots_PM10_(){
@@ -1814,26 +1996,26 @@ var __PM10_CHART__ = null;
 function drawPm10Chart_(rows) {
   var cvs = document.getElementById("pm10Chart");
   if (!cvs) return;
-  
+
   if (__PM10_CHART__ && __PM10_CHART__.canvas !== cvs) {
     __PM10_CHART__.destroy();
     __PM10_CHART__ = null;
   }
 
-  var clean = (rows || []).filter(function(r) { 
-    return r && r.v != null && isFinite(Number(r.v)); 
-  }).map(function(r) { 
-    return { 
-      time: String(r.time || ""), 
+  var clean = (rows || []).filter(function(r) {
+    return r && r.v != null && isFinite(Number(r.v));
+  }).map(function(r) {
+    return {
+      time: String(r.time || ""),
       rawLabel: (r.rawLabel !== undefined && r.rawLabel !== "") ? r.rawLabel : String(r.time || ""),
-      v: Number(r.v) 
-    }; 
+      v: Number(r.v)
+    };
   });
-  
+
   var labels = clean.map(function(r) { return r.rawLabel; });
   var data = clean.map(function(r) { return r.v; });
-  var pointBg = data.map(function(v) { 
-    return v >= PM10_BAD ? "#ff3b30" : v >= PM10_WARN ? "#ff9f0a" : "#1fd27a"; 
+  var pointBg = data.map(function(v) {
+    return v >= PM10_BAD ? "#ff3b30" : v >= PM10_WARN ? "#ff9f0a" : "#1fd27a";
   });
 
   var isDark = (document.body.getAttribute("data-theme") || "night") !== "day";
@@ -1847,14 +2029,14 @@ function drawPm10Chart_(rows) {
     __PM10_CHART__.data.labels = labels;
     __PM10_CHART__.data.datasets[0].data = data;
     __PM10_CHART__.data.datasets[0].pointHoverBackgroundColor = pointBg;
-    
+
     if (__PM10_CHART__.options.scales.x && __PM10_CHART__.options.scales.y) {
       __PM10_CHART__.options.scales.x.ticks.color = textColor;
       __PM10_CHART__.options.scales.y.ticks.color = textColor;
       __PM10_CHART__.options.scales.y.grid.color = gridColor;
     }
-    __PM10_CHART__.update('none'); 
-    
+    __PM10_CHART__.update('none');
+
   } else {
     __PM10_CHART__ = new Chart(cvs, {
       type: "line",
@@ -1863,9 +2045,9 @@ function drawPm10Chart_(rows) {
         datasets: [{
           label: "PM10 (µg/m³)",
           data: data,
-          tension: 0.2, 
+          tension: 0.2,
           borderWidth: 2,
-          pointRadius: 0, 
+          pointRadius: 0,
           pointHoverRadius: 5,
           pointHoverBorderWidth: 2,
           pointHoverBackgroundColor: pointBg,
@@ -1918,22 +2100,22 @@ function drawPm10Chart_(rows) {
           }
         },
         scales: {
-          x: { 
-            ticks: { 
-              color: textColor, 
+          x: {
+            ticks: {
+              color: textColor,
               font: { size: 10, family: "ui-monospace, monospace" },
               maxRotation: 0,
-              autoSkip: true, 
-              maxTicksLimit: isMobile ? 6 : 10 
-            }, 
-            grid: { display: false } 
+              autoSkip: true,
+              maxTicksLimit: isMobile ? 6 : 10
+            },
+            grid: { display: false }
           },
           y: {
             beginAtZero: true,
             suggestedMax: 150,
-            ticks: { 
-              color: textColor, 
-              font: { size: 10, family: "ui-monospace, monospace" }, 
+            ticks: {
+              color: textColor,
+              font: { size: 10, family: "ui-monospace, monospace" },
               stepSize: 50
             },
             grid: { color: gridColor, borderDash: [4, 4] },
@@ -1950,22 +2132,22 @@ function drawPm10Chart_(rows) {
             var y = yScale.getPixelForValue(val);
             if (y < area.top || y > area.bottom) return;
             ctx2.save();
-            ctx2.strokeStyle = color; 
+            ctx2.strokeStyle = color;
             ctx2.lineWidth = 1.5;
             ctx2.setLineDash([5, 4]);
             ctx2.globalAlpha = 0.65;
-            ctx2.beginPath(); 
-            ctx2.moveTo(area.left, y); 
-            ctx2.lineTo(area.right, y); 
+            ctx2.beginPath();
+            ctx2.moveTo(area.left, y);
+            ctx2.lineTo(area.right, y);
             ctx2.stroke();
             ctx2.setLineDash([]);
             ctx2.globalAlpha = 0.85;
-            
+
             var textWidth = ctx2.measureText(label).width;
             ctx2.fillStyle = isDark ? "rgba(10,18,32,0.8)" : "rgba(255,255,255,0.8)";
             ctx2.fillRect(area.left + 2, y - 12, textWidth + 4, 11);
-            
-            ctx2.fillStyle = color; 
+
+            ctx2.fillStyle = color;
             ctx2.font = "bold 10px ui-monospace,monospace";
             ctx2.fillText(label, area.left + 4, y - 3);
             ctx2.restore();
@@ -2013,7 +2195,7 @@ function updatePosCards_(data){
   for(var i=0;i<data.belts.length;i++){var it=data.belts[i]; if(it&&it.belt) map[String(it.belt)]=it;}
   for(var j=0;j<MAP_POINTS.length;j++){
     var p=MAP_POINTS[j];
-    if(!p.__card || !p.modes.includes("BELT")) continue; 
+    if(!p.__card || !p.modes.includes("BELT")) continue;
     var worst=0,bodyHtml="";
     for(var k=0;k<p.belts.length;k++){
       var bname=p.belts[k],it2=map[bname]||null,lv=beltLevel_(it2);
@@ -2036,39 +2218,28 @@ function updatePosCards_(data){
 function updatePosCards_PM10_(){
   for(var j=0;j<MAP_POINTS.length;j++){
     var p=MAP_POINTS[j];
-    if(!p.__card || !p.modes.includes("PM10")) continue; 
-    
+    if(!p.__card || !p.modes.includes("PM10")) continue;
+
     var sumEl=$id("posSum_"+p.pos+"_PM10"),bodyEl=$id("posBody_"+p.pos+"_PM10");
     if(!sumEl||!bodyEl) continue;
-    
+
     var latest=__PM10_LATEST__[p.pos];
     var v=(latest&&latest.v!=null)?Number(latest.v):NaN;
     var ageMin=(!isNaN(v)&&latest)?pm10AgeMin_(latest):null;
     var ageTxt=ageMin!=null?(" "+ageMin+"m ago"):"";
-    
+
     if(!isFinite(v)){
       sumEl.textContent="NO"; bodyEl.innerHTML='<div class="posLine pos-stale"><div class="posLeft"><span class="posChip"></span><span>PM10</span></div><div class="posRight mono"><span>- µg/m³</span></div></div>';
       continue;
     }
-    
+
     var sev=pm10Severity_(v);
     var sevTxt=(sev==="bad")?"BAD":(sev==="warn"?"WARN":"OK");
-    var lineCls=(sev==="bad")?"pos-open":(sev==="warn"?"pos-stuck":"pos-ok");
+    var lineCls=(sev==="bad")?"pos-open":(sev==="warn")?"pos-stuck":"pos-ok";
     sumEl.textContent=sevTxt;
     bodyEl.innerHTML='<div class="posLine '+lineCls+'"><div class="posLeft"><span class="posChip"></span><span>PM10</span></div><div class="posRight mono"><span>'+esc(v.toFixed(0))+' µg</span><span style="opacity:.6">'+esc(ageTxt)+'</span></div></div>';
   }
   setTimeout(adjustCardPositions_, 100);
-}
-
-function isAllStopNoAlarm_(arr){
-  if(!arr||!arr.length) return false;
-  for(var i=0;i<arr.length;i++){
-    var it=arr[i]; if(!it) return false;
-    if(it.currentStatus==="NO_DATA") return false;
-    if(it.currentStatus==="ALERT") return false;
-    if(Number(it.run)!==0) return false;
-  }
-  return true;
 }
 
 function updateMapDots_(data){
@@ -2179,7 +2350,7 @@ function render(data){
 
 function setModeButtons_(){
   var b1=$id("modeBeltBtn"),b2=$id("modePm10Btn"),b3=$id("modeBeltBtn2"),b4=$id("modePm10Btn2"),b5=$id("modeAiBtn"),b6=$id("modeAiBtn2");
-  var b9=$id("modeVibDashBtn"), b10=$id("modeVibDashBtn2"); 
+  var b9=$id("modeVibDashBtn"), b10=$id("modeVibDashBtn2");
 
   if(b1) b1.classList.toggle("primary",__PAGE_MODE__==="BELT");
   if(b2) b2.classList.toggle("primary",__PAGE_MODE__==="PM10");
@@ -2187,7 +2358,7 @@ function setModeButtons_(){
   if(b4) b4.classList.toggle("primary",__PAGE_MODE__==="PM10");
   if(b5) b5.classList.toggle("primary",__PAGE_MODE__==="AI");
   if(b6) b6.classList.toggle("primary",__PAGE_MODE__==="AI");
-  
+
   if(b9) b9.classList.toggle("primary",__PAGE_MODE__==="VIB_DASH");
   if(b10) b10.classList.toggle("primary",__PAGE_MODE__==="VIB_DASH");
 }
@@ -2213,16 +2384,17 @@ function setLegendForMode_(){
 function setPageMode(mode){
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
-  localStorage.setItem("scada_page_mode", mode);
+  try { localStorage.setItem("scada_page_mode", mode); } catch (e) {}
 
   setSectionVisibility_();
+  syncIframesForMode_(mode);
   setModeButtons_();
   setLegendForMode_();
   hideMapPopup_();
   clearMapDotStateCache_();
 
   if (typeof map !== 'undefined' && map) {
-    var isNewMapVisible = (mode !== "VIB_DASH");
+    var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
 
     var syncTvMapView_ = function() {
       if (!isNewMapVisible) return;
@@ -2248,7 +2420,7 @@ function setPageMode(mode){
       if(p.__card) p.__card.classList.remove("mobile-active");
 
       if(p.modes && p.modes.includes(mode)) {
-        p.__marker.addTo(map); 
+        p.__marker.addTo(map);
         if (mode === "PM10") {
           if(p.__card) p.__card.style.display = "none";
         } else {
@@ -2272,7 +2444,8 @@ function setPageMode(mode){
   } else if(mode === "AI"){
     setText("title", "Monitor");
     setText("subtitle", "Noise Sensor");
-    refreshVibStatus_(); 
+    if(window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
+    refreshVibStatus_();
   } else if(mode === "VIB_DASH"){
     setText("title", "Monitor");
     setText("subtitle", "Vibration Dashboard");
@@ -2330,13 +2503,13 @@ function stopAutoSwitch_(){
 
 function autoSwitchTick_(){
   if(!__AUTO_SWITCH_ENABLED__ || document.hidden || shouldPauseAutoSwitch_()) return;
-  
+
   __AUTO_SWITCH_REMAINING__--;
-  setAutoSwitchButtons_(); 
-  
+  setAutoSwitchButtons_();
+
   if(__AUTO_SWITCH_REMAINING__ <= 0){
     __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC;
-    var seq=["BELT","PM10","VIB_DASH"];
+    var seq=["BELT","PM10","VIB_DASH","AI"];
     var idx=seq.indexOf(__PAGE_MODE__);
     if(idx<0) idx=0;
     setPageMode(seq[(idx+1)%seq.length]);
@@ -2363,8 +2536,8 @@ function setAutoSwitchEnabled_(on){
   ["modeBeltBtn","modeBeltBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("BELT");});});
   ["modePm10Btn","modePm10Btn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("PM10");});});
   ["modeAiBtn","modeAiBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("AI");});});
-  ["modeVibDashBtn","modeVibDashBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("VIB_DASH");});}); 
-  ["autoSwitchBtn","autoSwitchBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setAutoSwitchEnabled_(!__AUTO_SWITCH_ENABLED__);});}); 
+  ["modeVibDashBtn","modeVibDashBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("VIB_DASH");});});
+  ["autoSwitchBtn","autoSwitchBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setAutoSwitchEnabled_(!__AUTO_SWITCH_ENABLED__);});});
 })();
 
 // =========================================================
@@ -2393,7 +2566,7 @@ function renderSimpleTable_(title, rows){
     }
     html += '</tbody></table>';
   }
-  setText("modalTitle", title); 
+  setText("modalTitle", title);
   setHTML("modalBody", html);
 }
 
@@ -2404,22 +2577,62 @@ function renderSimpleTable_(title, rows){
   }
   function openBasicModal_(title){setText("modalTitle",title);setHTML("modalBody","<div class='skeleton' style='height:20px;margin-bottom:5px;'></div><div class='skeleton' style='height:20px;margin-bottom:5px;'></div><div class='skeleton' style='height:20px;'></div>");openModal();}
   function fetchAlarmLog24h_(){
+    var cacheKey = "alarm_log_24h";
     openBasicModal_("Alarm Log 24h");
     callGasAPI('getAlarmLog24h', {page: 'overview'})
       .then(res => {
-        if(!res||res.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');return;}
+        if(res && res.aborted) return;
+        if(!res||res.ok===false){
+          var cached = readGasCache_(cacheKey);
+          if(cached && cached.data){
+            setCachedBadge_(true, cached.savedAt);
+            renderSimpleTable_("Alarm Log 24h", cached.data.rows || []);
+            return;
+          }
+          setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
+          return;
+        }
+        writeGasCache_(cacheKey, res);
         renderSimpleTable_("Alarm Log 24h",res.rows||[]);
       })
-      .catch(err => {setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');});
+      .catch(err => {
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          renderSimpleTable_("Alarm Log 24h", cached.data.rows || []);
+          return;
+        }
+        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
+      });
   }
   function fetchEventList24h_(){
+    var cacheKey = "event_list_24h";
     openBasicModal_("Event List 24h");
     callGasAPI('getEventList24h', {page: 'overview'})
       .then(res => {
-        if(!res||res.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');return;}
+        if(res && res.aborted) return;
+        if(!res||res.ok===false){
+          var cached = readGasCache_(cacheKey);
+          if(cached && cached.data){
+            setCachedBadge_(true, cached.savedAt);
+            renderSimpleTable_("Event List 24h", cached.data.rows || []);
+            return;
+          }
+          setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
+          return;
+        }
+        writeGasCache_(cacheKey, res);
         renderSimpleTable_("Event List 24h",res.rows||[]);
       })
-      .catch(err => {setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');});
+      .catch(err => {
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          renderSimpleTable_("Event List 24h", cached.data.rows || []);
+          return;
+        }
+        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
+      });
   }
   bind("alarmLogBtn",fetchAlarmLog24h_); bind("alarmLogBtn2",fetchAlarmLog24h_);
   bind("eventListBtn",fetchEventList24h_); bind("eventListBtn2",fetchEventList24h_);
@@ -2464,6 +2677,36 @@ window.addEventListener("resize", function() {
 });
 
 // =========================================================
+// MOBILE HAMBURGER MENU TOGGLE
+// =========================================================
+(function() {
+  var hamBtn = document.getElementById("hamburgerBtn");
+  var mobMenu = document.getElementById("mobileMenu");
+  if (!hamBtn || !mobMenu) return;
+
+  hamBtn.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    mobMenu.classList.toggle("open");
+  });
+
+  document.addEventListener("click", function(e) {
+    if (!mobMenu.classList.contains("open")) return;
+    if (!mobMenu.contains(e.target) && !hamBtn.contains(e.target)) {
+      mobMenu.classList.remove("open");
+    }
+  });
+
+  mobMenu.addEventListener("click", function(e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    setTimeout(function() {
+      mobMenu.classList.remove("open");
+    }, 120);
+  });
+})();
+
+// =========================================================
 // 16. QR ZOOM
 // =========================================================
 (function(){
@@ -2488,7 +2731,7 @@ window.addEventListener("resize", function() {
 })();
 
 // =========================================================
-// 17. REPORT LOGIC (HIGH-RES 2560px & ORIGINAL =s0)
+// 17. REPORT LOGIC (AUTO-COMPRESS 1600px @ 0.82 & ORIGINAL =s0)
 // =========================================================
 const DELETE_PASSWORD="1234";
 
@@ -2503,12 +2746,12 @@ function makeDelayedLoader(ms,title,text){
 function toDriveImgUrl_(u) {
   u = String(u || "").trim();
   if (!u) return "";
-  
+
   var id = "";
   var m1 = u.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]{10,})/);
   var m2 = u.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
   var m3 = u.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
-  
+
   if (m1 && m1[1]) id = m1[1];
   else if (m2 && m2[1]) id = m2[1];
   else if (m3 && m3[1]) id = m3[1];
@@ -2630,7 +2873,7 @@ function fileToBase64_(file) {
     reader.onload = function(e) {
       var img = new Image();
       img.onload = function() {
-        var MAX_DIM = 2560;
+        var MAX_DIM = 1600;
         var w = img.width;
         var h = img.height;
 
@@ -2652,7 +2895,7 @@ function fileToBase64_(file) {
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, w, h);
 
-        var dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.82);
         var comma = dataUrl.indexOf(",");
         var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 
@@ -2747,10 +2990,10 @@ async function reportSave_(){
     function parseDatetimeLocalToMs_(s){var m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);if(!m) return NaN;return new Date(+m[1],(+m[2])-1,+m[3],+m[4],+m[5],0,0).getTime();}
     var checkMs=parseDatetimeLocalToMs_(checkStr);
     if(!isFinite(checkMs)){showToast("Invalid time","err","เลือกเวลาใหม่");return;}
-    
+
     var filesEl=$id("r_files");
     var fileArr=(filesEl&&filesEl.files&&filesEl.files.length)?Array.from(filesEl.files):[];
-    
+
     if(!__REPORT_EDIT_ID__ && fileArr.length === 0){
       showToast("Missing image","warn","บังคับให้ต้องแนบรูปก่อนบันทึกงาน");
       return;
@@ -2764,7 +3007,7 @@ async function reportSave_(){
         setUploadProgress_(Math.round(((i)/fileArr.length)*100),true);
         try{
           const meta=await fileToBase64_(fileArr[i]);
-          const res = await callGasAPI('uploadReportImage', {}, 'POST', meta);
+          const res = await callGasAPI('uploadReportImage', {}, 'POST', meta, { cancelPrevious: false });
           if(!res||res.ok===false) throw new Error((res&&res.error)?res.error:"upload error");
           imgUrls["img"+(i+1)]=toDriveImgUrl_(res.viewUrl||res.fileId||"");
         }catch(e){
@@ -2780,7 +3023,7 @@ async function reportSave_(){
     var payload={id:__REPORT_EDIT_ID__||"",checkTimeMs:checkMs,code:code,detail:detail,images:imgUrls,operator:op.name||"",shift:op.shift||""};
     if(!__REPORT_EDIT_ID__){
       var saveLoader=makeDelayedLoader(350,"Saving…","Please wait");
-      callGasAPI('reportCreate', {}, 'POST', payload)
+      callGasAPI('reportCreate', {}, 'POST', payload, { cancelPrevious: false })
         .then(res => {
           saveLoader.close();
           if(!res||res.ok===false){showToast("Create failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -2798,7 +3041,7 @@ async function reportSave_(){
     }).then((result)=>{
       if(!result.isConfirmed) return;
       var upLoader=makeDelayedLoader(350,"Updating…","Please wait");
-      callGasAPI('reportUpdate', {}, 'POST', payload)
+      callGasAPI('reportUpdate', {}, 'POST', payload, { cancelPrevious: false })
         .then(res => {
           upLoader.close();
           if(!res||res.ok===false){showToast("Update failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -2819,7 +3062,7 @@ function reportDelete_(){
   }).then((result)=>{
     if(!result.isConfirmed) return;
     var id=__REPORT_EDIT_ID__,loader=makeDelayedLoader(200,"Deleting…",id);
-    callGasAPI('reportDelete', {}, 'POST', {id: id})
+    callGasAPI('reportDelete', {}, 'POST', {id: id}, { cancelPrevious: false })
       .then(res => {
         loader.close();
         if(!res||res.ok===false){showToast("Delete failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -2846,13 +3089,13 @@ function reportRender_(rows){
   for(let i=0;i<rows.length;i++){
     const r=rows[i]; const tr=document.createElement("tr");
     tr.innerHTML='<td class="rSmallMono">'+esc(r.checkTime||"-")+'</td><td class="rSmallMono"><b>'+esc(r.code||"-")+'</b></td><td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc((r.detail||"").slice(0,120))+(String(r.detail||"").length>120?"…":"")+'</td><td>'+miniImgsHtml_(r)+'</td><td class="rSmallMono">'+esc((r.operator||"-")+(r.shift?" / "+r.shift:""))+'</td><td class="rActCell"><div class="rActRow"><button class="rBtn rBtnMini" data-act="edit">Edit</button><button class="rBtn danger rBtnMini" data-act="del">Del</button></div></td>';
-    
+
     var editBtn = tr.querySelector('[data-act="edit"]');
     if(editBtn) editBtn.addEventListener("click", function(){ setFormFromRow_(r); });
 
     var delBtn = tr.querySelector('[data-act="del"]');
-    if(delBtn) delBtn.addEventListener("click", function(){ 
-      __REPORT_EDIT_ID__ = r.id || ""; reportDelete_(); 
+    if(delBtn) delBtn.addEventListener("click", function(){
+      __REPORT_EDIT_ID__ = r.id || ""; reportDelete_();
     });
 
     var imgs = tr.querySelectorAll('.rMiniImgs img');
@@ -2866,14 +3109,35 @@ function reportRender_(rows){
 }
 
 function reportRefresh_(){
+  var cacheKey = "report_list_200";
   var loader = makeDelayedLoader(200, "Loading reports…", "Please wait");
   callGasAPI('reportList', {limit: 200})
     .then(res => {
       loader.close();
-      if(!res || res.ok === false){ showToast("Fetch failed", "err", (res && res.error) ? res.error : ""); return; }
+      if(res && res.aborted) return;
+      if(!res || res.ok === false){
+        var cached = readGasCache_(cacheKey);
+        if(cached && cached.data){
+          setCachedBadge_(true, cached.savedAt);
+          reportRender_(cached.data.rows || []);
+          return;
+        }
+        showToast("Fetch failed", "err", (res && res.error) ? res.error : "");
+        return;
+      }
+      writeGasCache_(cacheKey, res);
       reportRender_(res.rows || []);
     })
-    .catch(err => { loader.close(); showToast("Fetch failed", "err", String(err)); });
+    .catch(err => {
+      loader.close();
+      var cached = readGasCache_(cacheKey);
+      if(cached && cached.data){
+        setCachedBadge_(true, cached.savedAt);
+        reportRender_(cached.data.rows || []);
+        return;
+      }
+      showToast("Fetch failed", "err", String(err));
+    });
 }
 
 (function bindReportButtons_(){
@@ -2902,52 +3166,32 @@ function reportRefresh_(){
 })();
 
 // =========================================================
-// 18. LIVE TICKER (SMOOTH SPEED & ANTI-FLICKER)
+// 18. LIVE TICKER ONLY
 // =========================================================
-var __LAST_TICKER_TEXT__ = "";
-var __LAST_TICKER_RENDER_AT__ = 0;
-
 function updateGlobalLeftAlarms_() {
   if (!window.__LAST_DATA__) return;
-
-  var now = Date.now();
-  if (__LAST_TICKER_TEXT__ && (now - __LAST_TICKER_RENDER_AT__ < 30000)) {
-    return;
-  }
-
   var rows = buildAiRows_(window.__LAST_DATA__);
 
   var oldPanel = document.getElementById("leftAlarmPanel");
   if (oldPanel) oldPanel.remove();
 
-  var seenMap = {};
   var activeAlarms = rows.filter(function(r) {
     var isAlarm = r.level === "CRITICAL" || r.level === "HIGH" || r.level === "MEDIUM";
     var isAlert = r.status === "ALERT" || r.status === "WARN";
-    if (!isAlarm || !isAlert) return false;
-    var key = String(r.belt || "") + "|" + String(r.alarmType || "");
-    if (seenMap[key]) return false;
-    seenMap[key] = true;
-    return true;
+    return isAlarm && isAlert;
   });
 
-  var nextText = "";
-  if (activeAlarms.length === 0) {
-    nextText = "✅ SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.";
-  } else {
-    var msgs = activeAlarms.map(function(a) {
-      return "⚠️ " + a.belt + " [" + a.level + "]: " + (a.alarmMsg || a.alarmType);
-    });
-    nextText = msgs.join("     •     ");
-  }
-
-  if (nextText !== __LAST_TICKER_TEXT__) {
-    __LAST_TICKER_TEXT__ = nextText;
-    __LAST_TICKER_RENDER_AT__ = now;
-    var ticker = document.getElementById("liveTickerContent");
-    if (ticker) {
-      ticker.innerHTML = "<span>" + esc(nextText) + "</span>";
+  var ticker = document.getElementById("liveTickerContent");
+  if (ticker) {
+    var tickerHtml = '<span>';
+    if (activeAlarms.length === 0) {
+      tickerHtml += '✅ [' + new Date().toLocaleTimeString('th-TH') + '] SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.';
+    } else {
+      var msgs = activeAlarms.map(a => '⚠️ ' + a.belt + ': ' + (a.alarmMsg || a.alarmType));
+      tickerHtml += msgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ');
     }
+    tickerHtml += '</span>';
+    ticker.innerHTML = tickerHtml;
   }
 }
 
@@ -2957,30 +3201,29 @@ function updateGlobalLeftAlarms_() {
 document.addEventListener("DOMContentLoaded", function() {
   refreshOperatorPill();
   updateMuteBtn();
-  loadLogo(); 
-  
-  var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
-  if (savedMode === "AI") savedMode = "PM10";
-  __PAGE_MODE__ = savedMode;
-  document.body.setAttribute("data-mode", savedMode);
+  loadLogo();
+
+  try { localStorage.removeItem("scada_page_mode"); } catch (e) {}
+  __PAGE_MODE__ = "BELT";
+  document.body.setAttribute("data-mode", "BELT");
 
   var canvas = document.getElementById("mapCanvas");
   if(canvas) {
     buildMapDotsOnce_();
   } else {
     console.warn("Waiting for map container...");
-    setTimeout(buildMapDotsOnce_, 500); 
+    setTimeout(buildMapDotsOnce_, 500);
   }
 
-  setPageMode(savedMode);
+  setPageMode("BELT");
   setAutoSwitchButtons_();
   if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
 });
 
 window.addEventListener("load", function(){
   setTimeout(function(){
-    fetchStatus(); 
-    refreshVibStatus_(); 
+    fetchStatus();
+    refreshVibStatus_();
     startPolling();
   }, 50);
 });
@@ -3153,7 +3396,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   var bar = document.createElement("div");
   bar.id = "layoutEditorBar";
   bar.style.cssText = "display:none; position:fixed; top:54px; left:50%; transform:translateX(-50%); z-index:10020; background:rgba(12,18,27,0.96); border:1px solid #00e0ff; border-radius:10px; padding:8px 14px; box-shadow:0 8px 25px rgba(0,0,0,0.8); align-items:center; gap:10px; font-family:ui-monospace,monospace; font-size:12px; color:#fff; flex-wrap:wrap; justify-content:center;";
-  bar.innerHTML = 
+  bar.innerHTML =
     '<span style="color:#00e0ff; font-weight:bold;">🛠️ EDIT MODE:</span>' +
     '<span>ลากจุด POS หรือลากกล่องการ์ด</span>' +
     '<button id="saveLayoutSheetBtn" class="rBtn primary" style="padding:5px 10px; background:rgba(31,210,122,0.2); border-color:#1fd27a;">💾 Save to Sheet</button>' +
@@ -3301,7 +3544,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       });
 
       var loader = makeDelayedLoader(150, "กำลังบันทึกพิกัด...", "กรุณารอสักครู่");
-      callGasAPI('saveMapPoints', {}, 'POST', { points: pointsPayload })
+      callGasAPI('saveMapPoints', {}, 'POST', { points: pointsPayload }, { cancelPrevious: false })
         .then(function(res) {
           loader.close();
           if (!res || res.ok === false) {
@@ -3341,231 +3584,697 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 })();
 
 // =========================================================
-// 22. HIVE MQ CLOUD PURGE AIR LIVE MONITOR (8 POINTS)
+// 22. BAG FILTER PURGE AIR PRESSURE (MQTT + HISTORY + COMPARE)
 // =========================================================
-(function initPurgeAirMqtt_() {
-  const MQTT_HOST = "4d79d42984154e37aab32ca068370f40.s1.eu.hivemq.cloud";
-  const MQTT_PORT = 8884;
-  const MQTT_USER = "esp32_bagfilter_sensor";
-  const MQTT_PASS = "Mcl195088";
-  const MQTT_TOPICS = ["bagfilter/#", "purge/#", "cm/+/purge/#"];
-
-  const PURGE_CONFIG = {
-    badBelow: 3.5,
-    warnBelow: 4.2,
-    defaultUnit: "bar",
-    decimals: 2,
-    layout: "grid2"
+(function initPurgePressureMqtt_() {
+  const MQTT_CONFIG = {
+    broker: "4d79d42984154e37aab32ca068370f40.s1.eu.hivemq.cloud",
+    port: 8884,
+    username: "esp32_bagfilter_sensor",
+    password: "Mcl195088",
+    topic: "#"
   };
 
-  const PURGE_POINTS = [
-    { name: "6526.04" },
-    { name: "6524.04" },
-    { name: "6526.08" },
-    { name: "6536.04" },
-    { name: "6536.041" },
-    { name: "6536.08" },
-    { name: "6511.76" },
-    { name: "6511.80" }
+  const PURGE_NODES = [
+    { id: 'p1', sheetCol: 'PS1', name: '6526.04',  color: '#00e0ff', val: null, updatedAt: 0 },
+    { id: 'p2', sheetCol: 'PS2', name: '6524.041', color: '#1fd27a', val: null, updatedAt: 0 },
+    { id: 'p3', sheetCol: 'PS3', name: '6526.08',  color: '#ff9f0a', val: null, updatedAt: 0 },
+    { id: 'p4', sheetCol: 'PS4', name: '6536.04',  color: '#b38bff', val: null, updatedAt: 0 },
+    { id: 'p5', sheetCol: 'PS5', name: '6536.041', color: '#ff5e99', val: null, updatedAt: 0 },
+    { id: 'p6', sheetCol: 'PS6', name: '6536.08',  color: '#ffd60a', val: null, updatedAt: 0 },
+    { id: 'p7', sheetCol: 'PS7', name: '6511.76',  color: '#4dabf7', val: null, updatedAt: 0 },
+    { id: 'p8', sheetCol: 'PS8', name: '6511.80',  color: '#ff7a00', val: null, updatedAt: 0 }
   ];
 
-  const purgeState = {};
-  PURGE_POINTS.forEach(function(pt) {
-    purgeState[pt.name] = { val: null, unit: PURGE_CONFIG.defaultUnit };
-  });
+  const PRESSURE_LOW_BAD   = 4.5;
+  const PRESSURE_LOW_WARN  = 5.0;
+  const PRESSURE_HIGH_WARN = 6.2;
 
-  let pahoClient = null;
-  let reconnectTimer = null;
+  let __PURGE_CHART__ = null;
 
-  function getPurgeColorClass_(val) {
-    if (val == null || !isFinite(val)) return "empty";
-    if (val < PURGE_CONFIG.badBelow) return "bad";
-    if (val < PURGE_CONFIG.warnBelow) return "warn";
+  function ensureCompareHeaderBtn_() {
+    const head = document.querySelector("#purgePressureOverlay .purge-panel-head");
+    if (!head || document.getElementById("purgeCompareAllBtn")) return;
+
+    const rightWrap = document.createElement("div");
+    rightWrap.style.cssText = "display:flex;align-items:center;gap:5px;";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "purgeCompareAllBtn";
+    btn.className = "purge-compare-btn";
+    btn.title = "เปรียบเทียบความดันลมทั้ง 8 จุดในกราฟเดียว";
+    btn.textContent = "📊 All 8";
+
+    const dot = head.querySelector(".purge-mqtt-dot");
+    if (dot) {
+      head.insertBefore(rightWrap, dot);
+      rightWrap.appendChild(btn);
+      rightWrap.appendChild(dot);
+    } else {
+      rightWrap.appendChild(btn);
+      head.appendChild(rightWrap);
+    }
+
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      window.openPurgeCompareModal(24);
+    });
+  }
+
+  function getPressureClass_(val, updatedAt) {
+    if (val === null || !isFinite(val) || (Date.now() - updatedAt > 120000)) {
+      return "stale";
+    }
+    if (val < PRESSURE_LOW_BAD) return "bad";
+    if (val < PRESSURE_LOW_WARN || val > PRESSURE_HIGH_WARN) return "warn";
     return "ok";
   }
 
-  function renderPurgeList_() {
-    var listEl = document.getElementById("purgeAirList");
-    if (!listEl) return;
+  function renderPurgePanel_() {
+    ensureCompareHeaderBtn_();
+    const grid = document.getElementById("purgePressureGrid");
+    if (!grid) return;
 
-    listEl.classList.toggle("grid2", PURGE_CONFIG.layout === "grid2");
+    let html = "";
+    for (let i = 0; i < PURGE_NODES.length; i++) {
+      const node = PURGE_NODES[i];
+      const cls = getPressureClass_(node.val, node.updatedAt);
+      const valText = (cls === "stale" && node.val === null)
+        ? "--"
+        : Number(node.val).toFixed(2);
 
-    var html = "";
-    for (var i = 0; i < PURGE_POINTS.length; i++) {
-      var name = PURGE_POINTS[i].name;
-      var st = purgeState[name] || { val: null, unit: PURGE_CONFIG.defaultUnit };
-      var valText = "-";
-      var cls = "empty";
+      html += `<div class="purge-row ${cls}" data-node-id="${esc(node.id)}" title="คลิกเพื่อดูกราฟย้อนหลัง ${esc(node.name)} (${esc(node.sheetCol)})">
+        <span class="purge-name">${esc(node.name)}</span>
+        <span class="purge-val">${esc(valText)}</span>
+      </div>`;
+    }
+    grid.innerHTML = html;
+  }
 
-      if (st.val != null && isFinite(st.val)) {
-        valText = Number(st.val).toFixed(PURGE_CONFIG.decimals);
-        if (PURGE_CONFIG.layout === "list" && st.unit) {
-          valText += " " + st.unit;
-        }
-        cls = getPurgeColorClass_(st.val);
+  function bindPurgeGridClick_() {
+    const grid = document.getElementById("purgePressureGrid");
+    if (!grid || grid.__clickBound) return;
+    grid.__clickBound = true;
+
+    grid.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      const rowEl = ev.target.closest(".purge-row");
+      if (!rowEl) return;
+      const nodeId = rowEl.getAttribute("data-node-id");
+      if (nodeId) {
+        window.openPurgeHistoryModal(nodeId, 24);
       }
-
-      html +=
-        '<div class="purge-point-row ' + cls + '">' +
-          '<span class="purge-point-name">' + esc(name) + '</span>' +
-          '<span class="purge-point-val ' + cls + '">' + esc(valText) + '</span>' +
-        '</div>';
-    }
-    listEl.innerHTML = html;
+    });
   }
 
-  function setPurgeConnState_(cls, label) {
-    var st = document.getElementById("purgeMqttStatus");
-    if (!st) return;
-    st.className = "purge-mqtt-dot " + cls;
-    st.textContent = label;
-  }
-
-  function updatePurgeTimestamp_() {
-    var timeEl = document.getElementById("purgeAirTime");
-    if (timeEl) {
-      timeEl.textContent = "Updated: " + new Date().toLocaleTimeString("th-TH");
+  function destroyPurgeChart_() {
+    if (__PURGE_CHART__) {
+      __PURGE_CHART__.destroy();
+      __PURGE_CHART__ = null;
     }
   }
 
-  function parseNumUnit_(raw) {
-    var s = String(raw == null ? "" : raw).trim();
-    if (!s) return null;
-    var m = s.match(/-?\d+(?:\.\d+)?/);
-    if (!m) return null;
-    var n = Number(m[0]);
-    if (!isFinite(n)) return null;
-    var uMatch = s.match(/\b(bar|psi|kpa|mpa)\b/i);
-    return { val: n, unit: uMatch ? uMatch[1] : null };
-  }
+  window.openPurgeCompareModal = function (hours) {
+    hours = Number(hours || 24);
+    const cacheKey = "purge_compare_all_" + hours;
 
-  function matchPointNameFromTopic_(topic) {
-    var t = String(topic || "").trim();
-    for (var i = 0; i < PURGE_POINTS.length; i++) {
-      var name = PURGE_POINTS[i].name;
-      var re = new RegExp("(^|[/\\-_])" + name.replace(/\./g, "\\.") + "([/\\-_]|$)");
-      if (re.test(t)) return name;
-    }
-    return null;
-  }
+    setText("modalTitle", "Purge Air • เปรียบเทียบทั้ง 8 จุด (PS1–PS8)");
+    destroyAllModalCharts_();
+    destroyPurgeChart_();
 
-  function handlePurgeMessage_(topic, payloadStr) {
-    var raw = String(payloadStr == null ? "" : payloadStr).trim();
-    if (!raw) return;
+    setHTML("modalBody",
+      "<div class='skeleton' style='height:55px;margin-bottom:8px;'></div>" +
+      "<div class='skeleton' style='height:300px;margin-bottom:8px;'></div>" +
+      "<div class='skeleton' style='height:120px;'></div>"
+    );
+    openModal();
 
-    var changed = false;
-
-    if (raw.charAt(0) === "{") {
-      try {
-        var obj = JSON.parse(raw);
-
-        if (obj && typeof obj === "object") {
-          var targetName = obj.name || obj.point || obj.device || obj.id;
-          var singleVal = obj.purge ?? obj.purge_air ?? obj.purgeAir ?? obj.pressure ?? obj.val ?? obj.value;
-          if (targetName && purgeState[String(targetName)] && singleVal != null && isFinite(Number(singleVal))) {
-            purgeState[String(targetName)].val = Number(singleVal);
-            if (obj.unit) purgeState[String(targetName)].unit = String(obj.unit);
-            changed = true;
+    callGasAPI("getPurgeCompareHistory", { hours: hours })
+      .then(res => {
+        if (res && res.aborted) return;
+        if (!res || res.ok === false || !res.series) {
+          const cached = readGasCache_(cacheKey);
+          if (cached && cached.data && cached.data.series) {
+            setCachedBadge_(true, cached.savedAt);
+            renderPurgeCompareModal_(cached.data.series, hours);
+            return;
           }
+          setHTML("modalBody", `<div class="mono" style="color:var(--open);font-weight:900;">ERROR: ${esc((res && res.error) || "ไม่สามารถดึงข้อมูลเปรียบเทียบจาก Sheet ได้")}</div>`);
+          return;
+        }
+        writeGasCache_(cacheKey, res);
+        renderPurgeCompareModal_(res.series, hours);
+      })
+      .catch(err => {
+        const cached = readGasCache_(cacheKey);
+        if (cached && cached.data && cached.data.series) {
+          setCachedBadge_(true, cached.savedAt);
+          renderPurgeCompareModal_(cached.data.series, hours);
+          return;
+        }
+        setHTML("modalBody", `<div class="mono" style="color:var(--open);font-weight:900;">ERROR: ${esc(String(err))}</div>`);
+      });
+  };
 
-          for (var i = 0; i < PURGE_POINTS.length; i++) {
-            var pName = PURGE_POINTS[i].name;
-            if (Object.prototype.hasOwnProperty.call(obj, pName) && obj[pName] != null && isFinite(Number(obj[pName]))) {
-              purgeState[pName].val = Number(obj[pName]);
-              if (obj.unit) purgeState[pName].unit = String(obj.unit);
-              changed = true;
+  function renderPurgeCompareModal_(seriesMap, currentHours) {
+    seriesMap = seriesMap || {};
+
+    let html = '<div style="display:flex;flex-direction:column;gap:10px;">';
+
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);padding:10px 12px;border-radius:10px;border:1px solid var(--border);gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-weight:900;font-size:13px;">📊 เปรียบเทียบทั้ง 8 จุดพร้อมกัน</span>
+        <button type="button" class="rBtn rBtnMini" onclick="openPurgeHistoryModal('p1', ${Number(currentHours)})">← ดูรายจุด</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <select style="background:var(--panel);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:8px;font-weight:bold;cursor:pointer;outline:none;" onchange="openPurgeCompareModal(this.value)">
+          <option value="6"   ${currentHours == 6   ? "selected" : ""}>6 ชั่วโมงล่าสุด</option>
+          <option value="12"  ${currentHours == 12  ? "selected" : ""}>12 ชั่วโมงย้อนหลัง</option>
+          <option value="24"  ${currentHours == 24  ? "selected" : ""}>24 ชั่วโมงล่าสุด (1 วัน)</option>
+          <option value="72"  ${currentHours == 72  ? "selected" : ""}>3 วันย้อนหลัง</option>
+          <option value="168" ${currentHours == 168 ? "selected" : ""}>7 วันย้อนหลัง</option>
+        </select>
+        <button type="button" class="rBtn rBtnMini" id="resetPurgeCompareZoomBtn">↺ Reset</button>
+      </div>
+    </div>`;
+
+    html += `<div class="rCard" style="padding:10px;">
+      <div class="mono" style="color:var(--muted);font-size:11px;margin-bottom:6px;">คลิกที่ชื่อจุดใน Legend ด้านบนเพื่อซ่อน/แสดงเส้นได้อิสระ</div>
+      <div style="height:310px;width:100%;"><canvas id="purgeCompareChart"></canvas></div>
+    </div>`;
+
+    html += `<div class="rCard" style="padding:10px;">
+      <div style="overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>จุดวัด (Name)</th>
+              <th>Sheet Col</th>
+              <th style="text-align:right;">Live / ล่าสุด (Bar)</th>
+              <th style="text-align:right;">MIN</th>
+              <th style="text-align:right;">AVG</th>
+              <th style="text-align:right;">MAX</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+    for (let i = 0; i < PURGE_NODES.length; i++) {
+      const node = PURGE_NODES[i];
+      const rows = Array.isArray(seriesMap[node.sheetCol]) ? seriesMap[node.sheetCol] : [];
+      const vals = rows.map(r => Number(r.v)).filter(v => isFinite(v));
+      const latestVal = (node.val !== null && isFinite(node.val))
+        ? Number(node.val)
+        : (vals.length ? vals[vals.length - 1] : null);
+      const minV = vals.length ? Math.min.apply(null, vals) : null;
+      const maxV = vals.length ? Math.max.apply(null, vals) : null;
+      const avgV = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+
+      const fmt = v => (v === null || !isFinite(v)) ? "-" : Number(v).toFixed(2);
+      const cls = getPressureClass_(latestVal, node.val !== null ? node.updatedAt : Date.now());
+      const valColor = cls === "bad" ? "var(--open)" : (cls === "warn" ? "var(--stuck)" : "var(--ok)");
+
+      html += `<tr style="cursor:pointer;" onclick="openPurgeHistoryModal('${esc(node.id)}', ${Number(currentHours)})" title="คลิกเพื่อดูรายละเอียดเฉพาะจุด ${esc(node.name)}">
+        <td class="mono" style="font-weight:900;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${node.color};margin-right:6px;"></span>${esc(node.name)}</td>
+        <td class="mono" style="color:var(--muted);">${esc(node.sheetCol)}</td>
+        <td class="mono" style="text-align:right;font-weight:900;color:${valColor};">${fmt(latestVal)}</td>
+        <td class="mono" style="text-align:right;">${fmt(minV)}</td>
+        <td class="mono" style="text-align:right;">${fmt(avgV)}</td>
+        <td class="mono" style="text-align:right;">${fmt(maxV)}</td>
+      </tr>`;
+    }
+
+    html += `</tbody></table></div></div></div>`;
+    setHTML("modalBody", html);
+
+    const resetBtn = document.getElementById("resetPurgeCompareZoomBtn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", function () {
+        if (__PURGE_CHART__) __PURGE_CHART__.resetZoom();
+      });
+    }
+
+    drawPurgeCompareChart_(seriesMap);
+  }
+
+  function drawPurgeCompareChart_(seriesMap) {
+    const cvs = document.getElementById("purgeCompareChart");
+    if (!cvs) return;
+    destroyPurgeChart_();
+
+    let baseRows = [];
+    for (let i = 0; i < PURGE_NODES.length; i++) {
+      const r = seriesMap[PURGE_NODES[i].sheetCol] || [];
+      if (r.length > baseRows.length) baseRows = r;
+    }
+
+    let step = 1;
+    if (baseRows.length > 350) {
+      step = Math.ceil(baseRows.length / 350);
+    }
+
+    const sampledBase = baseRows.filter((_, idx) => idx % step === 0 || idx === baseRows.length - 1);
+    const labels = sampledBase.map(r => formatShortTimeMobile_(r.time));
+
+    const datasets = PURGE_NODES.map(node => {
+      const rawArr = seriesMap[node.sheetCol] || [];
+      const sampledArr = rawArr.filter((_, idx) => idx % step === 0 || idx === rawArr.length - 1);
+      const dataPoints = sampledArr.map(r => Number(r.v));
+
+      return {
+        label: `${node.name} (${node.sheetCol})`,
+        data: dataPoints,
+        borderColor: node.color,
+        backgroundColor: node.color,
+        borderWidth: 1.8,
+        tension: 0.2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        fill: false
+      };
+    });
+
+    const isDark = (document.body.getAttribute("data-theme") || "night") !== "day";
+    const gridColor = isDark ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)";
+    const textColor = isDark ? "#9fb2c9" : "#4b5b70";
+    const isMobile = window.innerWidth <= 768;
+
+    __PURGE_CHART__ = new Chart(cvs, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: {
+            display: true,
+            position: "top",
+            labels: {
+              color: textColor,
+              boxWidth: 10,
+              font: { size: isMobile ? 9.5 : 11, weight: "bold" }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                const v = ctx.parsed.y;
+                return ` ${ctx.dataset.label}: ${isFinite(v) ? Number(v).toFixed(2) + " Bar" : "-"}`;
+              }
+            }
+          },
+          zoom: {
+            pan: { enabled: true, mode: "x" },
+            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: textColor, maxRotation: 0, autoSkip: true, maxTicksLimit: isMobile ? 5 : 10, font: { size: 10 } },
+            grid: { display: false }
+          },
+          y: {
+            suggestedMin: 0,
+            suggestedMax: 7,
+            ticks: { color: textColor, font: { size: 10 } },
+            grid: { color: gridColor }
+          }
+        }
+      },
+      plugins: [{
+        id: "purgeCompareThresholds",
+        afterDraw: function (chart) {
+          const ctx2 = chart.ctx, area = chart.chartArea, yScale = chart.scales.y;
+          if (!area) return;
+          function drawLimit(val, color, text) {
+            const y = yScale.getPixelForValue(val);
+            if (y < area.top || y > area.bottom) return;
+            ctx2.save();
+            ctx2.strokeStyle = color;
+            ctx2.lineWidth = 1.2;
+            ctx2.setLineDash([5, 4]);
+            ctx2.globalAlpha = 0.7;
+            ctx2.beginPath();
+            ctx2.moveTo(area.left, y);
+            ctx2.lineTo(area.right, y);
+            ctx2.stroke();
+            ctx2.fillStyle = color;
+            ctx2.font = "bold 10px ui-monospace, monospace";
+            ctx2.fillText(text, area.left + 6, y - 3);
+            ctx2.restore();
+          }
+          drawLimit(PRESSURE_LOW_WARN, "#ff9f0a", "WARN 5.0 Bar");
+          drawLimit(PRESSURE_LOW_BAD,  "#ff3b30", "BAD 4.5 Bar");
+        }
+      }]
+    });
+  }
+
+  window.openPurgeHistoryModal = function (nodeId, hours) {
+    hours = Number(hours || 24);
+    const node = PURGE_NODES.find(n => n.id === nodeId) || PURGE_NODES[0];
+    const cacheKey = "purge_hist_" + node.sheetCol + "_" + hours;
+
+    setText("modalTitle", `Purge Air • ${node.name} (${node.sheetCol})`);
+    destroyAllModalCharts_();
+    destroyPurgeChart_();
+
+    setHTML("modalBody",
+      "<div class='skeleton' style='height:55px;margin-bottom:8px;'></div>" +
+      "<div class='skeleton' style='height:250px;margin-bottom:8px;'></div>" +
+      "<div class='skeleton' style='height:140px;'></div>"
+    );
+    openModal();
+
+    callGasAPI("getPurgeHistory", { col: node.sheetCol, hours: hours })
+      .then(res => {
+        if (res && res.aborted) return;
+        if (!res || res.ok === false) {
+          const cached = readGasCache_(cacheKey);
+          if (cached && cached.data) {
+            setCachedBadge_(true, cached.savedAt);
+            renderPurgeHistoryModal_(node, cached.data.rows || [], hours);
+            return;
+          }
+          setHTML("modalBody", `<div class="mono" style="color:var(--open);font-weight:900;">ERROR: ${esc((res && res.error) || "ไม่สามารถดึงข้อมูลจาก Sheet ได้")}</div>`);
+          return;
+        }
+        writeGasCache_(cacheKey, res);
+        renderPurgeHistoryModal_(node, res.rows || [], hours);
+      })
+      .catch(err => {
+        const cached = readGasCache_(cacheKey);
+        if (cached && cached.data) {
+          setCachedBadge_(true, cached.savedAt);
+          renderPurgeHistoryModal_(node, cached.data.rows || [], hours);
+          return;
+        }
+        setHTML("modalBody", `<div class="mono" style="color:var(--open);font-weight:900;">ERROR: ${esc(String(err))}</div>`);
+      });
+  };
+
+  function renderPurgeHistoryModal_(node, rows, currentHours) {
+    rows = Array.isArray(rows) ? rows : [];
+    const vals = rows.map(r => Number(r.v)).filter(v => isFinite(v));
+    const latestVal = (node.val !== null && isFinite(node.val))
+      ? Number(node.val)
+      : (vals.length ? vals[vals.length - 1] : null);
+
+    const minV = vals.length ? Math.min.apply(null, vals) : null;
+    const maxV = vals.length ? Math.max.apply(null, vals) : null;
+    const avgV = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+
+    function fmtBar_(v) { return (v === null || !isFinite(v)) ? "-" : Number(v).toFixed(2); }
+    function colorBar_(v) {
+      if (v === null || !isFinite(v)) return "var(--muted)";
+      if (v < PRESSURE_LOW_BAD) return "var(--open)";
+      if (v < PRESSURE_LOW_WARN || v > PRESSURE_HIGH_WARN) return "var(--stuck)";
+      return "var(--ok)";
+    }
+
+    let html = '<div style="display:flex;flex-direction:column;gap:10px;">';
+
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);padding:10px 12px;border-radius:10px;border:1px solid var(--border);gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-weight:900;font-size:13px;">📈 แนวโน้มความดันลม (${esc(node.name)} / ${esc(node.sheetCol)})</span>
+        <button type="button" class="rBtn rBtnMini" onclick="openPurgeCompareModal(${Number(currentHours)})">📊 เทียบทั้ง 8 จุด</button>
+      </div>
+      <select style="background:var(--panel);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:8px;font-weight:bold;cursor:pointer;outline:none;" onchange="openPurgeHistoryModal('${esc(node.id)}', this.value)">
+        <option value="6"   ${currentHours == 6   ? "selected" : ""}>6 ชั่วโมงล่าสุด</option>
+        <option value="12"  ${currentHours == 12  ? "selected" : ""}>12 ชั่วโมงย้อนหลัง</option>
+        <option value="24"  ${currentHours == 24  ? "selected" : ""}>24 ชั่วโมงล่าสุด (1 วัน)</option>
+        <option value="72"  ${currentHours == 72  ? "selected" : ""}>3 วันย้อนหลัง</option>
+        <option value="168" ${currentHours == 168 ? "selected" : ""}>7 วันย้อนหลัง</option>
+      </select>
+    </div>`;
+
+    html += `<div class="pm10Summary" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="pm10StatCard">
+        <div class="pm10StatVal mono" style="color:${colorBar_(latestVal)};">${fmtBar_(latestVal)}</div>
+        <div class="pm10StatLbl">LATEST (BAR)</div>
+      </div>
+      <div class="pm10StatCard">
+        <div class="pm10StatVal mono">${fmtBar_(minV)}</div>
+        <div class="pm10StatLbl">MIN</div>
+      </div>
+      <div class="pm10StatCard">
+        <div class="pm10StatVal mono">${fmtBar_(avgV)}</div>
+        <div class="pm10StatLbl">AVG</div>
+      </div>
+      <div class="pm10StatCard">
+        <div class="pm10StatVal mono">${fmtBar_(maxV)}</div>
+        <div class="pm10StatLbl">MAX</div>
+      </div>
+    </div>`;
+
+    html += `<div class="rCard" style="padding:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;">
+        <div class="mono" style="color:var(--muted);font-size:11px;">ข้อมูลย้อนหลัง ${rows.length} รายการ (เกณฑ์ปกติ 5.0 - 6.0 Bar)</div>
+        <button type="button" class="rBtn rBtnMini" id="resetPurgeZoomBtn">↺ Reset</button>
+      </div>
+      <div style="height:250px;width:100%;"><canvas id="purgeHistoryChart"></canvas></div>
+    </div>`;
+
+    html += `<div class="rCard" style="padding:10px;">
+      <div style="overflow:auto;max-height:240px;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:150px;">Time</th>
+              <th style="text-align:right;">Pressure (Bar)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+    if (!rows.length) {
+      html += `<tr><td colspan="3" class="rMut" style="text-align:center;">ไม่มีข้อมูลในช่วงเวลาที่เลือก</td></tr>`;
+    } else {
+      const startIdx = Math.max(0, rows.length - 100);
+      for (let i = rows.length - 1; i >= startIdx; i--) {
+        const r = rows[i];
+        const v = Number(r.v);
+        const stTxt = v < PRESSURE_LOW_BAD ? "LOW BAD (<4.5)" : (v < PRESSURE_LOW_WARN ? "LOW WARN (<5.0)" : (v > PRESSURE_HIGH_WARN ? "HIGH (>6.2)" : "NORMAL"));
+        html += `<tr>
+          <td class="mono">${esc(formatShortTimeMobile_(r.time))}</td>
+          <td class="mono" style="text-align:right;font-weight:900;color:${colorBar_(v)};">${fmtBar_(v)}</td>
+          <td class="mono" style="font-weight:900;color:${colorBar_(v)};">${stTxt}</td>
+        </tr>`;
+      }
+    }
+
+    html += `</tbody></table></div></div></div>`;
+    setHTML("modalBody", html);
+
+    const resetBtn = document.getElementById("resetPurgeZoomBtn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", function () {
+        if (__PURGE_CHART__) __PURGE_CHART__.resetZoom();
+      });
+    }
+
+    drawPurgeChart_(rows, node.name, node.color);
+  }
+
+  function drawPurgeChart_(rows, labelName, lineColor) {
+    const cvs = document.getElementById("purgeHistoryChart");
+    if (!cvs) return;
+    destroyPurgeChart_();
+
+    let displayRows = rows;
+    if (rows.length > 400) {
+      const step = Math.ceil(rows.length / 400);
+      displayRows = rows.filter((_, idx) => idx % step === 0 || idx === rows.length - 1);
+    }
+
+    const labels = displayRows.map(r => formatShortTimeMobile_(r.time));
+    const data = displayRows.map(r => Number(r.v));
+
+    const isDark = (document.body.getAttribute("data-theme") || "night") !== "day";
+    const gridColor = isDark ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)";
+    const textColor = isDark ? "#9fb2c9" : "#4b5b70";
+    const isMobile = window.innerWidth <= 768;
+
+    __PURGE_CHART__ = new Chart(cvs, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: `${labelName} (Bar)`,
+          data: data,
+          tension: 0.2,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          borderColor: lineColor || "#00e0ff",
+          segment: {
+            borderColor: function (ctx) {
+              const v = data[ctx.p1DataIndex];
+              if (v < PRESSURE_LOW_BAD) return "#ff3b30";
+              if (v < PRESSURE_LOW_WARN || v > PRESSURE_HIGH_WARN) return "#ff9f0a";
+              return lineColor || "#00e0ff";
+            }
+          },
+          fill: true,
+          backgroundColor: "rgba(0, 224, 255, 0.08)"
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                return ` Pressure: ${ctx.parsed.y.toFixed(2)} Bar`;
+              }
+            }
+          },
+          zoom: {
+            pan: { enabled: true, mode: "x" },
+            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: textColor, maxRotation: 0, autoSkip: true, maxTicksLimit: isMobile ? 5 : 10, font: { size: 10 } },
+            grid: { display: false }
+          },
+          y: {
+            suggestedMin: 0,
+            suggestedMax: 7,
+            ticks: { color: textColor, font: { size: 10 } },
+            grid: { color: gridColor }
+          }
+        }
+      },
+      plugins: [{
+        id: "purgeThresholds",
+        afterDraw: function (chart) {
+          const ctx2 = chart.ctx, area = chart.chartArea, yScale = chart.scales.y;
+          if (!area) return;
+          function drawLimit(val, color, text) {
+            const y = yScale.getPixelForValue(val);
+            if (y < area.top || y > area.bottom) return;
+            ctx2.save();
+            ctx2.strokeStyle = color;
+            ctx2.lineWidth = 1.2;
+            ctx2.setLineDash([5, 4]);
+            ctx2.globalAlpha = 0.75;
+            ctx2.beginPath();
+            ctx2.moveTo(area.left, y);
+            ctx2.lineTo(area.right, y);
+            ctx2.stroke();
+            ctx2.fillStyle = color;
+            ctx2.font = "bold 10px ui-monospace, monospace";
+            ctx2.fillText(text, area.left + 6, y - 3);
+            ctx2.restore();
+          }
+          drawLimit(PRESSURE_LOW_WARN, "#ff9f0a", "WARN 5.0 Bar");
+          drawLimit(PRESSURE_LOW_BAD,  "#ff3b30", "BAD 4.5 Bar");
+        }
+      }]
+    });
+  }
+
+  function updateNodeValue_(id, rawVal) {
+    const num = parseFloat(rawVal);
+    if (!isFinite(num)) return;
+    const node = PURGE_NODES.find(n => n.id.toLowerCase() === String(id).toLowerCase());
+    if (node) {
+      node.val = num;
+      node.updatedAt = Date.now();
+    }
+  }
+
+  function parseIncomingMqtt_(topic, messageStr) {
+    const str = String(messageStr || "").trim();
+    if (!str) return;
+
+    if (str.startsWith("{")) {
+      try {
+        const obj = JSON.parse(str);
+        if (obj.id && (obj.value !== undefined || obj.val !== undefined || obj.pressure !== undefined)) {
+          updateNodeValue_(obj.id, obj.value ?? obj.val ?? obj.pressure);
+        } else {
+          for (const key in obj) {
+            if (/^p[1-8]$/i.test(key)) {
+              updateNodeValue_(key, obj[key]);
             }
           }
         }
-      } catch (_) {}
+        renderPurgePanel_();
+        return;
+      } catch (e) {}
     }
 
-    if (!changed) {
-      var matchedName = matchPointNameFromTopic_(topic);
-      if (matchedName) {
-        var parsed = parseNumUnit_(raw);
-        if (parsed) {
-          purgeState[matchedName].val = parsed.val;
-          if (parsed.unit) purgeState[matchedName].unit = parsed.unit;
-          changed = true;
-        }
+    const topicParts = String(topic || "").split("/");
+    for (let i = topicParts.length - 1; i >= 0; i--) {
+      if (/^p[1-8]$/i.test(topicParts[i])) {
+        updateNodeValue_(topicParts[i], str);
+        renderPurgePanel_();
+        return;
       }
     }
-
-    if (changed) {
-      renderPurgeList_();
-      updatePurgeTimestamp_();
-    }
   }
 
-  function scheduleReconnect_() {
-    if (reconnectTimer) return;
-    reconnectTimer = setTimeout(function() {
-      reconnectTimer = null;
-      connectMqtt_();
-    }, 5000);
-  }
+  function connectHiveMq_() {
+    renderPurgePanel_();
+    bindPurgeGridClick_();
 
-  function connectMqtt_() {
-    if (typeof Paho === "undefined" || !Paho.MQTT) {
-      setPurgeConnState_("err", "NO LIB");
-      scheduleReconnect_();
+    if (typeof mqtt === "undefined") {
+      setTimeout(connectHiveMq_, 500);
       return;
     }
 
-    try {
-      var clientId = "scada_tv_purge8_" + Math.random().toString(16).slice(2, 10);
-      pahoClient = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, "/mqtt", clientId);
+    const statusDot = document.getElementById("purgeMqttStatus");
+    const wsUrl = `wss://${MQTT_CONFIG.broker}:${MQTT_CONFIG.port}/mqtt`;
 
-      pahoClient.onConnectionLost = function(resp) {
-        setPurgeConnState_("err", "RETRY");
-        if (resp && resp.errorCode !== 0) {
-          console.warn("MQTT Purge lost:", resp.errorMessage);
-        }
-        scheduleReconnect_();
-      };
+    const client = mqtt.connect(wsUrl, {
+      username: MQTT_CONFIG.username,
+      password: MQTT_CONFIG.password,
+      clientId: "scada_web_" + Math.random().toString(16).substring(2, 8),
+      clean: true,
+      reconnectPeriod: 5000,
+      connectTimeout: 10000
+    });
 
-      pahoClient.onMessageArrived = function(msg) {
-        handlePurgeMessage_(msg.destinationName || "", msg.payloadString || "");
-      };
-
-      setPurgeConnState_("offline", "CONN");
-      pahoClient.connect({
-        userName: MQTT_USER,
-        password: MQTT_PASS,
-        useSSL: true,
-        timeout: 10,
-        keepAliveInterval: 30,
-        reconnect: false,
-        onSuccess: function() {
-          setPurgeConnState_("online", "MQTT");
-          MQTT_TOPICS.forEach(function(tp) {
-            try {
-              pahoClient.subscribe(tp, { qos: 0 });
-            } catch (e) {
-              console.warn("Subscribe err:", tp, e);
-            }
-          });
-        },
-        onFailure: function(err) {
-          setPurgeConnState_("err", "FAIL");
-          console.warn("MQTT Purge connect failed:", err && err.errorMessage);
-          scheduleReconnect_();
-        }
+    client.on("connect", function () {
+      if (statusDot) statusDot.className = "purge-mqtt-dot ok";
+      client.subscribe(MQTT_CONFIG.topic, function (err) {
+        if (err) console.error("Purge MQTT Subscribe Error:", err);
       });
-    } catch (err) {
-      setPurgeConnState_("err", "ERR");
-      scheduleReconnect_();
-    }
+    });
+
+    client.on("message", function (topic, payload) {
+      parseIncomingMqtt_(topic, payload.toString());
+    });
+
+    client.on("reconnect", function () {
+      if (statusDot) statusDot.className = "purge-mqtt-dot";
+    });
+
+    client.on("error", function (err) {
+      console.error("Purge MQTT Error:", err);
+      if (statusDot) statusDot.className = "purge-mqtt-dot err";
+    });
+
+    client.on("offline", function () {
+      if (statusDot) statusDot.className = "purge-mqtt-dot err";
+    });
+
+    setInterval(renderPurgePanel_, 15000);
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function() {
-      renderPurgeList_();
-      connectMqtt_();
-    });
+    document.addEventListener("DOMContentLoaded", connectHiveMq_);
   } else {
-    renderPurgeList_();
-    connectMqtt_();
+    connectHiveMq_();
   }
 })();
