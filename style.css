@@ -957,8 +957,8 @@ table th, .aiTable th {
   flex: 1;
   min-width: 0;
   height: 100%;
-  display: flex;
-  align-items: center;
+  display: block;
+  line-height: 20px;
   overflow: hidden;
   white-space: nowrap;
   color: var(--scada-cyan);
@@ -976,6 +976,12 @@ table th, .aiTable th {
   will-change: transform;
   transform: translate3d(var(--ticker-start, 100%), 0, 0);
   animation: tickerMove var(--ticker-duration, 20s) linear infinite;
+}
+
+.scada-ticker-wrap:hover .scada-ticker-content span,
+.scada-ticker-content:hover span {
+  animation-play-state: paused;
+  cursor: text;
 }
 
 @keyframes tickerMove {
