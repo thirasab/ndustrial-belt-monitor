@@ -3638,7 +3638,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   // เกณฑ์แจ้งเตือน Purge Air: ต่ำกว่า 4.0 Bar = Alarm แดง, 4.0 - 4.49 Bar = เฝ้าระวังส้ม, สูงกว่า 6.2 Bar = เฝ้าระวังส้ม
   const PRESSURE_LOW_BAD   = 4.0;
   const PRESSURE_LOW_WARN  = 4.5;
-  const PRESSURE_HIGH_WARN = 6.2;
+  const PRESSURE_HIGH_WARN = 7.0;
   const PURGE_ALARM_COOLDOWN_MS = 15000;
 
   window.__PURGE_CHART__ = window.__PURGE_CHART__ || null;
