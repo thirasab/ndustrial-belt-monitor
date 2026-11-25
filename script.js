@@ -4291,7 +4291,18 @@ function setAllPurgeCompareDatasetsVisible_(visible) {
         if (err) console.error("Purge MQTT Subscribe Error:", err);
       });
     });
+const PURGE_GAS_URL = "วาง_WEB_APP_URL_ของชีต_PRESS_AIR_BF_ตรงนี้";
 
+async function callPurgeGasAPI_(action, params = {}) {
+  const controller = new AbortController();
+  const url = new URL(PURGE_GAS_URL);
+  url.searchParams.append("action", action);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.append(key, value);
+  }
+  const response = await fetch(url, { method: "GET", signal: controller.signal });
+  return await response.json();
+}
     client.on("message", function (topic, payload) {
       parseIncomingMqtt_(topic, payload.toString());
     });
