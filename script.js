@@ -3646,6 +3646,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   const __PURGE_ABORT_CONTROLLERS__ = {};
   const __PURGE_LAST_TOAST_AT__ = {};
   let __PURGE_COLLAPSED__ = false;
+  let __PURGE_PREV_ALARM_IDS__ = {};
 
   function isPurgeUnused_(val) {
     return val !== null && isFinite(val) && Math.abs(Number(val)) < 0.01;
@@ -3677,11 +3678,13 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   function syncPurgeAlarmsToUi_() {
     const lowAlarms = [];
     const now = Date.now();
+    const currentAlarmIds = {};
 
     for (let i = 0; i < PURGE_NODES.length; i++) {
       const n = PURGE_NODES[i];
       if (isPurgeAlarmLow_(n.val, n.updatedAt)) {
         const vStr = Number(n.val).toFixed(2);
+        currentAlarmIds[n.id] = true;
         lowAlarms.push({
           id: n.id,
           name: n.name,
@@ -3703,7 +3706,22 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       }
     }
 
+    let hasNewlyTriggeredAlarm = false;
+    for (const id in currentAlarmIds) {
+      if (!__PURGE_PREV_ALARM_IDS__[id]) {
+        hasNewlyTriggeredAlarm = true;
+        break;
+      }
+    }
+    __PURGE_PREV_ALARM_IDS__ = currentAlarmIds;
+
     window.__PURGE_LOW_ALARMS__ = lowAlarms;
+
+    // กางกล่องออกอัตโนมัติทันทีเมื่อมีความดันลม < 4.0 Bar แม้จะพับเก็บหรืออยู่ในโหมด Dashboard
+    if (lowAlarms.length > 0 && (__PURGE_COLLAPSED__ || hasNewlyTriggeredAlarm)) {
+      __PURGE_COLLAPSED__ = false;
+      applyPurgeCollapseState_();
+    }
 
     const ticker = document.getElementById("liveTickerContent");
     if (ticker) {
@@ -3827,12 +3845,13 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     const origSetPageMode = window.setPageMode;
     window.setPageMode = function (mode) {
       origSetPageMode.apply(this, arguments);
-      const shouldAutoCollapse = (mode === "VIB_DASH" || mode === "AI");
       const hasLowAlarm = Array.isArray(window.__PURGE_LOW_ALARMS__) && window.__PURGE_LOW_ALARMS__.length > 0;
-      if (!hasLowAlarm) {
-        __PURGE_COLLAPSED__ = shouldAutoCollapse;
-        applyPurgeCollapseState_();
+      if (hasLowAlarm) {
+        __PURGE_COLLAPSED__ = false;
+      } else {
+        __PURGE_COLLAPSED__ = (mode === "VIB_DASH" || mode === "AI");
       }
+      applyPurgeCollapseState_();
     };
     window.setPageMode.__purgeHooked = true;
   }
