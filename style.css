@@ -1523,26 +1523,32 @@ html {
 }
 
 /* ========================================================= */
-/* 20. PURGE AIR PRESSURE OVERLAY (TOP-RIGHT OF MAP)         */
+/* 20. PURGE AIR PRESSURE OVERLAY (FIXED TOP-RIGHT ALL MODES) */
 /* ========================================================= */
 .purge-overlay-panel {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 1000;
-  width: 220px;
-  background: rgba(10, 15, 23, 0.88);
-  border: 1px solid rgba(0, 224, 255, 0.35);
+  position: fixed;
+  top: 76px;
+  right: 16px;
+  z-index: 9995;
+  width: 224px;
+  background: rgba(10, 15, 23, 0.92);
+  border: 1px solid rgba(0, 224, 255, 0.38);
   border-radius: 10px;
   padding: 7px 9px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.65);
   pointer-events: auto;
   user-select: none;
+  transition: top 0.25s ease, right 0.25s ease;
+}
+
+body.header-hidden .purge-overlay-panel {
+  top: 42px;
+  right: 12px;
 }
 
 [data-theme="day"] .purge-overlay-panel {
-  background: rgba(255, 255, 255, 0.90);
-  border-color: rgba(2, 132, 199, 0.35);
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(2, 132, 199, 0.38);
   box-shadow: 0 8px 20px rgba(20, 30, 50, 0.16);
 }
 
@@ -1550,6 +1556,7 @@ html {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 10.5px;
   font-weight: 1000;
@@ -1562,6 +1569,12 @@ html {
 
 [data-theme="day"] .purge-panel-head {
   color: #0284c7;
+}
+
+.purge-head-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .purge-compare-btn {
@@ -1587,6 +1600,59 @@ html {
   background: rgba(2, 132, 199, 0.12);
   border-color: rgba(2, 132, 199, 0.45);
   color: #0284c7;
+}
+
+.purge-toggle-btn {
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 1000;
+  padding: 2px 6px;
+  border-radius: 5px;
+  line-height: 1.2;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.purge-toggle-btn:hover {
+  background: rgba(0, 224, 255, 0.22);
+  border-color: rgba(0, 224, 255, 0.55);
+}
+
+[data-theme="day"] .purge-toggle-btn {
+  background: rgba(10, 18, 32, 0.06);
+  border-color: rgba(10, 18, 32, 0.18);
+}
+
+.purge-overlay-panel.collapsed {
+  width: auto !important;
+  min-width: 145px;
+  padding: 5px 8px;
+}
+
+.purge-overlay-panel.collapsed .purge-panel-head {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  gap: 8px;
+}
+
+.purge-overlay-panel.collapsed .purge-grid {
+  display: none !important;
+}
+
+.purge-alarm-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--open);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 1000;
+  line-height: 1.2;
 }
 
 .purge-mqtt-dot {
@@ -1641,7 +1707,17 @@ html {
 
 .purge-row.ok { border-left-color: var(--ok); }
 .purge-row.warn { border-left-color: var(--stuck); }
-.purge-row.bad { border-left-color: var(--open); }
+
+@keyframes purgeLowPulse {
+  0%, 100% { background: rgba(255, 59, 48, 0.14); }
+  50% { background: rgba(255, 59, 48, 0.34); }
+}
+
+.purge-row.bad {
+  border-left-color: var(--open);
+  background: rgba(255, 59, 48, 0.18);
+  animation: purgeLowPulse 1.3s ease-in-out infinite;
+}
 
 .purge-name {
   font-weight: 900;
@@ -1658,8 +1734,9 @@ html {
 .purge-row.bad .purge-val { color: var(--open); }
 
 @media (max-width: 768px) {
-  .purge-overlay-panel {
-    top: 10px;
+  .purge-overlay-panel,
+  body.header-hidden .purge-overlay-panel {
+    top: 78px;
     right: 10px;
     width: 224px;
     padding: 5px 6px;
