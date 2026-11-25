@@ -3603,6 +3603,9 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 // 22. BAG FILTER PURGE AIR PRESSURE (MQTT + HISTORY + COMPARE)
 // =========================================================
 (function initPurgePressureMqtt_() {
+  // 🛑 นำ Web App URL ของ Google Apps Script ที่ผูกกับชีต Press_Air.BF มาใส่ตรงนี้ 🛑
+  const PURGE_GAS_URL = "วาง_WEB_APP_URL_ของชีต_PRESS_AIR_BF_ตรงนี้";
+
   const MQTT_CONFIG = {
     broker: "4d79d42984154e37aab32ca068370f40.s1.eu.hivemq.cloud",
     port: 8884,
@@ -3622,11 +3625,52 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     { id: 'p8', sheetCol: 'PS8', name: '6511.80',  color: '#ff7a00', val: null, updatedAt: 0 }
   ];
 
+  // เกณฑ์สีแจ้งเตือนความดันลม Purge สำหรับระบบ 5.0 - 6.0 Bar
   const PRESSURE_LOW_BAD   = 4.5;
   const PRESSURE_LOW_WARN  = 5.0;
   const PRESSURE_HIGH_WARN = 6.2;
 
   let __PURGE_CHART__ = null;
+  const __PURGE_ABORT_CONTROLLERS__ = {};
+
+  // เรียก GAS ของชีต Purge Air แยกจาก GAS_URL ของสายพาน
+  async function callPurgeGasAPI_(action, params = {}) {
+    if (!PURGE_GAS_URL || PURGE_GAS_URL.indexOf("http") !== 0) {
+      throw new Error("ยังไม่ได้ตั้งค่า PURGE_GAS_URL ของชีตความดันลม Purge");
+    }
+
+    if (__PURGE_ABORT_CONTROLLERS__[action]) {
+      try {
+        __PURGE_ABORT_CONTROLLERS__[action].abort();
+      } catch (_) {}
+    }
+
+    const controller = new AbortController();
+    __PURGE_ABORT_CONTROLLERS__[action] = controller;
+
+    try {
+      const url = new URL(PURGE_GAS_URL);
+      url.searchParams.append("action", action);
+      for (const [key, value] of Object.entries(params)) {
+        url.searchParams.append(key, value);
+      }
+
+      const response = await fetch(url, {
+        method: "GET",
+        signal: controller.signal
+      });
+      return await response.json();
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        return { ok: false, aborted: true, error: "Request aborted" };
+      }
+      throw new Error(error.message || "Purge GAS Network Error");
+    } finally {
+      if (__PURGE_ABORT_CONTROLLERS__[action] === controller) {
+        delete __PURGE_ABORT_CONTROLLERS__[action];
+      }
+    }
+  }
 
   function ensureCompareHeaderBtn_() {
     const head = document.querySelector("#purgePressureOverlay .purge-panel-head");
@@ -3711,6 +3755,14 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     }
   }
 
+  function setAllPurgeCompareDatasetsVisible_(visible) {
+    if (!__PURGE_CHART__ || !Array.isArray(__PURGE_CHART__.data.datasets)) return;
+    __PURGE_CHART__.data.datasets.forEach(function (_, idx) {
+      __PURGE_CHART__.setDatasetVisibility(idx, !!visible);
+    });
+    __PURGE_CHART__.update();
+  }
+
   window.openPurgeCompareModal = function (hours) {
     hours = Number(hours || 24);
     const cacheKey = "purge_compare_all_" + hours;
@@ -3726,7 +3778,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     );
     openModal();
 
-    callGasAPI("getPurgeCompareHistory", { hours: hours })
+    callPurgeGasAPI_("getPurgeCompareHistory", { hours: hours })
       .then(res => {
         if (res && res.aborted) return;
         if (!res || res.ok === false || !res.series) {
@@ -3752,14 +3804,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
         setHTML("modalBody", `<div class="mono" style="color:var(--open);font-weight:900;">ERROR: ${esc(String(err))}</div>`);
       });
   };
-
-function setAllPurgeCompareDatasetsVisible_(visible) {
-    if (!__PURGE_CHART__ || !Array.isArray(__PURGE_CHART__.data.datasets)) return;
-    __PURGE_CHART__.data.datasets.forEach(function (_, idx) {
-      __PURGE_CHART__.setDatasetVisibility(idx, !!visible);
-    });
-    __PURGE_CHART__.update();
-  }
 
   function renderPurgeCompareModal_(seriesMap, currentHours) {
     seriesMap = seriesMap || {};
@@ -3990,7 +4034,7 @@ function setAllPurgeCompareDatasetsVisible_(visible) {
     );
     openModal();
 
-    callGasAPI("getPurgeHistory", { col: node.sheetCol, hours: hours })
+    callPurgeGasAPI_("getPurgeHistory", { col: node.sheetCol, hours: hours })
       .then(res => {
         if (res && res.aborted) return;
         if (!res || res.ok === false) {
@@ -4291,18 +4335,7 @@ function setAllPurgeCompareDatasetsVisible_(visible) {
         if (err) console.error("Purge MQTT Subscribe Error:", err);
       });
     });
-const PURGE_GAS_URL = "วาง_WEB_APP_URL_ของชีต_PRESS_AIR_BF_ตรงนี้";
 
-async function callPurgeGasAPI_(action, params = {}) {
-  const controller = new AbortController();
-  const url = new URL(PURGE_GAS_URL);
-  url.searchParams.append("action", action);
-  for (const [key, value] of Object.entries(params)) {
-    url.searchParams.append(key, value);
-  }
-  const response = await fetch(url, { method: "GET", signal: controller.signal });
-  return await response.json();
-}
     client.on("message", function (topic, payload) {
       parseIncomingMqtt_(topic, payload.toString());
     });
