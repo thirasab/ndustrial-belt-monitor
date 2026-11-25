@@ -3737,15 +3737,25 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       });
   };
 
+function setAllPurgeCompareDatasetsVisible_(visible) {
+    if (!__PURGE_CHART__ || !Array.isArray(__PURGE_CHART__.data.datasets)) return;
+    __PURGE_CHART__.data.datasets.forEach(function (_, idx) {
+      __PURGE_CHART__.setDatasetVisibility(idx, !!visible);
+    });
+    __PURGE_CHART__.update();
+  }
+
   function renderPurgeCompareModal_(seriesMap, currentHours) {
     seriesMap = seriesMap || {};
 
     let html = '<div style="display:flex;flex-direction:column;gap:10px;">';
 
     html += `<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);padding:10px 12px;border-radius:10px;border:1px solid var(--border);gap:8px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <span style="font-weight:900;font-size:13px;">📊 เปรียบเทียบทั้ง 8 จุดพร้อมกัน</span>
         <button type="button" class="rBtn rBtnMini" onclick="openPurgeHistoryModal('p1', ${Number(currentHours)})">← ดูรายจุด</button>
+        <button type="button" class="rBtn rBtnMini primary" id="purgeShowAllBtn">👁️ Show All</button>
+        <button type="button" class="rBtn rBtnMini" id="purgeHideAllBtn">🚫 Hide All</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <select style="background:var(--panel);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:8px;font-weight:bold;cursor:pointer;outline:none;" onchange="openPurgeCompareModal(this.value)">
@@ -3760,7 +3770,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     </div>`;
 
     html += `<div class="rCard" style="padding:10px;">
-      <div class="mono" style="color:var(--muted);font-size:11px;margin-bottom:6px;">คลิกที่ชื่อจุดใน Legend ด้านบนเพื่อซ่อน/แสดงเส้นได้อิสระ</div>
+      <div class="mono" style="color:var(--muted);font-size:11px;margin-bottom:6px;">ใช้ Show All / Hide All หรือคลิกชื่อจุดใน Legend เพื่อเปิด-ปิดเส้นทีละจุด</div>
       <div style="height:310px;width:100%;"><canvas id="purgeCompareChart"></canvas></div>
     </div>`;
 
@@ -3806,6 +3816,20 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
     html += `</tbody></table></div></div></div>`;
     setHTML("modalBody", html);
+
+    const showAllBtn = document.getElementById("purgeShowAllBtn");
+    if (showAllBtn) {
+      showAllBtn.addEventListener("click", function () {
+        setAllPurgeCompareDatasetsVisible_(true);
+      });
+    }
+
+    const hideAllBtn = document.getElementById("purgeHideAllBtn");
+    if (hideAllBtn) {
+      hideAllBtn.addEventListener("click", function () {
+        setAllPurgeCompareDatasetsVisible_(false);
+      });
+    }
 
     const resetBtn = document.getElementById("resetPurgeCompareZoomBtn");
     if (resetBtn) {
