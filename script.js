@@ -25,6 +25,7 @@ let PM10_WARN = 50, PM10_BAD = 120;
 let __PM_FETCH_LOCK__ = false;
 let __PM10_LATEST__ = {}, __PM10_SERIES__ = {}, __PM10_SERIES_FETCHED_AT__ = {};
 let __AI_ROWS__ = [];
+window.__PURGE_CHART__ = window.__PURGE_CHART__ || null;
 
 // =========================================================
 // 2. HELPER API CALLER (AbortController กันยิงซ้ำซ้อน)
@@ -153,6 +154,10 @@ function destroyAllModalCharts_() {
   if (typeof __PM10_CHART__ !== 'undefined' && __PM10_CHART__) {
     __PM10_CHART__.destroy();
     __PM10_CHART__ = null;
+  }
+  if (window.__PURGE_CHART__) {
+    window.__PURGE_CHART__.destroy();
+    window.__PURGE_CHART__ = null;
   }
 }
 
@@ -3197,14 +3202,20 @@ function updateGlobalLeftAlarms_() {
     return isAlarm && isAlert;
   });
 
+  var purgeMsgs = Array.isArray(window.__PURGE_LOW_ALARMS__)
+    ? window.__PURGE_LOW_ALARMS__.map(a => `🚨 Purge ${a.name} (${a.sheetCol}): ${a.val.toFixed(2)} Bar (<4.0 Bar)`)
+    : [];
+
+  var beltMsgs = activeAlarms.map(a => '⚠️ ' + a.belt + ': ' + (a.alarmMsg || a.alarmType));
+  var allMsgs = purgeMsgs.concat(beltMsgs);
+
   var ticker = document.getElementById("liveTickerContent");
   if (ticker) {
     var tickerHtml = '<span>';
-    if (activeAlarms.length === 0) {
+    if (allMsgs.length === 0) {
       tickerHtml += '✅ [' + new Date().toLocaleTimeString('th-TH') + '] SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.';
     } else {
-      var msgs = activeAlarms.map(a => '⚠️ ' + a.belt + ': ' + (a.alarmMsg || a.alarmType));
-      tickerHtml += msgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ');
+      tickerHtml += allMsgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ');
     }
     tickerHtml += '</span>';
     ticker.innerHTML = tickerHtml;
@@ -3600,10 +3611,9 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 })();
 
 // =========================================================
-// 22. BAG FILTER PURGE AIR PRESSURE (MQTT + HISTORY + COMPARE)
+// 22. BAG FILTER PURGE AIR PRESSURE (MQTT + COLLAPSE + ALARM <4 BAR)
 // =========================================================
 (function initPurgePressureMqtt_() {
-  // 🛑 นำ Web App URL ของ Google Apps Script ที่ผูกกับชีต Press_Air.BF มาใส่ตรงนี้ 🛑
   const PURGE_GAS_URL = "https://script.google.com/macros/s/AKfycbwkMTHj9lhFm79HaQTtLE4tC77O1ILsmazRb6s5tPdamXZct9hlC7sEwc9Xb3l4XydN/exec";
 
   const MQTT_CONFIG = {
@@ -3625,15 +3635,96 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     { id: 'p8', sheetCol: 'PS8', name: '6511.80',  color: '#ff7a00', val: null, updatedAt: 0 }
   ];
 
-  // เกณฑ์สีแจ้งเตือนความดันลม Purge สำหรับระบบ 5.0 - 6.0 Bar
-  const PRESSURE_LOW_BAD   = 4.5;
-  const PRESSURE_LOW_WARN  = 5.0;
+  // เกณฑ์แจ้งเตือน Purge Air: ต่ำกว่า 4.0 Bar = Alarm แดง, 4.0 - 4.49 Bar = เฝ้าระวังส้ม, สูงกว่า 6.2 Bar = เฝ้าระวังส้ม
+  const PRESSURE_LOW_BAD   = 4.0;
+  const PRESSURE_LOW_WARN  = 4.5;
   const PRESSURE_HIGH_WARN = 6.2;
+  const PURGE_ALARM_COOLDOWN_MS = 15000;
 
-  let __PURGE_CHART__ = null;
+  window.__PURGE_CHART__ = window.__PURGE_CHART__ || null;
+  window.__PURGE_LOW_ALARMS__ = [];
   const __PURGE_ABORT_CONTROLLERS__ = {};
+  const __PURGE_LAST_TOAST_AT__ = {};
+  let __PURGE_COLLAPSED__ = false;
 
-  // เรียก GAS ของชีต Purge Air แยกจาก GAS_URL ของสายพาน
+  function isPurgeUnused_(val) {
+    return val !== null && isFinite(val) && Math.abs(Number(val)) < 0.01;
+  }
+
+  function isPurgeStale_(updatedAt) {
+    return !updatedAt || (Date.now() - updatedAt > 120000);
+  }
+
+  function isPurgeAlarmLow_(val, updatedAt) {
+    if (val === null || !isFinite(val)) return false;
+    if (isPurgeStale_(updatedAt)) return false;
+    if (isPurgeUnused_(val)) return false;
+    return Number(val) < PRESSURE_LOW_BAD;
+  }
+
+  function applyPurgeCollapseState_() {
+    const panel = document.getElementById("purgePressureOverlay");
+    const toggleBtn = document.getElementById("purgeToggleCollapseBtn");
+    if (!panel) return;
+
+    panel.classList.toggle("collapsed", !!__PURGE_COLLAPSED__);
+    if (toggleBtn) {
+      toggleBtn.textContent = __PURGE_COLLAPSED__ ? "▸" : "▾";
+      toggleBtn.title = __PURGE_COLLAPSED__ ? "กางกล่อง Purge Air" : "พับเก็บกล่อง Purge Air";
+    }
+  }
+
+  function syncPurgeAlarmsToUi_() {
+    const lowAlarms = [];
+    const now = Date.now();
+
+    for (let i = 0; i < PURGE_NODES.length; i++) {
+      const n = PURGE_NODES[i];
+      if (isPurgeAlarmLow_(n.val, n.updatedAt)) {
+        const vStr = Number(n.val).toFixed(2);
+        lowAlarms.push({
+          id: n.id,
+          name: n.name,
+          sheetCol: n.sheetCol,
+          val: Number(n.val),
+          msg: `PURGE LOW ${vStr} Bar (<4.0)`
+        });
+
+        const prevToast = __PURGE_LAST_TOAST_AT__[n.id] || 0;
+        if (now - prevToast >= PURGE_ALARM_COOLDOWN_MS) {
+          __PURGE_LAST_TOAST_AT__[n.id] = now;
+          if (typeof showToast === "function") {
+            showToast(`Alarm Purge Air ${n.name}`, "err", `ความดันลม ${vStr} Bar (ต่ำกว่า 4.0 Bar)`);
+          }
+          if (!document.hidden && typeof beepOnce === "function") {
+            beepOnce();
+          }
+        }
+      }
+    }
+
+    window.__PURGE_LOW_ALARMS__ = lowAlarms;
+
+    const ticker = document.getElementById("liveTickerContent");
+    if (ticker) {
+      const purgeMsgs = lowAlarms.map(a => `🚨 Purge ${a.name} (${a.sheetCol}): ${a.val.toFixed(2)} Bar (<4.0 Bar)`);
+      let beltMsgs = [];
+      if (window.__LAST_DATA__ && typeof buildAiRows_ === "function") {
+        const aiRows = buildAiRows_(window.__LAST_DATA__);
+        beltMsgs = aiRows
+          .filter(r => (r.level === "CRITICAL" || r.level === "HIGH" || r.level === "MEDIUM") && (r.status === "ALERT" || r.status === "WARN"))
+          .map(a => `⚠️ ${a.belt}: ${a.alarmMsg || a.alarmType}`);
+      }
+
+      const allMsgs = purgeMsgs.concat(beltMsgs);
+      if (allMsgs.length === 0) {
+        ticker.innerHTML = `<span>✅ [${new Date().toLocaleTimeString('th-TH')}] SYSTEM NORMAL: All sensors, transport belts, and purge air (<4.0 Bar) are normal.</span>`;
+      } else {
+        ticker.innerHTML = `<span>${allMsgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ')}</span>`;
+      }
+    }
+  }
+
   async function callPurgeGasAPI_(action, params = {}) {
     if (!PURGE_GAS_URL || PURGE_GAS_URL.indexOf("http") !== 0) {
       throw new Error("ยังไม่ได้ตั้งค่า PURGE_GAS_URL ของชีตความดันลม Purge");
@@ -3672,47 +3763,93 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     }
   }
 
-  function ensureCompareHeaderBtn_() {
+  function ensureHeaderControls_() {
     const head = document.querySelector("#purgePressureOverlay .purge-panel-head");
-    if (!head || document.getElementById("purgeCompareAllBtn")) return;
+    if (!head) return;
 
-    const rightWrap = document.createElement("div");
-    rightWrap.style.cssText = "display:flex;align-items:center;gap:5px;";
+    let ctrlWrap = head.querySelector(".purge-head-controls");
+    if (!ctrlWrap) {
+      ctrlWrap = document.createElement("div");
+      ctrlWrap.className = "purge-head-controls";
 
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.id = "purgeCompareAllBtn";
-    btn.className = "purge-compare-btn";
-    btn.title = "เปรียบเทียบความดันลมทั้ง 8 จุดในกราฟเดียว";
-    btn.textContent = "📊 All 8";
+      const cmpBtn = document.createElement("button");
+      cmpBtn.type = "button";
+      cmpBtn.id = "purgeCompareAllBtn";
+      cmpBtn.className = "purge-compare-btn";
+      cmpBtn.title = "เปรียบเทียบความดันลมทั้ง 8 จุดในกราฟเดียว";
+      cmpBtn.textContent = "📊 All 8";
+      cmpBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        window.openPurgeCompareModal(24);
+      });
 
-    const dot = head.querySelector(".purge-mqtt-dot");
-    if (dot) {
-      head.insertBefore(rightWrap, dot);
-      rightWrap.appendChild(btn);
-      rightWrap.appendChild(dot);
-    } else {
-      rightWrap.appendChild(btn);
-      head.appendChild(rightWrap);
+      const tglBtn = document.createElement("button");
+      tglBtn.type = "button";
+      tglBtn.id = "purgeToggleCollapseBtn";
+      tglBtn.className = "purge-toggle-btn";
+      tglBtn.textContent = "▾";
+      tglBtn.title = "พับเก็บกล่อง Purge Air";
+      tglBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        __PURGE_COLLAPSED__ = !__PURGE_COLLAPSED__;
+        applyPurgeCollapseState_();
+      });
+
+      const dot = head.querySelector(".purge-mqtt-dot");
+      ctrlWrap.appendChild(cmpBtn);
+      ctrlWrap.appendChild(tglBtn);
+      if (dot) {
+        head.removeChild(dot);
+        ctrlWrap.appendChild(dot);
+      }
+      head.appendChild(ctrlWrap);
     }
 
-    btn.addEventListener("click", function (ev) {
-      ev.stopPropagation();
-      window.openPurgeCompareModal(24);
-    });
+    let alarmBadge = document.getElementById("purgeCollapsedAlarmBadge");
+    const lowCount = Array.isArray(window.__PURGE_LOW_ALARMS__) ? window.__PURGE_LOW_ALARMS__.length : 0;
+    if (lowCount > 0) {
+      if (!alarmBadge) {
+        alarmBadge = document.createElement("span");
+        alarmBadge.id = "purgeCollapsedAlarmBadge";
+        alarmBadge.className = "purge-alarm-pill";
+        head.insertBefore(alarmBadge, ctrlWrap);
+      }
+      alarmBadge.textContent = `🚨 ${lowCount}`;
+    } else if (alarmBadge) {
+      alarmBadge.remove();
+    }
+
+    applyPurgeCollapseState_();
+  }
+
+  function hookModeChangeForPurgePanel_() {
+    if (typeof window.setPageMode !== "function" || window.setPageMode.__purgeHooked) return;
+    const origSetPageMode = window.setPageMode;
+    window.setPageMode = function (mode) {
+      origSetPageMode.apply(this, arguments);
+      const shouldAutoCollapse = (mode === "VIB_DASH" || mode === "AI");
+      const hasLowAlarm = Array.isArray(window.__PURGE_LOW_ALARMS__) && window.__PURGE_LOW_ALARMS__.length > 0;
+      if (!hasLowAlarm) {
+        __PURGE_COLLAPSED__ = shouldAutoCollapse;
+        applyPurgeCollapseState_();
+      }
+    };
+    window.setPageMode.__purgeHooked = true;
   }
 
   function getPressureClass_(val, updatedAt) {
-    if (val === null || !isFinite(val) || (Date.now() - updatedAt > 120000)) {
+    if (val === null || !isFinite(val) || isPurgeStale_(updatedAt)) {
       return "stale";
     }
+    if (isPurgeUnused_(val)) return "stale";
     if (val < PRESSURE_LOW_BAD) return "bad";
     if (val < PRESSURE_LOW_WARN || val > PRESSURE_HIGH_WARN) return "warn";
     return "ok";
   }
 
   function renderPurgePanel_() {
-    ensureCompareHeaderBtn_();
+    syncPurgeAlarmsToUi_();
+    ensureHeaderControls_();
     const grid = document.getElementById("purgePressureGrid");
     if (!grid) return;
 
@@ -3720,9 +3857,10 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     for (let i = 0; i < PURGE_NODES.length; i++) {
       const node = PURGE_NODES[i];
       const cls = getPressureClass_(node.val, node.updatedAt);
-      const valText = (cls === "stale" && node.val === null)
+      const isUnused = isPurgeUnused_(node.val);
+      const valText = (node.val === null || !isFinite(node.val))
         ? "--"
-        : Number(node.val).toFixed(2);
+        : (isUnused ? "UNUSED" : Number(node.val).toFixed(2));
 
       html += `<div class="purge-row ${cls}" data-node-id="${esc(node.id)}" title="คลิกเพื่อดูกราฟย้อนหลัง ${esc(node.name)} (${esc(node.sheetCol)})">
         <span class="purge-name">${esc(node.name)}</span>
@@ -3748,19 +3886,12 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     });
   }
 
-  function destroyPurgeChart_() {
-    if (__PURGE_CHART__) {
-      __PURGE_CHART__.destroy();
-      __PURGE_CHART__ = null;
-    }
-  }
-
   function setAllPurgeCompareDatasetsVisible_(visible) {
-    if (!__PURGE_CHART__ || !Array.isArray(__PURGE_CHART__.data.datasets)) return;
-    __PURGE_CHART__.data.datasets.forEach(function (_, idx) {
-      __PURGE_CHART__.setDatasetVisibility(idx, !!visible);
+    if (!window.__PURGE_CHART__ || !Array.isArray(window.__PURGE_CHART__.data.datasets)) return;
+    window.__PURGE_CHART__.data.datasets.forEach(function (_, idx) {
+      window.__PURGE_CHART__.setDatasetVisibility(idx, !!visible);
     });
-    __PURGE_CHART__.update();
+    window.__PURGE_CHART__.update();
   }
 
   window.openPurgeCompareModal = function (hours) {
@@ -3769,7 +3900,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
     setText("modalTitle", "Purge Air • เปรียบเทียบทั้ง 8 จุด (PS1–PS8)");
     destroyAllModalCharts_();
-    destroyPurgeChart_();
 
     setHTML("modalBody",
       "<div class='skeleton' style='height:55px;margin-bottom:8px;'></div>" +
@@ -3861,13 +3991,14 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       const avgV = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null;
 
       const fmt = v => (v === null || !isFinite(v)) ? "-" : Number(v).toFixed(2);
-      const cls = getPressureClass_(latestVal, node.val !== null ? node.updatedAt : Date.now());
-      const valColor = cls === "bad" ? "var(--open)" : (cls === "warn" ? "var(--stuck)" : "var(--ok)");
+      const isUnused = isPurgeUnused_(latestVal);
+      const cls = getPressureClass_(latestVal, node.val !== null ? node.updatedAt : 0);
+      const valColor = isUnused ? "var(--muted)" : (cls === "bad" ? "var(--open)" : (cls === "warn" ? "var(--stuck)" : "var(--ok)"));
 
       html += `<tr style="cursor:pointer;" onclick="openPurgeHistoryModal('${esc(node.id)}', ${Number(currentHours)})" title="คลิกเพื่อดูรายละเอียดเฉพาะจุด ${esc(node.name)}">
         <td class="mono" style="font-weight:900;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${node.color};margin-right:6px;"></span>${esc(node.name)}</td>
         <td class="mono" style="color:var(--muted);">${esc(node.sheetCol)}</td>
-        <td class="mono" style="text-align:right;font-weight:900;color:${valColor};">${fmt(latestVal)}</td>
+        <td class="mono" style="text-align:right;font-weight:900;color:${valColor};">${isUnused ? "UNUSED" : fmt(latestVal)}</td>
         <td class="mono" style="text-align:right;">${fmt(minV)}</td>
         <td class="mono" style="text-align:right;">${fmt(avgV)}</td>
         <td class="mono" style="text-align:right;">${fmt(maxV)}</td>
@@ -3894,7 +4025,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     const resetBtn = document.getElementById("resetPurgeCompareZoomBtn");
     if (resetBtn) {
       resetBtn.addEventListener("click", function () {
-        if (__PURGE_CHART__) __PURGE_CHART__.resetZoom();
+        if (window.__PURGE_CHART__) window.__PURGE_CHART__.resetZoom();
       });
     }
 
@@ -3904,7 +4035,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   function drawPurgeCompareChart_(seriesMap) {
     const cvs = document.getElementById("purgeCompareChart");
     if (!cvs) return;
-    destroyPurgeChart_();
+    destroyAllModalCharts_();
 
     let baseRows = [];
     for (let i = 0; i < PURGE_NODES.length; i++) {
@@ -3943,7 +4074,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     const textColor = isDark ? "#9fb2c9" : "#4b5b70";
     const isMobile = window.innerWidth <= 768;
 
-    __PURGE_CHART__ = new Chart(cvs, {
+    window.__PURGE_CHART__ = new Chart(cvs, {
       type: "line",
       data: {
         labels: labels,
@@ -3967,7 +4098,10 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
             callbacks: {
               label: function (ctx) {
                 const v = ctx.parsed.y;
-                return ` ${ctx.dataset.label}: ${isFinite(v) ? Number(v).toFixed(2) + " Bar" : "-"}`;
+                if (!isFinite(v)) return ` ${ctx.dataset.label}: -`;
+                return isPurgeUnused_(v)
+                  ? ` ${ctx.dataset.label}: UNUSED (0.00 Bar)`
+                  : ` ${ctx.dataset.label}: ${Number(v).toFixed(2)} Bar`;
               }
             }
           },
@@ -4011,8 +4145,8 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
             ctx2.fillText(text, area.left + 6, y - 3);
             ctx2.restore();
           }
-          drawLimit(PRESSURE_LOW_WARN, "#ff9f0a", "WARN 5.0 Bar");
-          drawLimit(PRESSURE_LOW_BAD,  "#ff3b30", "BAD 4.5 Bar");
+          drawLimit(PRESSURE_LOW_WARN, "#ff9f0a", "WARN 4.5 Bar");
+          drawLimit(PRESSURE_LOW_BAD,  "#ff3b30", "ALARM <4.0 Bar");
         }
       }]
     });
@@ -4025,7 +4159,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
     setText("modalTitle", `Purge Air • ${node.name} (${node.sheetCol})`);
     destroyAllModalCharts_();
-    destroyPurgeChart_();
 
     setHTML("modalBody",
       "<div class='skeleton' style='height:55px;margin-bottom:8px;'></div>" +
@@ -4072,9 +4205,12 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     const maxV = vals.length ? Math.max.apply(null, vals) : null;
     const avgV = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null;
 
-    function fmtBar_(v) { return (v === null || !isFinite(v)) ? "-" : Number(v).toFixed(2); }
+    function fmtBar_(v) {
+      if (v === null || !isFinite(v)) return "-";
+      return isPurgeUnused_(v) ? "UNUSED" : Number(v).toFixed(2);
+    }
     function colorBar_(v) {
-      if (v === null || !isFinite(v)) return "var(--muted)";
+      if (v === null || !isFinite(v) || isPurgeUnused_(v)) return "var(--muted)";
       if (v < PRESSURE_LOW_BAD) return "var(--open)";
       if (v < PRESSURE_LOW_WARN || v > PRESSURE_HIGH_WARN) return "var(--stuck)";
       return "var(--ok)";
@@ -4102,22 +4238,22 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
         <div class="pm10StatLbl">LATEST (BAR)</div>
       </div>
       <div class="pm10StatCard">
-        <div class="pm10StatVal mono">${fmtBar_(minV)}</div>
+        <div class="pm10StatVal mono">${minV === null ? "-" : Number(minV).toFixed(2)}</div>
         <div class="pm10StatLbl">MIN</div>
       </div>
       <div class="pm10StatCard">
-        <div class="pm10StatVal mono">${fmtBar_(avgV)}</div>
+        <div class="pm10StatVal mono">${avgV === null ? "-" : Number(avgV).toFixed(2)}</div>
         <div class="pm10StatLbl">AVG</div>
       </div>
       <div class="pm10StatCard">
-        <div class="pm10StatVal mono">${fmtBar_(maxV)}</div>
+        <div class="pm10StatVal mono">${maxV === null ? "-" : Number(maxV).toFixed(2)}</div>
         <div class="pm10StatLbl">MAX</div>
       </div>
     </div>`;
 
     html += `<div class="rCard" style="padding:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;">
-        <div class="mono" style="color:var(--muted);font-size:11px;">ข้อมูลย้อนหลัง ${rows.length} รายการ (เกณฑ์ปกติ 5.0 - 6.0 Bar)</div>
+        <div class="mono" style="color:var(--muted);font-size:11px;">ข้อมูลย้อนหลัง ${rows.length} รายการ (ALARM < 4.0 Bar • 0.00 = UNUSED)</div>
         <button type="button" class="rBtn rBtnMini" id="resetPurgeZoomBtn">↺ Reset</button>
       </div>
       <div style="height:250px;width:100%;"><canvas id="purgeHistoryChart"></canvas></div>
@@ -4142,10 +4278,13 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       for (let i = rows.length - 1; i >= startIdx; i--) {
         const r = rows[i];
         const v = Number(r.v);
-        const stTxt = v < PRESSURE_LOW_BAD ? "LOW BAD (<4.5)" : (v < PRESSURE_LOW_WARN ? "LOW WARN (<5.0)" : (v > PRESSURE_HIGH_WARN ? "HIGH (>6.2)" : "NORMAL"));
+        const unused = isPurgeUnused_(v);
+        const stTxt = unused
+          ? "UNUSED (0.00)"
+          : (v < PRESSURE_LOW_BAD ? "ALARM LOW (<4.0)" : (v < PRESSURE_LOW_WARN ? "LOW WARN (<4.5)" : (v > PRESSURE_HIGH_WARN ? "HIGH (>6.2)" : "NORMAL")));
         html += `<tr>
           <td class="mono">${esc(formatShortTimeMobile_(r.time))}</td>
-          <td class="mono" style="text-align:right;font-weight:900;color:${colorBar_(v)};">${fmtBar_(v)}</td>
+          <td class="mono" style="text-align:right;font-weight:900;color:${colorBar_(v)};">${unused ? "0.00" : Number(v).toFixed(2)}</td>
           <td class="mono" style="font-weight:900;color:${colorBar_(v)};">${stTxt}</td>
         </tr>`;
       }
@@ -4157,7 +4296,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     const resetBtn = document.getElementById("resetPurgeZoomBtn");
     if (resetBtn) {
       resetBtn.addEventListener("click", function () {
-        if (__PURGE_CHART__) __PURGE_CHART__.resetZoom();
+        if (window.__PURGE_CHART__) window.__PURGE_CHART__.resetZoom();
       });
     }
 
@@ -4167,7 +4306,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   function drawPurgeChart_(rows, labelName, lineColor) {
     const cvs = document.getElementById("purgeHistoryChart");
     if (!cvs) return;
-    destroyPurgeChart_();
+    destroyAllModalCharts_();
 
     let displayRows = rows;
     if (rows.length > 400) {
@@ -4183,7 +4322,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     const textColor = isDark ? "#9fb2c9" : "#4b5b70";
     const isMobile = window.innerWidth <= 768;
 
-    __PURGE_CHART__ = new Chart(cvs, {
+    window.__PURGE_CHART__ = new Chart(cvs, {
       type: "line",
       data: {
         labels: labels,
@@ -4198,6 +4337,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
           segment: {
             borderColor: function (ctx) {
               const v = data[ctx.p1DataIndex];
+              if (isPurgeUnused_(v)) return "#7c8898";
               if (v < PRESSURE_LOW_BAD) return "#ff3b30";
               if (v < PRESSURE_LOW_WARN || v > PRESSURE_HIGH_WARN) return "#ff9f0a";
               return lineColor || "#00e0ff";
@@ -4216,7 +4356,10 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
           tooltip: {
             callbacks: {
               label: function (ctx) {
-                return ` Pressure: ${ctx.parsed.y.toFixed(2)} Bar`;
+                const v = ctx.parsed.y;
+                return isPurgeUnused_(v)
+                  ? " Status: UNUSED (0.00 Bar)"
+                  : ` Pressure: ${Number(v).toFixed(2)} Bar`;
               }
             }
           },
@@ -4260,8 +4403,8 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
             ctx2.fillText(text, area.left + 6, y - 3);
             ctx2.restore();
           }
-          drawLimit(PRESSURE_LOW_WARN, "#ff9f0a", "WARN 5.0 Bar");
-          drawLimit(PRESSURE_LOW_BAD,  "#ff3b30", "BAD 4.5 Bar");
+          drawLimit(PRESSURE_LOW_WARN, "#ff9f0a", "WARN 4.5 Bar");
+          drawLimit(PRESSURE_LOW_BAD,  "#ff3b30", "ALARM <4.0 Bar");
         }
       }]
     });
@@ -4309,6 +4452,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   }
 
   function connectHiveMq_() {
+    hookModeChangeForPurgePanel_();
     renderPurgePanel_();
     bindPurgeGridClick_();
 
