@@ -44,7 +44,7 @@
   --shadow: rgba(20, 30, 50, .18);
 }
 
-*, *::before, *::after {
+* {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; 
@@ -262,7 +262,7 @@ body {
 .hamburger {
   display: none; cursor: pointer; user-select: none;
   padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border);
-  background: rgba(255,255,255,.04); color: var(--text); font-size: 18px; line-height: 1;
+  background: rgba(255,255,255,.04); font-size: 18px; line-height: 1;
 }
 
 .mobileMenu {
@@ -398,7 +398,7 @@ body {
 .mapPopupBody { padding: 8px; display: flex; flex-direction: column; gap: 8px; max-height: 48vh; overflow: auto; }
 
 /* ========================================================= */
-/* 7. CARDS (POS, Mini, AI) */
+/* 7. CARDS (POS, Mini) */
 /* ========================================================= */
 .posCard {
   position: absolute; z-index: 40; min-width: 155px; max-width: 260px;
@@ -506,68 +506,13 @@ body {
 .rpmDash{color:var(--muted);}
 
 /* ========================================================= */
-/* 8. AI ANALYSIS SECTION */
+/* 8. AI SECTION (REMOVED / PERMANENTLY HIDDEN)              */
 /* ========================================================= */
-.aiSection { display: none; position: relative; z-index: 1; }
-.aiSection.open { display: block; }
-.aiWrap { padding: clamp(8px, 1.5vw, 16px); display: flex; flex-direction: column; gap: clamp(8px, 1.5vw, 16px); }
-
-.aiGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: clamp(8px, 1.5vw, 12px); }
-.aiCard {
-  border: 1px solid var(--border); border-radius: 12px; padding: clamp(12px, 1.5vw, 16px);
-  background: linear-gradient(180deg, var(--panel), var(--panel2));
-  box-shadow: 0 8px 18px rgba(0,0,0,.24); min-height: 90px; position: relative; overflow: hidden;
-  display: flex; flex-direction: column; justify-content: center;
+.aiSection,
+.aiSection.open,
+#aiSection {
+  display: none !important;
 }
-.aiCard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--offline); opacity: .95; }
-.aiCard.kpi-critical::before { background: var(--open); }
-.aiCard.kpi-high::before { background: var(--stuck); }
-.aiCard.kpi-medium::before { background: var(--other); }
-.aiCard.kpi-watch::before { background: var(--scada-cyan); }
-.aiCard.kpi-normal::before { background: var(--ok); }
-
-.aiKicker { font-size: clamp(11px, 1vw, 14px); font-weight: 1000; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; }
-.aiValue { margin-top: 6px; font-size: clamp(24px, 3vw, 36px); line-height: 1; font-weight: 1000; }
-.aiSub { margin-top: 6px; font-size: clamp(11px, 1vw, 13px); color: var(--muted); font-weight: 800; }
-
-.aiMain { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(320px,1fr); gap: clamp(8px, 1.5vw, 12px); }
-.aiPanel {
-  border: 1px solid var(--border); border-radius: 12px;
-  background: linear-gradient(180deg, var(--panel), var(--panel2));
-  box-shadow: 0 8px 18px rgba(0,0,0,.24); overflow: hidden; display: flex; flex-direction: column;
-}
-.aiPanelHead {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: clamp(10px, 1.5vw, 14px) clamp(12px, 1.5vw, 16px); border-bottom: 1px solid var(--border);
-  background: rgba(255,255,255,.03); flex-wrap: wrap;
-}
-[data-theme="day"] .aiPanelHead { background: rgba(10,18,32,.03); }
-.aiPanelTitle { font-size: clamp(14px, 1.2vw, 16px); font-weight: 1000; letter-spacing: .4px; }
-.aiPanelMeta { font-size: clamp(11px, 1vw, 13px); color: var(--muted); font-weight: 800; }
-
-.aiTableWrap { padding: clamp(8px, 1vw, 12px); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.aiTable { width: 100%; min-width: 600px; } 
-.aiTable td, .aiTable th { font-size: clamp(12px, 1vw, 14px); padding: clamp(8px, 1vw, 12px) 8px; }
-
-.aiLevel {
-  display: inline-flex; align-items: center; justify-content: center; min-width: 78px;
-  padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); font-weight: 1000; letter-spacing: .4px;
-  background: rgba(255,255,255,.04); font-size: clamp(11px, 1vw, 13px);
-}
-.aiLevel.CRITICAL { color: var(--open); }
-.aiLevel.HIGH { color: var(--stuck); }
-.aiLevel.MEDIUM { color: var(--other); }
-.aiLevel.LOW { color: var(--scada-cyan); }
-.aiLevel.NORMAL { color: var(--ok); }
-
-.aiReasonList { padding: clamp(8px, 1vw, 12px); display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; }
-.aiReasonItem { border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.03); padding: clamp(10px, 1.2vw, 14px); }
-[data-theme="day"] .aiReasonItem { background: rgba(10,18,32,.03); }
-.aiReasonTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
-.aiReasonBelt { font-weight: 1000; font-size: clamp(13px, 1.2vw, 15px); }
-.aiReasonMsg { margin-top: 6px; font-size: clamp(12px, 1vw, 14px); line-height: 1.4; color: var(--muted); }
-.aiEmpty { padding: 16px; border: 1px dashed var(--border); border-radius: 12px; text-align: center; color: var(--muted); font-weight: 900; font-size: clamp(13px, 1.2vw, 15px); }
-.aiTiny { font-size: clamp(11px, 0.9vw, 12px); color: var(--muted); font-weight: 800; margin-top: 3px; }
 
 /* ========================================================= */
 /* 9. STICKY HEADERS & TABLES */
@@ -578,14 +523,14 @@ th { background: rgba(255,255,255,.04); color: var(--muted); font-weight: 900; }
 [data-theme="day"] th { background: rgba(10,18,32,.04); }
 tr:last-child td { border-bottom: none; }
 
-table th, .aiTable th {
+table th {
   position: sticky;
   top: 0; 
   z-index: 20 !important;
   background-color: var(--panel) !important;
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2) !important;
 }
-[data-theme="day"] table th, [data-theme="day"] .aiTable th {
+[data-theme="day"] table th {
   background-color: #ffffff !important; 
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05) !important;
 }
@@ -687,7 +632,7 @@ table th, .aiTable th {
 .rMut { color: var(--muted); font-weight: 900; }
 .rSmallMono { font-family: ui-monospace, Menlo, Consolas, monospace; }
 
-.rTableWrap { margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.rTableWrap { margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .rTable { width: 100%; border-collapse: collapse; }
 .rTable th, .rTable td { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; font-size: 11px; }
 .rTable th { background: rgba(255,255,255,.04); color: var(--muted); font-weight: 1000; }
@@ -763,10 +708,6 @@ table th, .aiTable th {
 /* ========================================================= */
 /* 11. MEDIA QUERIES (BASE MOBILE & TABLET) */
 /* ========================================================= */
-@media (max-width: 1024px) {
-  .aiMain { grid-template-columns: 1fr; }
-}
-
 @media (max-width: 768px) {
   .top {
     display: flex;
@@ -775,95 +716,23 @@ table th, .aiTable th {
     justify-content: space-between;
     flex-wrap: nowrap;
     width: 100%;
-    max-width: 100%;
   }
-  .top .left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden; }
-  .brand { min-width: 0; flex: 1; overflow: hidden; }
+  .top .left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .brand { min-width: auto; flex: 1; overflow: hidden; }
   #logoImg { height: 36px !important; padding: 2px 5px !important; }
   .h1 { font-size: 14px; }
   .sub { font-size: 11px; }
 
-  .top .right { display: none !important; }
+  .right { display: none !important; }
   .hamburger {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
     margin-left: auto;
-    flex-shrink: 0;
     padding: 8px 12px;
     font-size: 20px;
     background: rgba(255,255,255,0.06);
     border-radius: 8px;
   }
-
-  /* เมนูมือถือแบบลอยทับหน้าจอ พร้อมแอนิเมชันเปิด-ปิดนุ่มนวล */
-  .mobileMenu {
-    display: flex !important;
-    position: fixed !important;
-    top: 56px !important;
-    left: 6px !important;
-    right: 6px !important;
-    background: rgba(12, 18, 27, 0.97) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 14px !important;
-    padding: 12px !important;
-    margin-top: 0 !important;
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.85) !important;
-    z-index: 10010 !important;
-    max-height: 80dvh !important;
-    overflow-y: auto !important;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: translateY(-10px) scale(0.98);
-    transform-origin: top center;
-    transition: opacity 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-                transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-                visibility 0s linear 0.24s;
-  }
-  .mobileMenu.open {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: translateY(0) scale(1);
-    transition: opacity 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-                transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-                visibility 0s linear 0s;
-  }
-  [data-theme="day"] .mobileMenu {
-    background: rgba(255, 255, 255, 0.97) !important;
-    box-shadow: 0 14px 32px rgba(20, 30, 50, 0.22) !important;
-  }
-
-  /* จัดระยะห่างและขนาดปุ่มในเมนูมือถือให้กดง่าย */
-  .mobileMenu .right {
-    display: flex !important;
-    gap: 8px !important;
-  }
-  .mobileMenu .right > div[style*="grid-template-columns"] {
-    gap: 8px !important;
-    margin-bottom: 10px !important;
-  }
-  .mobileMenu .btn,
-  .mobileMenu .modeBtn {
-    min-height: 42px !important;
-    padding: 10px 12px !important;
-    font-size: 13px !important;
-    border-radius: 10px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-  }
-  .mobileMenu .btn:active,
-  .mobileMenu .modeBtn:active {
-    transform: scale(0.97) !important;
-  }
-
-  .aiGrid { grid-template-columns: repeat(2, 1fr); }
-  .aiCard:last-child { grid-column: 1 / -1; }
-  .aiMain { display: grid !important; grid-template-columns: 1fr !important; width: 100% !important; max-width: 100% !important; }
-  .aiObservations, .aiObsPanel, .aiCard { width: 100% !important; max-width: 100% !important; }
-  .aiObsList, .aiObsGrid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important; gap: 12px !important; }
+  .mobileMenu.open .right { display: flex !important; }
 
   .qrOverlay { padding-top: 12vh; } 
   .qrZoomBox { 
@@ -921,7 +790,7 @@ table th, .aiTable th {
 }
 
 /* ========================================================= */
-/* 13. LIVE TICKER (ข้อความวิ่ง) */
+/* 13. LIVE TICKER (SMOOTH SPEED & HOVER PAUSE)              */
 /* ========================================================= */
 .scada-ticker-wrap {
   display: flex; align-items: center; background: rgba(0,0,0,0.4); 
@@ -944,7 +813,11 @@ table th, .aiTable th {
 
 .scada-ticker-content span {
   display: inline-block; padding-left: 100%; 
-  animation: tickerMove 45s linear infinite;
+  animation: tickerMove 50s linear infinite;
+  will-change: transform;
+}
+.scada-ticker-wrap:hover .scada-ticker-content span {
+  animation-play-state: paused;
 }
 @keyframes tickerMove {
   0% { transform: translateX(0); }
@@ -1114,15 +987,10 @@ body[data-mode="PM10"] .posCard {
   flex-direction: column;
 }
 
-#aiSection:not(.open) {
-  display: none !important;
-}
-
 .mainViewport > .section[style*="display: none"] {
   display: none !important;
 }
 
-.aiSection.open,
 #vibDashboardSection[style*="block"],
 #vibDashboardSection[style*="flex"] {
   display: flex !important;
@@ -1248,10 +1116,7 @@ html {
 /* 19. MOBILE RESPONSIVE OVERRIDES (ALL-IN-ONE <= 768px)      */
 /* ========================================================= */
 @media (max-width: 768px) {
-  /* 1. โครงสร้างหลักเต็มความสูงหน้าจอมือถือ ไม่ล้นขอบข้างและไม่เลื่อนเด้ง */
   html, body {
-    width: 100vw !important;
-    max-width: 100vw !important;
     height: 100dvh !important;
     margin: 0 !important;
     padding: 4px !important;
@@ -1260,7 +1125,6 @@ html {
     overflow: hidden !important;
   }
 
-  /* 2. ป้องกันระบบ Auto-Hide ซ่อน Header บนมือถือ */
   .top {
     padding: 6px 8px !important;
     border-radius: 10px !important;
@@ -1280,36 +1144,27 @@ html {
     display: none !important;
   }
 
-  /* ปรับแถบหัวข้อแผนที่ (.secHead) บนมือถือแนวตั้งให้ตัดบรรทัดได้และไม่ล้นขอบจอ */
-  .secHead {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    justify-content: flex-start !important;
-    gap: 3px !important;
-    padding: 6px 8px !important;
-    width: 100% !important;
-    max-width: 100% !important;
+  .mobileMenu.open {
+    position: fixed !important;
+    top: 56px !important;
+    left: 6px !important;
+    right: 6px !important;
+    background: rgba(12, 18, 27, 0.97) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.85) !important;
+    z-index: 10010 !important;
+    max-height: 80dvh !important;
+    overflow-y: auto !important;
   }
-  .secTitle {
-    white-space: normal !important;
-    word-break: break-word !important;
-    font-size: 12px !important;
-    line-height: 1.3 !important;
-    max-width: 100% !important;
-  }
-  .secMeta {
-    justify-content: flex-start !important;
-    white-space: normal !important;
-    font-size: 10px !important;
-    line-height: 1.25 !important;
-    max-width: 100% !important;
+  [data-theme="day"] .mobileMenu.open {
+    background: rgba(255, 255, 255, 0.97) !important;
   }
 
-  /* 3. ขยายพื้นที่แผนที่และ Iframe (Noise / Vib Dashboard) ให้เต็มจอ */
   .mainViewport {
     flex: 1 !important;
     min-height: 0 !important;
-    width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
     margin-top: 4px !important;
@@ -1317,7 +1172,6 @@ html {
   .mainViewport > .section {
     flex: 1 !important;
     min-height: 0 !important;
-    width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
   }
@@ -1339,7 +1193,6 @@ html {
     min-height: 0 !important;
   }
 
-  /* 4. ขยายจุดบนแผนที่และปุ่มควบคุม (+, -, 🎯) ให้กดง่ายด้วยนิ้ว */
   .mapDot {
     width: 28px !important;
     height: 28px !important;
@@ -1360,7 +1213,6 @@ html {
     font-size: 18px !important;
   }
 
-  /* 5. การ์ดสถานะบนแผนที่ (ซ่อนเป็นค่าเริ่มต้น โชว์เฉพาะจุดที่แตะ) */
   body:not([data-mode="PM10"]) .posCard {
     display: none !important;
   }
@@ -1377,7 +1229,6 @@ html {
     background: rgba(255, 255, 255, 0.92) !important;
   }
 
-  /* 6. Popup รายละเอียดสายพาน (Bottom Sheet ด้านล่างจอ) */
   .mapPopup {
     position: fixed !important;
     left: 8px !important;
@@ -1390,7 +1241,6 @@ html {
     box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.75) !important;
   }
 
-  /* 7. Modal เต็มตาบนมือถือแนวตั้ง */
   .overlay {
     padding: 4px !important;
   }
@@ -1410,61 +1260,6 @@ html {
     padding: 8px !important;
   }
 
-  /* แก้ตาราง Report บนมือถือให้ปัดเลื่อนซ้าย-ขวาได้ครบทั้ง 6 คอลัมน์ */
-  .reportOverlay {
-    padding: 4px !important;
-  }
-  .reportModal {
-    width: calc(100vw - 8px) !important;
-    max-width: calc(100vw - 8px) !important;
-    height: 94dvh !important;
-    max-height: 94dvh !important;
-    border-radius: 12px !important;
-  }
-  .reportBody {
-    padding: 8px !important;
-    min-width: 0 !important;
-  }
-  .reportBody .rCard {
-    min-width: 0 !important;
-    max-width: 100% !important;
-    overflow: hidden !important;
-  }
-  .rTableWrap {
-    display: block !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: auto !important;
-    overflow-y: visible !important;
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-x pan-y !important;
-  }
-  .rTable {
-    display: table !important;
-    width: max-content !important;
-    min-width: 640px !important;
-    overflow: visible !important;
-    border-collapse: collapse !important;
-  }
-  .rTable th,
-  .rTable td {
-    padding: 8px 7px !important;
-    font-size: 11px !important;
-    white-space: nowrap !important;
-    vertical-align: middle !important;
-  }
-  .rTable td:nth-child(3) {
-    white-space: normal !important;
-    min-width: 150px !important;
-    max-width: 210px !important;
-    line-height: 1.3 !important;
-  }
-  .reportFormBox {
-    width: 98vw !important;
-    max-height: 94dvh !important;
-  }
-
-  /* 8. ตาราง History / Alarm Log / PM10 แบบตรึงคอลัมน์เวลาซ้ายสุด */
   .modalBody table {
     display: block !important;
     width: 100% !important;
@@ -1508,7 +1303,6 @@ html {
     background-color: rgba(10, 18, 32, 0.025);
   }
 
-  /* 9. กราฟ Chart.js และการ์ดสรุปค่า PM10 */
   .modalBody div[style*="height:240px"] {
     height: 260px !important;
     margin-left: -4px !important;
@@ -1531,8 +1325,168 @@ html {
     font-size: 9px !important;
   }
 
-  /* 10. ป้องกันเบราว์เซอร์มือถือซูมหน้าจออัตโนมัติเวลาแตะช่องกรอกข้อมูล */
   .rInput, .rText, select {
     font-size: 16px !important;
+  }
+}
+
+/* ========================================================= */
+/* 22. FLOATING PURGE AIR WIDGET (8 POINTS TOP-RIGHT)       */
+/* ========================================================= */
+.purge-air-widget {
+  position: fixed;
+  top: 66px;
+  right: 14px;
+  z-index: 10004;
+  width: 178px;
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+  padding: 7px 9px;
+  border-radius: 12px;
+  background: rgba(10, 15, 23, 0.92);
+  border: 1px solid rgba(0, 224, 255, 0.35);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  pointer-events: auto;
+  transition: top 0.25s ease, border-color 0.2s ease;
+}
+
+[data-theme="day"] .purge-air-widget {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(2, 132, 199, 0.35);
+  box-shadow: 0 8px 20px rgba(20, 30, 50, 0.16);
+}
+
+body.header-hidden .purge-air-widget {
+  top: 44px;
+}
+
+.purge-air-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 1000;
+  letter-spacing: 0.4px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+[data-theme="day"] .purge-air-head {
+  border-bottom-color: rgba(10, 18, 32, 0.1);
+}
+
+.purge-air-title {
+  color: var(--scada-cyan);
+}
+[data-theme="day"] .purge-air-title {
+  color: #0284c7;
+}
+
+.purge-mqtt-dot {
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  border: 1px solid currentColor;
+}
+.purge-mqtt-dot.online { color: var(--ok); }
+.purge-mqtt-dot.offline { color: var(--muted); }
+.purge-mqtt-dot.err { color: var(--open); }
+
+.purge-air-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.purge-point-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 10px;
+  line-height: 1.25;
+}
+[data-theme="day"] .purge-point-row {
+  background: rgba(10, 18, 32, 0.03);
+}
+
+.purge-point-name {
+  font-weight: 900;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.purge-point-val {
+  font-weight: 1000;
+  color: var(--ok);
+  white-space: nowrap;
+}
+.purge-point-val.empty { color: var(--muted); }
+.purge-point-val.warn { color: var(--stuck); }
+.purge-point-val.bad { color: var(--open); }
+.purge-point-val.ok { color: var(--ok); }
+
+.purge-point-row.bad {
+  border-left: 2px solid var(--open);
+  background: rgba(255, 59, 48, 0.12);
+}
+
+.purge-point-row.warn {
+  border-left: 2px solid var(--stuck);
+  background: rgba(255, 159, 10, 0.10);
+}
+
+.purge-point-row.ok {
+  border-left: 2px solid var(--ok);
+}
+
+.purge-air-list.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.purge-air-list.grid2 .purge-point-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 4px 6px;
+}
+
+.purge-air-list.grid2 .purge-point-name {
+  font-size: 9px;
+}
+
+.purge-air-list.grid2 .purge-point-val {
+  font-size: 11.5px;
+}
+
+.purge-air-time {
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 9px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 768px) {
+  .purge-air-widget {
+    top: 86px;
+    right: 8px;
+    width: 146px;
+    padding: 6px 7px;
+  }
+  .purge-point-row {
+    font-size: 9.5px;
+    padding: 1.5px 3px;
   }
 }
