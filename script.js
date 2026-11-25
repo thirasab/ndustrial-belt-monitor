@@ -3718,16 +3718,16 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     { id: 'p8', sheetCol: 'PS8', name: '6511.80',  color: '#ff7a00', val: null, updatedAt: 0 }
   ];
 
-  // เกณฑ์แจ้งเตือน Purge Air: ต่ำกว่า 4.0 Bar = Alarm แดง, 4.0 - 4.49 Bar = เฝ้าระวังส้ม, สูงกว่า 6.2 Bar = เฝ้าระวังส้ม
+  // เกณฑ์แจ้งเตือน Purge Air: ต่ำกว่า 4.0 Bar = Alarm แดง, 4.0 - 4.49 Bar = เฝ้าระวังส้ม, สูงกว่า 7.0 Bar = เฝ้าระวังส้ม
   const PRESSURE_LOW_BAD   = 4.0;
   const PRESSURE_LOW_WARN  = 4.5;
   const PRESSURE_HIGH_WARN = 7.0;
-  const PURGE_ALARM_COOLDOWN_MS = 15000;
+  const PURGE_GROUP_TOAST_COOLDOWN_MS = 15000;
 
   window.__PURGE_CHART__ = window.__PURGE_CHART__ || null;
   window.__PURGE_LOW_ALARMS__ = [];
   const __PURGE_ABORT_CONTROLLERS__ = {};
-  const __PURGE_LAST_TOAST_AT__ = {};
+  let __PURGE_LAST_GROUP_TOAST_AT__ = 0;
   let __PURGE_COLLAPSED__ = false;
   let __PURGE_PREV_ALARM_IDS__ = {};
 
@@ -3775,14 +3775,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
           val: Number(n.val),
           msg: `PURGE LOW ${vStr} Bar (<4.0)`
         });
-
-        const prevToast = __PURGE_LAST_TOAST_AT__[n.id] || 0;
-        if (now - prevToast >= PURGE_ALARM_COOLDOWN_MS) {
-          __PURGE_LAST_TOAST_AT__[n.id] = now;
-          if (typeof showToast === "function") {
-            showToast(`Alarm Purge Air ${n.name}`, "err", `ความดันลม ${vStr} Bar (ต่ำกว่า 4.0 Bar)`);
-          }
-        }
       }
     }
 
@@ -3796,6 +3788,22 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     __PURGE_PREV_ALARM_IDS__ = currentAlarmIds;
 
     window.__PURGE_LOW_ALARMS__ = lowAlarms;
+
+    // แสดง Toast รวมทุกจุดที่ตก < 4.0 Bar ในรอบเดียวกันไว้ในกล่องเดียว
+    if (lowAlarms.length > 0 && typeof showToast === "function") {
+      const canShowGroupToast =
+        hasNewlyTriggeredAlarm ||
+        (now - __PURGE_LAST_GROUP_TOAST_AT__ >= PURGE_GROUP_TOAST_COOLDOWN_MS);
+
+      if (canShowGroupToast) {
+        __PURGE_LAST_GROUP_TOAST_AT__ = now;
+        const title = `Alarm Purge Air (${lowAlarms.length} จุด < 4.0 Bar)`;
+        const detail = lowAlarms
+          .map(a => `${a.name} (${a.val.toFixed(2)} Bar)`)
+          .join(" • ");
+        showToast(title, "err", detail);
+      }
+    }
 
     if (lowAlarms.length > 0 && !document.hidden) {
       if (typeof beepPurgeLow_ === "function") {
@@ -4385,7 +4393,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
         const unused = isPurgeUnused_(v);
         const stTxt = unused
           ? "UNUSED (0.00)"
-          : (v < PRESSURE_LOW_BAD ? "ALARM LOW (<4.0)" : (v < PRESSURE_LOW_WARN ? "LOW WARN (<4.5)" : (v > PRESSURE_HIGH_WARN ? "HIGH (>6.2)" : "NORMAL")));
+          : (v < PRESSURE_LOW_BAD ? "ALARM LOW (<4.0)" : (v < PRESSURE_LOW_WARN ? "LOW WARN (<4.5)" : (v > PRESSURE_HIGH_WARN ? "HIGH (>7.0)" : "NORMAL")));
         html += `<tr>
           <td class="mono">${esc(formatShortTimeMobile_(r.time))}</td>
           <td class="mono" style="text-align:right;font-weight:900;color:${colorBar_(v)};">${unused ? "0.00" : Number(v).toFixed(2)}</td>
