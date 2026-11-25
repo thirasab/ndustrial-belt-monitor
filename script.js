@@ -332,6 +332,43 @@ function beepOnce(){
     tone(900,t0+0.14,0.12,0.14);
   } catch (err) {}
 }
+
+var lastPurgeBeepAt = 0;
+var PURGE_BEEP_INTERVAL_MS = 8000;
+
+function beepPurgeLow_() {
+  if (!getBeepEnabled()) return;
+  if (!ensureAudio()) return;
+
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume().catch(function(){});
+  }
+  if (audioCtx.state !== "running") return;
+
+  var now = Date.now();
+  if (now - lastPurgeBeepAt < PURGE_BEEP_INTERVAL_MS) return;
+  lastPurgeBeepAt = now;
+
+  try {
+    var t0 = audioCtx.currentTime;
+    function purgeTone(freq, start, dur, gainVal) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(gainVal, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + dur + 0.02);
+    }
+    purgeTone(1350, t0 + 0.00, 0.08, 0.16);
+    purgeTone(1350, t0 + 0.11, 0.08, 0.16);
+    purgeTone(1650, t0 + 0.22, 0.12, 0.18);
+  } catch (err) {}
+}
+
 function handleBeepFromData(data){
   if(document.hidden || (__PAGE_MODE__ !== "BELT" && __PAGE_MODE__ !== "AI")) return;
   if(!data||!data.belts||!data.belts.length) return;
@@ -3191,9 +3228,14 @@ function reportRefresh_(){
 // =========================================================
 var __LAST_TICKER_HTML__ = "";
 
-function setLiveTickerHtml_(htmlContent) {
+function setLiveTickerHtml_(htmlContent, hasAlarm) {
   var ticker = document.getElementById("liveTickerContent");
+  var wrap = document.querySelector(".scada-ticker-wrap");
   if (!ticker) return;
+
+  if (wrap) {
+    wrap.classList.toggle("has-alarm", !!hasAlarm);
+  }
 
   if (__LAST_TICKER_HTML__ === htmlContent && ticker.querySelector("span")) {
     return;
@@ -3225,9 +3267,9 @@ function updateGlobalLeftAlarms_() {
   var allMsgs = purgeMsgs.concat(beltMsgs);
 
   if (allMsgs.length === 0) {
-    setLiveTickerHtml_('✅ SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.');
+    setLiveTickerHtml_('✅ SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.', false);
   } else {
-    setLiveTickerHtml_(allMsgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; '));
+    setLiveTickerHtml_(allMsgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; '), true);
   }
 }
 
@@ -3248,7 +3290,8 @@ function refreshTickerMarquee_() {
   var endX = -textW;
   var totalDist = startX - endX;
 
-  var durationSec = Math.max(8, Math.round(totalDist / 85));
+  var speedPxPerSec = (window.innerWidth > 1200) ? 55 : 85;
+  var durationSec = Math.max(10, Math.round(totalDist / speedPxPerSec));
 
   span.style.setProperty("--ticker-start", startX + "px");
   span.style.setProperty("--ticker-end", endX + "px");
@@ -3739,9 +3782,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
           if (typeof showToast === "function") {
             showToast(`Alarm Purge Air ${n.name}`, "err", `ความดันลม ${vStr} Bar (ต่ำกว่า 4.0 Bar)`);
           }
-          if (!document.hidden && typeof beepOnce === "function") {
-            beepOnce();
-          }
         }
       }
     }
@@ -3756,6 +3796,14 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     __PURGE_PREV_ALARM_IDS__ = currentAlarmIds;
 
     window.__PURGE_LOW_ALARMS__ = lowAlarms;
+
+    if (lowAlarms.length > 0 && !document.hidden) {
+      if (typeof beepPurgeLow_ === "function") {
+        beepPurgeLow_();
+      } else if (typeof beepOnce === "function") {
+        beepOnce();
+      }
+    }
 
     // กางกล่องออกอัตโนมัติทันทีเมื่อมีความดันลม < 4.0 Bar แม้จะพับเก็บหรืออยู่ในโหมด Dashboard
     if (lowAlarms.length > 0 && (__PURGE_COLLAPSED__ || hasNewlyTriggeredAlarm)) {
@@ -3774,9 +3822,9 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
     const allMsgs = purgeMsgs.concat(beltMsgs);
     if (allMsgs.length === 0) {
-      setLiveTickerHtml_('✅ SYSTEM NORMAL: All sensors, transport belts, and purge air (<4.0 Bar) are normal.');
+      setLiveTickerHtml_('✅ SYSTEM NORMAL: All sensors, transport belts, and purge air (<4.0 Bar) are normal.', false);
     } else {
-      setLiveTickerHtml_(allMsgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; '));
+      setLiveTickerHtml_(allMsgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; '), true);
     }
   }
 
