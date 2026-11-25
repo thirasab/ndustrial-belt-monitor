@@ -3604,7 +3604,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 // =========================================================
 (function initPurgePressureMqtt_() {
   // 🛑 นำ Web App URL ของ Google Apps Script ที่ผูกกับชีต Press_Air.BF มาใส่ตรงนี้ 🛑
-  const PURGE_GAS_URL = "วาง_WEB_APP_URL_ของชีต_PRESS_AIR_BF_ตรงนี้";
+  const PURGE_GAS_URL = "https://script.google.com/macros/s/AKfycbwkMTHj9lhFm79HaQTtLE4tC77O1ILsmazRb6s5tPdamXZct9hlC7sEwc9Xb3l4XydN/exec";
 
   const MQTT_CONFIG = {
     broker: "4d79d42984154e37aab32ca068370f40.s1.eu.hivemq.cloud",
