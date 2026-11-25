@@ -3221,7 +3221,36 @@ function updateGlobalLeftAlarms_() {
     ticker.innerHTML = tickerHtml;
   }
 }
+function refreshTickerMarquee_() {
+  var wrap = document.querySelector(".scada-ticker-content");
+  var span = wrap ? wrap.querySelector("span") : null;
+  if (!wrap || !span) return;
 
+  // รีเซ็ตแอนิเมชันเพื่อวัดความกว้างจริงของข้อความ
+  span.style.animation = "none";
+  span.style.transform = "translate3d(0, 0, 0)";
+  void span.offsetWidth;
+
+  var wrapW = wrap.clientWidth || 0;
+  var textW = span.scrollWidth || 0;
+  if (wrapW <= 0 || textW <= 0) return;
+
+  var startX = wrapW;
+  var endX = -textW;
+  var totalDist = startX - endX;
+
+  // รักษาความเร็วคงที่ ~85 px/วินาที (ขั้นต่ำ 10 วินาที) เพื่อให้ข้อความสั้นหรือยาวอ่านได้สบายตา
+  var durationSec = Math.max(10, Math.round(totalDist / 85));
+
+  span.style.setProperty("--ticker-start", startX + "px");
+  span.style.setProperty("--ticker-end", endX + "px");
+  span.style.setProperty("--ticker-duration", durationSec + "s");
+  span.style.animation = "tickerMove " + durationSec + "s linear infinite";
+}
+
+window.addEventListener("resize", function () {
+  refreshTickerMarquee_();
+});
 // =========================================================
 // 15. INITIALIZATION
 // =========================================================
