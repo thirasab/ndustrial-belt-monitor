@@ -14,11 +14,11 @@ const MAP_IMAGE_BOUNDS = [
 let MAP_POINTS = [];
 let mapCoords = {};
 let map;
-let __PAGE_MODE__ = "BELT"; // บังคับหน้าจอเริ่มต้นเป็นโหมด BELT ทุกครั้งที่เปิด/รีเฟรชหน้า
-try { localStorage.removeItem("scada_page_mode"); } catch (e) {}
+let __PAGE_MODE__ = "PM10";
 let AUTO_SWITCH_SEC = 60;
-let __AUTO_SWITCH_ENABLED__ = false; // บังคับเป็น Manual (ปิด Auto Switch) ทุกครั้งที่เปิด/รีเฟรชหน้า
-try { localStorage.removeItem("scada_auto_switch"); } catch (e) {}
+let __AUTO_SWITCH_ENABLED__ = (function(){
+  try{ return localStorage.getItem("scada_auto_switch") !== "0"; }catch(e){ return true; }
+})();
 let __AUTO_SWITCH_TIMER__ = null;
 let __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC; 
 let PM10_WARN = 50, PM10_BAD = 120;
@@ -27,119 +27,42 @@ let __PM10_LATEST__ = {}, __PM10_SERIES__ = {}, __PM10_SERIES_FETCHED_AT__ = {};
 let __AI_ROWS__ = [];
 
 // =========================================================
-// 2. HELPER API CALLER (AbortController กันยิงซ้ำซ้อน)
+// 2. HELPER API CALLER (แทนที่ google.script.run)
 // =========================================================
-const __GAS_ABORT_CONTROLLERS__ = {};
-
-async function callGasAPI(action, params = {}, method = 'GET', bodyData = null, options = {}) {
-  const cancelPrevious = options.cancelPrevious !== false;
-  const controller = new AbortController();
-
-  if (cancelPrevious && __GAS_ABORT_CONTROLLERS__[action]) {
-    try {
-      __GAS_ABORT_CONTROLLERS__[action].abort();
-    } catch (_) {}
-  }
-
-  if (cancelPrevious) {
-    __GAS_ABORT_CONTROLLERS__[action] = controller;
-  }
-
+async function callGasAPI(action, params = {}, method = 'GET', bodyData = null) {
   try {
     let url = new URL(GAS_URL);
     url.searchParams.append('action', action);
-
+    
     if (method === 'GET') {
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.append(key, value);
       }
     }
 
-    const fetchOptions = {
+    const options = {
       method: method,
-      signal: controller.signal
     };
 
     if (method === 'POST' && bodyData) {
-      fetchOptions.body = JSON.stringify(bodyData);
-      fetchOptions.headers = { "Content-Type": "text/plain;charset=utf-8" };
+      options.body = JSON.stringify(bodyData);
+      options.headers = { "Content-Type": "text/plain;charset=utf-8" };
     }
 
-    const response = await fetch(url, fetchOptions);
+    const response = await fetch(url, options);
     const data = await response.json();
     return data;
   } catch (error) {
-    if (error && error.name === 'AbortError') {
-      return { ok: false, aborted: true, error: "Request aborted" };
-    }
     throw new Error(error.message || "Network Error");
-  } finally {
-    if (cancelPrevious && __GAS_ABORT_CONTROLLERS__[action] === controller) {
-      delete __GAS_ABORT_CONTROLLERS__[action];
-    }
   }
 }
 
 // =========================================================
-// 3. HELPERS, OFFLINE CACHE & MEMORY CLEANUP
+// 3. HELPERS & MEMORY CLEANUP
 // =========================================================
 function $id(id){ return document.getElementById(id); }
 function setText(id,val){ var el=$id(id); if(!el) return false; el.textContent=(val==null?"":val); return true; }
 function setHTML(id,html){ var el=$id(id); if(!el) return false; el.innerHTML=(html==null?"":html); return true; }
-
-const GAS_CACHE_PREFIX_ = "scada_gas_cache_v1_";
-
-function readGasCache_(key) {
-  try {
-    var raw = localStorage.getItem(GAS_CACHE_PREFIX_ + key);
-    if (!raw) return null;
-    var parsed = JSON.parse(raw);
-    if (!parsed || !parsed.data) return null;
-    return parsed;
-  } catch (e) {
-    return null;
-  }
-}
-
-function writeGasCache_(key, data) {
-  try {
-    if (!data) return;
-    var payload = JSON.stringify({
-      savedAt: Date.now(),
-      data: data
-    });
-    if (payload.length > 1500000) return;
-    localStorage.setItem(GAS_CACHE_PREFIX_ + key, payload);
-  } catch (e) {}
-}
-
-function setCachedBadge_(isCached, savedAt) {
-  var badge = $id("cachedBadge");
-  if (!badge) {
-    var conn = $id("connBadge");
-    if (!conn || !conn.parentNode) return;
-    badge = document.createElement("span");
-    badge.id = "cachedBadge";
-    badge.className = "pill mono";
-    badge.style.cssText = "display:none; color:#ff9f0a; border-color:rgba(255,159,10,.45); font-weight:900;";
-    conn.parentNode.insertBefore(badge, conn.nextSibling);
-  }
-
-  if (!isCached) {
-    badge.style.display = "none";
-    badge.textContent = "";
-    return;
-  }
-
-  var tStr = "";
-  if (savedAt) {
-    try {
-      tStr = " @ " + new Date(savedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-    } catch (_) {}
-  }
-  badge.style.display = "inline-flex";
-  badge.textContent = "CACHED" + tStr;
-}
 
 function destroyAllModalCharts_() {
   if (typeof __VIB_CHARTS__ !== 'undefined') {
@@ -192,40 +115,145 @@ function hardCrashScreen(title,msg,stack){
 window.addEventListener("error",function(e){ hardCrashScreen("SCADA UI crashed",(e&&e.message)||"Unknown",(e&&e.error&&e.error.stack)||""); });
 window.addEventListener("unhandledrejection",function(e){ hardCrashScreen("SCADA Promise crashed",(e&&e.reason)||"Unknown",""); });
 
-function setTheme(theme) {
-  theme = (theme === "day") ? "day" : "night";
-  document.body.setAttribute("data-theme", theme);
+// =========================================================
+// 4. MOBILE MENU & THEME (AUTO / MANUAL DAY & NIGHT)
+// =========================================================
+(function(){
+  var btn = $id("hamburgerBtn");
+  var menu = $id("mobileMenu");
+  if(!btn || !menu) return;
+
+  function closeMobileMenu(){
+    menu.classList.remove("open");
+    btn.textContent = "☰";
+  }
+
+  function toggleMobileMenu(){
+    menu.classList.toggle("open");
+    btn.textContent = menu.classList.contains("open") ? "✕" : "☰";
+  }
+
+  btn.addEventListener("click", function(e){
+    e.preventDefault(); e.stopPropagation(); toggleMobileMenu();
+  });
+
+  menu.addEventListener("click", function(e){
+    var targetBtn = e.target.closest("button");
+    if(!targetBtn) return;
+    setTimeout(closeMobileMenu, 120);
+  });
+
+  document.addEventListener("click", function(e){
+    if(!menu.classList.contains("open")) return;
+    if(menu.contains(e.target) || btn.contains(e.target)) return;
+    closeMobileMenu();
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape") closeMobileMenu();
+  });
+
+  window.addEventListener("resize", function(){
+    if(window.innerWidth > 768) closeMobileMenu();
+  });
+})();
+
+function getAutoThemeByTime_() {
+  var hr = new Date().getHours();
+  // 18:00 - 05:59 = กลางคืน (night), 06:00 - 17:59 = กลางวัน (day)
+  return (hr >= 18 || hr < 6) ? "night" : "day";
+}
+
+function getThemeControlMode_() {
   try {
-    localStorage.setItem("belt_theme", theme);
+    var m = localStorage.getItem("belt_theme_mode");
+    return (m === "manual") ? "manual" : "auto";
+  } catch (e) {
+    return "auto";
+  }
+}
+
+function updateThemeModeButtons_() {
+  var mode = getThemeControlMode_();
+  var txt = (mode === "manual") ? "✋ Theme Mode: MANUAL" : "🕒 Theme Mode: AUTO";
+  ["themeModeBtn", "themeModeBtn2"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  });
+}
+
+function setThemeControlMode(mode, applyNow) {
+  var normalized = (mode === "manual") ? "manual" : "auto";
+  try {
+    localStorage.setItem("belt_theme_mode", normalized);
+  } catch (e) {}
+  updateThemeModeButtons_();
+
+  if (normalized === "auto" && applyNow !== false) {
+    setTheme(getAutoThemeByTime_(), false);
+  }
+}
+
+function setTheme(theme, isManual) {
+  var finalTheme = (theme === "day") ? "day" : "night";
+  document.body.setAttribute("data-theme", finalTheme);
+  try {
+    localStorage.setItem("belt_theme", finalTheme);
   } catch (e) {}
 
-  var txt = (theme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
+  if (isManual) {
+    setThemeControlMode("manual", false);
+  }
+
+  var txt = (finalTheme === "day") ? "☀️ Theme: DAY" : "🌙 Theme: NIGHT";
   ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
     var e = document.getElementById(id);
     if (e) e.textContent = txt;
   });
 }
 
-// บังคับเป็นธีมกลางคืน ("night") เสมอทุกครั้งที่เปิดหรือรีเฟรชหน้าเว็บ
-(function initTheme_() {
-  try {
-    localStorage.removeItem("belt_theme");
-    localStorage.removeItem("belt_theme_manual_hr");
-  } catch (e) {}
-  setTheme("night");
-})();
+function applyAutoThemeIfNeeded_() {
+  if (getThemeControlMode_() !== "auto") return;
+  var autoTheme = getAutoThemeByTime_();
+  var curTheme = document.body.getAttribute("data-theme") || "night";
+  if (curTheme !== autoTheme) {
+    setTheme(autoTheme, false);
+  }
+}
 
-(function() {
-  function bindTheme(id) {
+(function initThemeSystem_() {
+  var controlMode = getThemeControlMode_();
+  var savedTheme = localStorage.getItem("belt_theme") || "night";
+  if (controlMode === "auto") {
+    setTheme(getAutoThemeByTime_(), false);
+  } else {
+    setTheme(savedTheme, false);
+  }
+  updateThemeModeButtons_();
+  setInterval(applyAutoThemeIfNeeded_, 60000);
+
+  ["themeBtnToggle", "themeBtnToggle2"].forEach(function(id) {
     var b = document.getElementById(id);
     if (!b) return;
     b.addEventListener("click", function() {
       var cur = document.body.getAttribute("data-theme") || "night";
-      setTheme(cur === "day" ? "night" : "day");
+      setTheme(cur === "day" ? "night" : "day", true);
     });
-  }
-  bindTheme("themeBtnToggle");
-  bindTheme("themeBtnToggle2");
+  });
+
+  ["themeModeBtn", "themeModeBtn2"].forEach(function(id) {
+    var mb = document.getElementById(id);
+    if (!mb) return;
+    mb.addEventListener("click", function() {
+      var nextMode = (getThemeControlMode_() === "auto") ? "manual" : "auto";
+      setThemeControlMode(nextMode, true);
+      showToast(
+        nextMode === "auto" ? "Theme Mode: AUTO" : "Theme Mode: MANUAL",
+        "ok",
+        nextMode === "auto" ? "สลับธีมตามเวลากลางวัน/กลางคืน" : "ล็อกธีมตามที่เลือกไว้"
+      );
+    });
+  });
 })();
 
 // =========================================================
@@ -392,7 +420,7 @@ var ov=$id("overlay"); if(ov) ov.addEventListener("click",function(e){ if(e.targ
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
 
 // =========================================================
-// 7. AI ENGINE
+// 7. RISK ENGINE (FOR LIVE LOG & ALERTS)
 // =========================================================
 function aiToNum_(v){ if(v===null||v===undefined||v==="") return null; var n=Number(v); return isFinite(n)?n:null; }
 function aiReasonCause_(type){
@@ -609,143 +637,26 @@ function buildAiRows_(data){
 }
 
 function setSectionVisibility_(){
-  var mapSec=$id("mapSection"), aiSec=$id("aiSection"), dashSec=$id("vibDashboardSection");
-  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH")?"none":"flex";
-  if(aiSec) aiSec.classList.toggle("open", __PAGE_MODE__==="AI");
+  var mapSec=$id("mapSection"), dashSec=$id("vibDashboardSection");
+  if(mapSec) mapSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"none":"flex";
   if(dashSec) dashSec.style.display=(__PAGE_MODE__==="VIB_DASH")?"flex":"none";
 }
 
-function syncIframesForMode_(mode) {
-  var pairs = [
-    { modeKey: "AI", sectionId: "aiSection" },
-    { modeKey: "VIB_DASH", sectionId: "vibDashboardSection" }
-  ];
-
-  for (var i = 0; i < pairs.length; i++) {
-    var sec = $id(pairs[i].sectionId);
-    if (!sec) continue;
-    var ifr = sec.querySelector("iframe");
-    if (!ifr) continue;
-
-    var targetSrc = ifr.getAttribute("data-src") || ifr.getAttribute("src") || "";
-    if (targetSrc && targetSrc !== "about:blank" && !ifr.getAttribute("data-src")) {
-      ifr.setAttribute("data-src", targetSrc);
-    }
-
-    var shouldLoad = (mode === pairs[i].modeKey);
-    if (shouldLoad) {
-      if (targetSrc && ifr.getAttribute("src") !== targetSrc) {
-        ifr.setAttribute("src", targetSrc);
-      }
-    } else {
-      if (ifr.getAttribute("src") && ifr.getAttribute("src") !== "about:blank") {
-        ifr.setAttribute("src", "about:blank");
-      }
-    }
-  }
-}
-
-function renderAiAnalysis_(data){
-  var rows=buildAiRows_(data);
-  var c={CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,NORMAL:0};
-  for(var i=0;i<rows.length;i++){
-    var lv=rows[i].level||"NORMAL";
-    c[lv]=(c[lv]||0)+1;
-  }
-  setText("aiKpiCritical", c.CRITICAL||0);
-  setText("aiKpiHigh", c.HIGH||0);
-  setText("aiKpiMedium", c.MEDIUM||0);
-  setText("aiKpiWatch", (c.LOW||0) + ((data&&Array.isArray(data.belts)) ? data.belts.filter(function(it){return String(it&&it.currentStatus||"")==="NO_DATA";}).length : 0));
-  var normalTotal=(data&&Array.isArray(data.belts)) ?
-    Math.max(0, data.belts.length - rows.filter(function(r){return r.level!=="NORMAL" && r.group!=="Environment" && r.group!=="Vibration Gear";}).length) : 0;
-  setText("aiKpiNormal", normalTotal);
-  setText("aiGeneratedAt", "Generated: " + new Date().toLocaleString("th-TH"));
-
-  var tb=$id("aiTbody");
-  if(tb){
-    if(!rows.length){
-      tb.innerHTML='<tr><td colspan="7" class="rMut empty-row">No AI findings</td></tr>';
-    }else{
-      var html="";
-      var topRows=rows.slice(0,15); 
-      for(var j=0;j<topRows.length;j++){
-        var r=topRows[j];
-        var bgStyle = "";
-        if (r.level === "CRITICAL") bgStyle = 'style="background:rgba(255,59,48,0.15);"';
-        else if (r.level === "HIGH") bgStyle = 'style="background:rgba(255,159,10,0.10);"';
-
-        html+='<tr ' + bgStyle + '>'+
-          '<td class="mono"><b>'+esc(String(r.score))+'</b></td>'+
-          '<td><span class="aiLevel '+esc(r.level)+'">'+esc(r.level)+'</span></td>'+
-          '<td class="mono"><b>'+esc(r.belt)+'</b><div class="aiTiny" style="color:var(--text);">'+esc(r.group||"-")+'</div></td>'+
-          '<td class="mono">'+(r.group==="Environment" ? "-" : (r.run===1?'RUN':'STOP'))+(r.isAcked?'<div class="aiTiny">ACK</div>':'')+'</td>'+
-          '<td class="mono">'+esc(r.alarmType||"-")+(r.alarmMsg?'<div class="aiTiny" style="color:#ff3b30;">'+esc(r.alarmMsg)+'</div>':'')+'</td>'+
-          '<td>'+esc(r.cause)+'</td>'+
-          '<td style="color:var(--scada-cyan);">'+esc(r.action)+'</td>'+
-        '</tr>';
-      }
-      tb.innerHTML=html;
-    }
-  }
-
-  var list=$id("aiReasonList");
-  if(list){
-    if(!rows.length){
-      list.innerHTML='<div class="aiEmpty">No AI findings</div>';
-    }else{
-      var out="";
-      var top=rows.slice(0,5);
-      for(var k=0;k<top.length;k++){
-        var rr=top[k];
-        var borderGlow = rr.level === "CRITICAL" ? "border-color: #ff3b30; box-shadow: 0 0 10px rgba(255,59,48,0.2);" : "";
-        out+='<div class="aiReasonItem" style="' + borderGlow + '">'+
-          '<div class="aiReasonTop">'+
-            '<div class="aiReasonBelt mono">'+esc(rr.belt)+' <span class="aiTiny">'+esc(rr.group||"")+'</span></div>'+
-            '<span class="aiLevel '+esc(rr.level)+'">'+esc(rr.level)+' • '+esc(String(rr.score))+'</span>'+
-          '</div>'+
-          '<div class="aiReasonMsg"><b>Alarm:</b> '+esc(rr.alarmType||"-")+(rr.alarmMsg?(' • '+esc(rr.alarmMsg)):'')+'</div>'+
-          '<div class="aiReasonMsg"><b>Why:</b> '+esc(rr.reasonText||rr.cause)+'</div>'+
-          '<div class="aiReasonMsg" style="color:var(--scada-cyan);"><b>Action:</b> '+esc(rr.action)+'</div>'+
-        '</div>';
-      }
-      list.innerHTML=out;
-    }
-  }
-}
-
 // =========================================================
-// 8. DATA FETCHING (REST API + OFFLINE FALLBACK)
+// 8. DATA FETCHING (REST API via fetch)
 // =========================================================
 
 function fetchHistory(beltName){
-  var cacheKey = "history_24h_" + String(beltName || "");
   setText("modalTitle","History 24h — "+beltName);
   setHTML("modalBody","<div class='skeleton' style='height:30px;margin-bottom:6px;'></div><div class='skeleton' style='height:20px;margin-bottom:4px;'></div><div class='skeleton' style='height:20px;'></div>");
   openModal();
   
   callGasAPI('getHistory24h', {beltName: beltName})
     .then(data => {
-      if(data && data.aborted) return;
-      if(!data||data.ok===false){
-        var cached = readGasCache_(cacheKey);
-        if(cached && cached.data){
-          setCachedBadge_(true, cached.savedAt);
-          renderHistory(cached.data);
-          return;
-        }
-        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((data&&data.error)?data.error:"unknown")+'</div>');
-        return;
-      }
-      writeGasCache_(cacheKey, data);
+      if(!data||data.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((data&&data.error)?data.error:"unknown")+'</div>'); return;}
       renderHistory(data);
     })
     .catch(err => {
-      var cached = readGasCache_(cacheKey);
-      if(cached && cached.data){
-        setCachedBadge_(true, cached.savedAt);
-        renderHistory(cached.data);
-        return;
-      }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
     });
 }
@@ -754,34 +665,23 @@ var _vibPollCount = 0;
 function refreshVibStatus_(){
   var timeRange = (_vibPollCount % 30 === 0) ? "5d" : "4h";
   _vibPollCount++;
-  var cacheKey = "vib_" + timeRange;
 
   callGasAPI('getVibData', {rangeKey: timeRange})
     .then(res => {
-      if(!res || res.aborted || res.ok === false) return;
-      writeGasCache_(cacheKey, res);
+      if(!res || res.ok === false) return;
       if(timeRange === "5d") window.__TREND_VIB_DATA__ = res;
       window.__LAST_VIB_DATA__ = res; 
 
-      if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
+      if (typeof updateGlobalLeftAlarms_ === "function") updateGlobalLeftAlarms_();
       setTimeout(adjustCardPositions_, 100);
     })
-    .catch(err => {
-      var cached = readGasCache_(cacheKey);
-      if(cached && cached.data){
-        if(timeRange === "5d") window.__TREND_VIB_DATA__ = cached.data;
-        window.__LAST_VIB_DATA__ = cached.data;
-        if(__PAGE_MODE__ === "AI" && window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
-      }
-      console.error("Vib Fetch Error:", err);
-    });
+    .catch(err => console.error("Vib Fetch Error:", err));
 }
 
 function fetchVibData(rangeKey, pos) {
   rangeKey = rangeKey || "4h";
   pos = pos || window.__CURRENT_VIB_POS__ || 1; 
   window.__CURRENT_VIB_POS__ = pos;
-  var cacheKey = "vib_" + rangeKey;
   
   var titleText = (pos == 2) ? "Vibration & Sound ก้นกะพ้อ CM11_6532" : 
                   (pos == 3) ? "Vibration & Sound CM9_542.22" : 
@@ -794,42 +694,12 @@ function fetchVibData(rangeKey, pos) {
 
   callGasAPI('getVibData', {rangeKey: rangeKey})
     .then(res => {
-      if(res && res.aborted) return;
-      if(!res||res.ok===false){
-        var cached = readGasCache_(cacheKey);
-        if(cached && cached.data){
-          setCachedBadge_(true, cached.savedAt);
-          renderVibModal_(cached.data, rangeKey, pos);
-          return;
-        }
-        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
-        return;
-      }
-      writeGasCache_(cacheKey, res);
+      if(!res||res.ok===false){ setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>'); return; }
       renderVibModal_(res, rangeKey, pos);
     })
     .catch(err => {
-      var cached = readGasCache_(cacheKey);
-      if(cached && cached.data){
-        setCachedBadge_(true, cached.savedAt);
-        renderVibModal_(cached.data, rangeKey, pos);
-        return;
-      }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
     });
-}
-
-function applyPm10SnapshotData_(dataObj) {
-  if(!dataObj) return;
-  for (var posKey in dataObj) {
-    var posNum = Number(posKey);
-    var latestData = dataObj[posKey]; 
-    setPm10Latest_(posNum, latestData);
-    updateMapDotPm10_(posNum);
-  }
-  if(__PAGE_MODE__ === "PM10") {
-    updatePosCards_PM10_();
-  }
 }
 
 function fetchPm10SnapshotAll_() {
@@ -857,26 +727,19 @@ function fetchPm10SnapshotAll_() {
 
   callGasAPI('getPm10SnapshotAll')
     .then(res => {
-       if(res && res.aborted) return;
        if(res && res.ok && res.data) {
-         writeGasCache_("pm10_snapshot_all", res.data);
-         applyPm10SnapshotData_(res.data);
-       } else {
-         var cached = readGasCache_("pm10_snapshot_all");
-         if(cached && cached.data){
-           setCachedBadge_(true, cached.savedAt);
-           applyPm10SnapshotData_(cached.data);
+         for (var posKey in res.data) {
+           var posNum = Number(posKey);
+           var latestData = res.data[posKey]; 
+           setPm10Latest_(posNum, latestData);
+           updateMapDotPm10_(posNum);
+         }
+         if(__PAGE_MODE__ === "PM10") {
+             updatePosCards_PM10_();
          }
        }
     })
-    .catch(err => {
-      var cached = readGasCache_("pm10_snapshot_all");
-      if(cached && cached.data){
-        setCachedBadge_(true, cached.savedAt);
-        applyPm10SnapshotData_(cached.data);
-      }
-      console.error("PM10 Batch Fetch error: ", err);
-    });
+    .catch(err => console.error("PM10 Batch Fetch error: ", err));
 }
 
 function fetchPm10ForPos_(pos, forceRefresh, days){
@@ -884,7 +747,6 @@ function fetchPm10ForPos_(pos, forceRefresh, days){
   window.__PM10_CURRENT_DAYS__ = currentDays;
   
   var cacheKey = pos + "_" + currentDays;
-  var storageKey = "pm10_series_" + cacheKey;
   var hasCache = hasUsablePm10Series_(cacheKey);
   var canUseCache = hasCache && !forceRefresh && isFreshPm10SeriesCache_(cacheKey);
 
@@ -910,24 +772,16 @@ function fetchPm10ForPos_(pos, forceRefresh, days){
   callGasAPI('getPm10Latest100', { pos: pos, days: currentDays })
     .then(res => {
       __PM_FETCH_LOCK__=false;
-      if(res && res.aborted) return;
       if(!res||res.ok===false){
         if(hasCache){
           renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
           showToast("PM10 cached","warn","showing cached data");
           return;
         }
-        var stored = readGasCache_(storageKey);
-        if(stored && stored.data){
-          setCachedBadge_(true, stored.savedAt);
-          renderPm10Modal_(pos, stored.data, currentDays);
-          return;
-        }
         setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
         return;
       }
       
-      writeGasCache_(storageKey, res);
       cachePm10Series_(cacheKey, res.rows || []);
       var latest = pickLatestPm10Row_(res.rows);
       if(latest) setPm10Latest_(pos, latest);
@@ -941,12 +795,6 @@ function fetchPm10ForPos_(pos, forceRefresh, days){
       if(hasCache){
         renderPm10Modal_(pos, { ok: true, rows: __PM10_SERIES__[cacheKey] || [] }, currentDays);
         showToast("PM10 cached","warn","showing cached data");
-        return;
-      }
-      var stored = readGasCache_(storageKey);
-      if(stored && stored.data){
-        setCachedBadge_(true, stored.savedAt);
-        renderPm10Modal_(pos, stored.data, currentDays);
         return;
       }
       setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
@@ -963,7 +811,7 @@ function loadLogo(){
   }
   callGasAPI('getLogoBase64')
     .then(res => {
-      if(!res || res.aborted || res.ok===false) return;
+      if(!res||res.ok===false) return;
       img.src=res.dataUrl; img.style.display="block";
       try{ localStorage.setItem("scada_logo", res.dataUrl); }catch(e){}
     })
@@ -976,9 +824,7 @@ function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 function startPolling(){stopPolling();pollTimer=setInterval(fetchStatus,REFRESH_SECONDS*1000);}
 function recordFetchOK(){
   if(failStreak>=2) showToast("Connection recovered","ok","fetch ok");
-  failStreak=0;
-  setCachedBadge_(false);
-  setConnBadge("ok","LIVE");
+  failStreak=0; setConnBadge("ok","LIVE");
 }
 function recordFetchFail(reason){
   failStreak++;
@@ -1000,12 +846,11 @@ function fetchStatus(){
      fetchPm10SnapshotAll_();
   }
 
-  if(__PAGE_MODE__==="AI" || __PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
+  if(__PAGE_MODE__==="VIB_DASH") refreshVibStatus_();
 
   callGasAPI('getStatusAll')
     .then(data => {
       if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false;
-      if(data && data.aborted) return;
       setText("lastFetch",new Date().toLocaleString("th-TH"));
       if(!data||data.ok===false){
         if (data && data.error === "SYSTEM_WARMING_UP") {
@@ -1014,25 +859,13 @@ function fetchStatus(){
         } else {
            recordFetchFail(data&&data.error?data.error:"server error");
         }
-        var cachedAll = readGasCache_("status_all");
-        if (cachedAll && cachedAll.data) {
-          setCachedBadge_(true, cachedAll.savedAt);
-          render(cachedAll.data);
-        }
         return;
       }
-      writeGasCache_("status_all", data);
       recordFetchOK(); 
       render(data);
     })
     .catch(err => {
-      if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false;
-      recordFetchFail(String(err));
-      var cachedAll = readGasCache_("status_all");
-      if (cachedAll && cachedAll.data) {
-        setCachedBadge_(true, cachedAll.savedAt);
-        render(cachedAll.data);
-      }
+      if(reloading||done) return; done=true; clearTimeout(tmr); fetchInFlight=false; recordFetchFail(String(err));
     });
 }
 
@@ -1371,7 +1204,6 @@ function fitMapCover_(animate) {
   map.options.minZoom = Math.max(12, coverZoom - 2);
   map.options.maxZoom = 22;
 
-  // 1. รวบรวมพิกัดของจุด POS ทั้งหมดที่เปิดใช้งานในโหมดปัจจุบัน (__PAGE_MODE__)
   var posBounds = L.latLngBounds();
   var count = 0;
 
@@ -1386,19 +1218,16 @@ function fitMapCover_(animate) {
     }
   }
 
-  // 2. หากพบจุด POS ให้คำนวณระยะซูมที่พอดีกับทุกจุด (เผื่อขอบจอไว้ให้การ์ดสถานะไม่ตกขอบ)
   if (count > 0 && posBounds.isValid()) {
     var isMobile = window.innerWidth <= 768;
-    // เผื่อระยะขอบ (Padding) ด้านขวา/ล่าง เผื่อกล่องการ์ด posCard ยื่นออกมา
     var padTopLeft = isMobile ? [40, 40] : [80, 70];
-    var padBottomRight = isMobile ? [40, 40] : [180, 110];
+    var padBottomRight = isMobile ? [40, 40] : [200, 110];
 
     var targetZoom = map.getBoundsZoom(posBounds, false, L.point(
       padTopLeft[0] + padBottomRight[0],
       padTopLeft[1] + padBottomRight[1]
     ));
 
-    // จำกัดไม่ให้ซูมใกล้เกินไป (กรณีมีจุดเดียว) และไม่ให้ซูมออกจนเห็นขอบดำนอกภาพ
     targetZoom = Math.min(targetZoom, 18);
     targetZoom = Math.max(targetZoom, coverZoom);
 
@@ -1410,7 +1239,6 @@ function fitMapCover_(animate) {
       animate: !!animate
     });
   } else {
-    // Fallback กรณีไม่มีจุด POS ให้แสดงเต็มภาพ map1.png
     map.__BASE_ZOOM = coverZoom;
     map.setView(imgBounds.getCenter(), coverZoom, { animate: !!animate });
   }
@@ -1537,22 +1365,6 @@ function showPosCards_(pos, anchorEl) {
   pop.style.left = left + "px"; pop.style.top = top + "px";
 }
 
-function applyMapPointsData_(points) {
-  MAP_POINTS = points || [];
-  mapCoords = {};
-  MAP_POINTS.forEach(p => {
-    mapCoords[p.pos] = { lat: p.lat, lng: p.lng };
-  });
-  initLeafletMap_();
-  if (window.__LAST_DATA__) {
-    updateMapDots_(window.__LAST_DATA__);
-    updatePosCards_(window.__LAST_DATA__);
-  } else {
-    fetchStatus();
-  }
-  fetchPm10SnapshotAll_();
-}
-
 function buildMapDotsOnce_() {
   var canvas = $id("mapCanvas"); 
   if(!canvas || canvas.__dotsBuilt) return;
@@ -1561,26 +1373,21 @@ function buildMapDotsOnce_() {
 
   callGasAPI('getMapPointsData')
     .then(points => {
-      if(points && points.aborted) return;
-      if(Array.isArray(points) && points.length){
-        writeGasCache_("map_points", points);
-        applyMapPointsData_(points);
+      MAP_POINTS = points;
+      mapCoords = {};
+      points.forEach(p => {
+        mapCoords[p.pos] = { lat: p.lat, lng: p.lng };
+      });
+      initLeafletMap_();
+      if (window.__LAST_DATA__) {
+        updateMapDots_(window.__LAST_DATA__);
+        updatePosCards_(window.__LAST_DATA__);
       } else {
-        var cached = readGasCache_("map_points");
-        if(cached && Array.isArray(cached.data)){
-          setCachedBadge_(true, cached.savedAt);
-          applyMapPointsData_(cached.data);
-        }
+        fetchStatus();
       }
+      fetchPm10SnapshotAll_(); 
     })
-    .catch(err => {
-      var cached = readGasCache_("map_points");
-      if(cached && Array.isArray(cached.data)){
-        setCachedBadge_(true, cached.savedAt);
-        applyMapPointsData_(cached.data);
-      }
-      console.error("Map points fetch error:", err);
-    });
+    .catch(err => console.error("Map points fetch error:", err));
 }
 
 function initLeafletMap_() {
@@ -1597,21 +1404,17 @@ function initLeafletMap_() {
     maxZoom: 22
   });
 
-  // แสดงภาพแผนผังโรงงาน map1.png
   L.imageOverlay('map1.png', MAP_IMAGE_BOUNDS, {
     interactive: false
   }).addTo(map);
 
-  // เผื่อขอบเขตการเลื่อนออกไป 80% เพื่อให้ย่อ-ขยายและลากดูพื้นที่รอบๆ ได้อิสระ
   map.setMaxBounds(L.latLngBounds(MAP_IMAGE_BOUNDS).pad(0.8));
   map.options.maxBoundsViscosity = 0.5;
 
-  // คำนวณและซูมภาพให้เต็มกรอบหน้าจอตอนเริ่มต้น
   fitMapCover_(false);
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  // ปุ่ม Reset View มุมขวาล่างเหนือปุ่ม + / -
   var resetViewControl = L.control({ position: 'bottomright' });
   resetViewControl.onAdd = function() {
     var btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control scada-reset-map-btn');
@@ -1643,7 +1446,6 @@ function initLeafletMap_() {
   };
   resetViewControl.addTo(map);
 
-  // กล่องแสดงพิกัดและระยะการซูมมุมซ้ายล่าง
   var coordControl = L.control({ position: 'bottomleft' });
   coordControl.onAdd = function(map) {
     this._div = L.DomUtil.create('div', 'map-coords mono');
@@ -1698,7 +1500,6 @@ function initLeafletMap_() {
       card.className = "posCard";
       card.style.transform = "translate(" + p.labelDx + "px," + p.labelDy + "px)";
 
-      // สร้างรายการสายพานเริ่มต้นแสดงในการ์ดทันที ไม่ต้องรอโหลดเสร็จ
       var initLines = "";
       if (p.belts && p.belts.length) {
         for (var bIdx = 0; bIdx < p.belts.length; bIdx++) {
@@ -2412,17 +2213,16 @@ function setLegendForMode_(){
 function setPageMode(mode){
   __PAGE_MODE__ = mode;
   document.body.setAttribute("data-mode", mode);
-  try { localStorage.setItem("scada_page_mode", mode); } catch (e) {}
+  localStorage.setItem("scada_page_mode", mode);
 
   setSectionVisibility_();
-  syncIframesForMode_(mode);
   setModeButtons_();
   setLegendForMode_();
   hideMapPopup_();
   clearMapDotStateCache_();
 
   if (typeof map !== 'undefined' && map) {
-    var isNewMapVisible = (mode !== "AI" && mode !== "VIB_DASH");
+    var isNewMapVisible = (mode !== "VIB_DASH");
 
     var syncTvMapView_ = function() {
       if (!isNewMapVisible) return;
@@ -2472,7 +2272,6 @@ function setPageMode(mode){
   } else if(mode === "AI"){
     setText("title", "Monitor");
     setText("subtitle", "Noise Sensor");
-    if(window.__LAST_DATA__) renderAiAnalysis_(window.__LAST_DATA__);
     refreshVibStatus_(); 
   } else if(mode === "VIB_DASH"){
     setText("title", "Monitor");
@@ -2537,7 +2336,7 @@ function autoSwitchTick_(){
   
   if(__AUTO_SWITCH_REMAINING__ <= 0){
     __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC;
-    var seq=["BELT","PM10","VIB_DASH","AI"];
+    var seq=["BELT","PM10","VIB_DASH"];
     var idx=seq.indexOf(__PAGE_MODE__);
     if(idx<0) idx=0;
     setPageMode(seq[(idx+1)%seq.length]);
@@ -2605,62 +2404,22 @@ function renderSimpleTable_(title, rows){
   }
   function openBasicModal_(title){setText("modalTitle",title);setHTML("modalBody","<div class='skeleton' style='height:20px;margin-bottom:5px;'></div><div class='skeleton' style='height:20px;margin-bottom:5px;'></div><div class='skeleton' style='height:20px;'></div>");openModal();}
   function fetchAlarmLog24h_(){
-    var cacheKey = "alarm_log_24h";
     openBasicModal_("Alarm Log 24h");
     callGasAPI('getAlarmLog24h', {page: 'overview'})
       .then(res => {
-        if(res && res.aborted) return;
-        if(!res||res.ok===false){
-          var cached = readGasCache_(cacheKey);
-          if(cached && cached.data){
-            setCachedBadge_(true, cached.savedAt);
-            renderSimpleTable_("Alarm Log 24h", cached.data.rows || []);
-            return;
-          }
-          setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
-          return;
-        }
-        writeGasCache_(cacheKey, res);
+        if(!res||res.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');return;}
         renderSimpleTable_("Alarm Log 24h",res.rows||[]);
       })
-      .catch(err => {
-        var cached = readGasCache_(cacheKey);
-        if(cached && cached.data){
-          setCachedBadge_(true, cached.savedAt);
-          renderSimpleTable_("Alarm Log 24h", cached.data.rows || []);
-          return;
-        }
-        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
-      });
+      .catch(err => {setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');});
   }
   function fetchEventList24h_(){
-    var cacheKey = "event_list_24h";
     openBasicModal_("Event List 24h");
     callGasAPI('getEventList24h', {page: 'overview'})
       .then(res => {
-        if(res && res.aborted) return;
-        if(!res||res.ok===false){
-          var cached = readGasCache_(cacheKey);
-          if(cached && cached.data){
-            setCachedBadge_(true, cached.savedAt);
-            renderSimpleTable_("Event List 24h", cached.data.rows || []);
-            return;
-          }
-          setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');
-          return;
-        }
-        writeGasCache_(cacheKey, res);
+        if(!res||res.ok===false){setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc((res&&res.error)?res.error:"unknown")+'</div>');return;}
         renderSimpleTable_("Event List 24h",res.rows||[]);
       })
-      .catch(err => {
-        var cached = readGasCache_(cacheKey);
-        if(cached && cached.data){
-          setCachedBadge_(true, cached.savedAt);
-          renderSimpleTable_("Event List 24h", cached.data.rows || []);
-          return;
-        }
-        setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');
-      });
+      .catch(err => {setHTML("modalBody",'<div class="mono" style="color:var(--other);font-weight:900;">ERROR: '+esc(String(err))+'</div>');});
   }
   bind("alarmLogBtn",fetchAlarmLog24h_); bind("alarmLogBtn2",fetchAlarmLog24h_);
   bind("eventListBtn",fetchEventList24h_); bind("eventListBtn2",fetchEventList24h_);
@@ -2705,36 +2464,6 @@ window.addEventListener("resize", function() {
 });
 
 // =========================================================
-// MOBILE HAMBURGER MENU TOGGLE
-// =========================================================
-(function() {
-  var hamBtn = document.getElementById("hamburgerBtn");
-  var mobMenu = document.getElementById("mobileMenu");
-  if (!hamBtn || !mobMenu) return;
-
-  hamBtn.addEventListener("click", function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    mobMenu.classList.toggle("open");
-  });
-
-  document.addEventListener("click", function(e) {
-    if (!mobMenu.classList.contains("open")) return;
-    if (!mobMenu.contains(e.target) && !hamBtn.contains(e.target)) {
-      mobMenu.classList.remove("open");
-    }
-  });
-
-  mobMenu.addEventListener("click", function(e) {
-    var btn = e.target.closest("button");
-    if (!btn) return;
-    setTimeout(function() {
-      mobMenu.classList.remove("open");
-    }, 120);
-  });
-})();
-
-// =========================================================
 // 16. QR ZOOM
 // =========================================================
 (function(){
@@ -2759,7 +2488,7 @@ window.addEventListener("resize", function() {
 })();
 
 // =========================================================
-// 17. REPORT LOGIC (AUTO-COMPRESS 1600px @ 0.82 & ORIGINAL =s0)
+// 17. REPORT LOGIC (HIGH-RES 2560px & ORIGINAL =s0)
 // =========================================================
 const DELETE_PASSWORD="1234";
 
@@ -2786,7 +2515,6 @@ function toDriveImgUrl_(u) {
   else if (/^[a-zA-Z0-9_-]{10,}$/.test(u)) id = u;
 
   if (id) {
-    // =s0 สั่งให้ Google Drive ส่งภาพความละเอียดต้นฉบับ 100% คมชัดสูงสุดบนจอ TV
     return "https://lh3.googleusercontent.com/d/" + id + "=s0";
   }
   return u;
@@ -2902,7 +2630,7 @@ function fileToBase64_(file) {
     reader.onload = function(e) {
       var img = new Image();
       img.onload = function() {
-        var MAX_DIM = 1600; // คมชัดบนจอ TV และมือถือ แต่ลดขนาดไฟล์เหลือ ~300 KB
+        var MAX_DIM = 2560;
         var w = img.width;
         var h = img.height;
 
@@ -2924,7 +2652,7 @@ function fileToBase64_(file) {
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, w, h);
 
-        var dataUrl = canvas.toDataURL("image/jpeg", 0.82); // คุณภาพ 82% ส่งผ่านเน็ตมือถือเร็วขึ้นมาก
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.92);
         var comma = dataUrl.indexOf(",");
         var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 
@@ -3036,7 +2764,7 @@ async function reportSave_(){
         setUploadProgress_(Math.round(((i)/fileArr.length)*100),true);
         try{
           const meta=await fileToBase64_(fileArr[i]);
-          const res = await callGasAPI('uploadReportImage', {}, 'POST', meta, { cancelPrevious: false });
+          const res = await callGasAPI('uploadReportImage', {}, 'POST', meta);
           if(!res||res.ok===false) throw new Error((res&&res.error)?res.error:"upload error");
           imgUrls["img"+(i+1)]=toDriveImgUrl_(res.viewUrl||res.fileId||"");
         }catch(e){
@@ -3052,7 +2780,7 @@ async function reportSave_(){
     var payload={id:__REPORT_EDIT_ID__||"",checkTimeMs:checkMs,code:code,detail:detail,images:imgUrls,operator:op.name||"",shift:op.shift||""};
     if(!__REPORT_EDIT_ID__){
       var saveLoader=makeDelayedLoader(350,"Saving…","Please wait");
-      callGasAPI('reportCreate', {}, 'POST', payload, { cancelPrevious: false })
+      callGasAPI('reportCreate', {}, 'POST', payload)
         .then(res => {
           saveLoader.close();
           if(!res||res.ok===false){showToast("Create failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -3070,7 +2798,7 @@ async function reportSave_(){
     }).then((result)=>{
       if(!result.isConfirmed) return;
       var upLoader=makeDelayedLoader(350,"Updating…","Please wait");
-      callGasAPI('reportUpdate', {}, 'POST', payload, { cancelPrevious: false })
+      callGasAPI('reportUpdate', {}, 'POST', payload)
         .then(res => {
           upLoader.close();
           if(!res||res.ok===false){showToast("Update failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -3091,7 +2819,7 @@ function reportDelete_(){
   }).then((result)=>{
     if(!result.isConfirmed) return;
     var id=__REPORT_EDIT_ID__,loader=makeDelayedLoader(200,"Deleting…",id);
-    callGasAPI('reportDelete', {}, 'POST', {id: id}, { cancelPrevious: false })
+    callGasAPI('reportDelete', {}, 'POST', {id: id})
       .then(res => {
         loader.close();
         if(!res||res.ok===false){showToast("Delete failed","err",(res&&res.error)?res.error:"unknown");return;}
@@ -3138,35 +2866,14 @@ function reportRender_(rows){
 }
 
 function reportRefresh_(){
-  var cacheKey = "report_list_200";
   var loader = makeDelayedLoader(200, "Loading reports…", "Please wait");
   callGasAPI('reportList', {limit: 200})
     .then(res => {
       loader.close();
-      if(res && res.aborted) return;
-      if(!res || res.ok === false){
-        var cached = readGasCache_(cacheKey);
-        if(cached && cached.data){
-          setCachedBadge_(true, cached.savedAt);
-          reportRender_(cached.data.rows || []);
-          return;
-        }
-        showToast("Fetch failed", "err", (res && res.error) ? res.error : "");
-        return;
-      }
-      writeGasCache_(cacheKey, res);
+      if(!res || res.ok === false){ showToast("Fetch failed", "err", (res && res.error) ? res.error : ""); return; }
       reportRender_(res.rows || []);
     })
-    .catch(err => {
-      loader.close();
-      var cached = readGasCache_(cacheKey);
-      if(cached && cached.data){
-        setCachedBadge_(true, cached.savedAt);
-        reportRender_(cached.data.rows || []);
-        return;
-      }
-      showToast("Fetch failed", "err", String(err));
-    });
+    .catch(err => { loader.close(); showToast("Fetch failed", "err", String(err)); });
 }
 
 (function bindReportButtons_(){
@@ -3195,32 +2902,52 @@ function reportRefresh_(){
 })();
 
 // =========================================================
-// 18. LIVE TICKER ONLY (ลบกล่องแจ้งเตือนด้านข้างออกแล้ว)
+// 18. LIVE TICKER (SMOOTH SPEED & ANTI-FLICKER)
 // =========================================================
+var __LAST_TICKER_TEXT__ = "";
+var __LAST_TICKER_RENDER_AT__ = 0;
+
 function updateGlobalLeftAlarms_() {
-  if (!window.__LAST_DATA__) return; 
+  if (!window.__LAST_DATA__) return;
+
+  var now = Date.now();
+  if (__LAST_TICKER_TEXT__ && (now - __LAST_TICKER_RENDER_AT__ < 30000)) {
+    return;
+  }
+
   var rows = buildAiRows_(window.__LAST_DATA__);
 
   var oldPanel = document.getElementById("leftAlarmPanel");
   if (oldPanel) oldPanel.remove();
 
+  var seenMap = {};
   var activeAlarms = rows.filter(function(r) {
     var isAlarm = r.level === "CRITICAL" || r.level === "HIGH" || r.level === "MEDIUM";
     var isAlert = r.status === "ALERT" || r.status === "WARN";
-    return isAlarm && isAlert;
+    if (!isAlarm || !isAlert) return false;
+    var key = String(r.belt || "") + "|" + String(r.alarmType || "");
+    if (seenMap[key]) return false;
+    seenMap[key] = true;
+    return true;
   });
 
-  var ticker = document.getElementById("liveTickerContent");
-  if (ticker) {
-    var tickerHtml = '<span>';
-    if (activeAlarms.length === 0) {
-      tickerHtml += '✅ [' + new Date().toLocaleTimeString('th-TH') + '] SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.';
-    } else {
-      var msgs = activeAlarms.map(a => '⚠️ ' + a.belt + ': ' + (a.alarmMsg || a.alarmType));
-      tickerHtml += msgs.join(' &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ');
+  var nextText = "";
+  if (activeAlarms.length === 0) {
+    nextText = "✅ SYSTEM NORMAL: All sensors and transport belts are operating within standard parameters.";
+  } else {
+    var msgs = activeAlarms.map(function(a) {
+      return "⚠️ " + a.belt + " [" + a.level + "]: " + (a.alarmMsg || a.alarmType);
+    });
+    nextText = msgs.join("     •     ");
+  }
+
+  if (nextText !== __LAST_TICKER_TEXT__) {
+    __LAST_TICKER_TEXT__ = nextText;
+    __LAST_TICKER_RENDER_AT__ = now;
+    var ticker = document.getElementById("liveTickerContent");
+    if (ticker) {
+      ticker.innerHTML = "<span>" + esc(nextText) + "</span>";
     }
-    tickerHtml += '</span>';
-    ticker.innerHTML = tickerHtml;
   }
 }
 
@@ -3231,10 +2958,11 @@ document.addEventListener("DOMContentLoaded", function() {
   refreshOperatorPill();
   updateMuteBtn();
   loadLogo(); 
-
-  try { localStorage.removeItem("scada_page_mode"); } catch (e) {}
-  __PAGE_MODE__ = "BELT";
-  document.body.setAttribute("data-mode", "BELT");
+  
+  var savedMode = localStorage.getItem("scada_page_mode") || "PM10";
+  if (savedMode === "AI") savedMode = "PM10";
+  __PAGE_MODE__ = savedMode;
+  document.body.setAttribute("data-mode", savedMode);
 
   var canvas = document.getElementById("mapCanvas");
   if(canvas) {
@@ -3244,7 +2972,7 @@ document.addEventListener("DOMContentLoaded", function() {
     setTimeout(buildMapDotsOnce_, 500); 
   }
 
-  setPageMode("BELT");
+  setPageMode(savedMode);
   setAutoSwitchButtons_();
   if(__AUTO_SWITCH_ENABLED__) startAutoSwitch_();
 });
@@ -3257,7 +2985,6 @@ window.addEventListener("load", function(){
   }, 50);
 });
 
-// รีเฟรชหน้าอัตโนมัติทุก 6 ชั่วโมง ป้องกัน Smart TV แรมเต็ม
 setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 
 // =========================================================
@@ -3299,7 +3026,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
 (function() {
   var hideBtn = document.getElementById("toggleHeaderBtn");
   var floatBtn = document.getElementById("floatingHeaderToggle");
-  var IDLE_TIMEOUT_MS = 15000; // 15 วินาที (ปรับเวลาได้ตามต้องการ เช่น 10000 = 10 วิ)
+  var IDLE_TIMEOUT_MS = 15000;
   var idleTimer = null;
   var lastMoveTime = 0;
 
@@ -3473,7 +3200,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     if (p.__dragBound) return;
     p.__dragBound = true;
 
-    // 1. ลากจุด POS (เปลี่ยนค่า Lat, Lng)
     p.__el.addEventListener("mousedown", function(e) {
       if (!__EDIT_LAYOUT_MODE__) return;
       e.preventDefault();
@@ -3498,7 +3224,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       window.addEventListener("mouseup", onUp);
     });
 
-    // 2. ลากกล่องการ์ด (เปลี่ยนค่า labelDx, labelDy)
     p.__card.addEventListener("mousedown", function(e) {
       if (!__EDIT_LAYOUT_MODE__) return;
       e.preventDefault();
@@ -3545,7 +3270,6 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     setEditMode(false);
   });
 
-  // ปุ่มบันทึกพิกัดลง Google Sheets โดยตรง
   document.getElementById("saveLayoutSheetBtn").addEventListener("click", function() {
     Swal.fire({
       title: "บันทึกตำแหน่งลง Google Sheets",
@@ -3577,7 +3301,7 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       });
 
       var loader = makeDelayedLoader(150, "กำลังบันทึกพิกัด...", "กรุณารอสักครู่");
-      callGasAPI('saveMapPoints', {}, 'POST', { points: pointsPayload }, { cancelPrevious: false })
+      callGasAPI('saveMapPoints', {}, 'POST', { points: pointsPayload })
         .then(function(res) {
           loader.close();
           if (!res || res.ok === false) {
@@ -3614,4 +3338,234 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       Swal.fire({ title: "POS Coordinates JSON", html: '<textarea style="width:100%;height:260px;font-family:monospace;">' + jsonStr + '</textarea>' });
     }
   });
+})();
+
+// =========================================================
+// 22. HIVE MQ CLOUD PURGE AIR LIVE MONITOR (8 POINTS)
+// =========================================================
+(function initPurgeAirMqtt_() {
+  const MQTT_HOST = "4d79d42984154e37aab32ca068370f40.s1.eu.hivemq.cloud";
+  const MQTT_PORT = 8884;
+  const MQTT_USER = "esp32_bagfilter_sensor";
+  const MQTT_PASS = "Mcl195088";
+  const MQTT_TOPICS = ["bagfilter/#", "purge/#", "cm/+/purge/#"];
+
+  const PURGE_CONFIG = {
+    badBelow: 3.5,
+    warnBelow: 4.2,
+    defaultUnit: "bar",
+    decimals: 2,
+    layout: "grid2"
+  };
+
+  const PURGE_POINTS = [
+    { name: "6526.04" },
+    { name: "6524.04" },
+    { name: "6526.08" },
+    { name: "6536.04" },
+    { name: "6536.041" },
+    { name: "6536.08" },
+    { name: "6511.76" },
+    { name: "6511.80" }
+  ];
+
+  const purgeState = {};
+  PURGE_POINTS.forEach(function(pt) {
+    purgeState[pt.name] = { val: null, unit: PURGE_CONFIG.defaultUnit };
+  });
+
+  let pahoClient = null;
+  let reconnectTimer = null;
+
+  function getPurgeColorClass_(val) {
+    if (val == null || !isFinite(val)) return "empty";
+    if (val < PURGE_CONFIG.badBelow) return "bad";
+    if (val < PURGE_CONFIG.warnBelow) return "warn";
+    return "ok";
+  }
+
+  function renderPurgeList_() {
+    var listEl = document.getElementById("purgeAirList");
+    if (!listEl) return;
+
+    listEl.classList.toggle("grid2", PURGE_CONFIG.layout === "grid2");
+
+    var html = "";
+    for (var i = 0; i < PURGE_POINTS.length; i++) {
+      var name = PURGE_POINTS[i].name;
+      var st = purgeState[name] || { val: null, unit: PURGE_CONFIG.defaultUnit };
+      var valText = "-";
+      var cls = "empty";
+
+      if (st.val != null && isFinite(st.val)) {
+        valText = Number(st.val).toFixed(PURGE_CONFIG.decimals);
+        if (PURGE_CONFIG.layout === "list" && st.unit) {
+          valText += " " + st.unit;
+        }
+        cls = getPurgeColorClass_(st.val);
+      }
+
+      html +=
+        '<div class="purge-point-row ' + cls + '">' +
+          '<span class="purge-point-name">' + esc(name) + '</span>' +
+          '<span class="purge-point-val ' + cls + '">' + esc(valText) + '</span>' +
+        '</div>';
+    }
+    listEl.innerHTML = html;
+  }
+
+  function setPurgeConnState_(cls, label) {
+    var st = document.getElementById("purgeMqttStatus");
+    if (!st) return;
+    st.className = "purge-mqtt-dot " + cls;
+    st.textContent = label;
+  }
+
+  function updatePurgeTimestamp_() {
+    var timeEl = document.getElementById("purgeAirTime");
+    if (timeEl) {
+      timeEl.textContent = "Updated: " + new Date().toLocaleTimeString("th-TH");
+    }
+  }
+
+  function parseNumUnit_(raw) {
+    var s = String(raw == null ? "" : raw).trim();
+    if (!s) return null;
+    var m = s.match(/-?\d+(?:\.\d+)?/);
+    if (!m) return null;
+    var n = Number(m[0]);
+    if (!isFinite(n)) return null;
+    var uMatch = s.match(/\b(bar|psi|kpa|mpa)\b/i);
+    return { val: n, unit: uMatch ? uMatch[1] : null };
+  }
+
+  function matchPointNameFromTopic_(topic) {
+    var t = String(topic || "").trim();
+    for (var i = 0; i < PURGE_POINTS.length; i++) {
+      var name = PURGE_POINTS[i].name;
+      var re = new RegExp("(^|[/\\-_])" + name.replace(/\./g, "\\.") + "([/\\-_]|$)");
+      if (re.test(t)) return name;
+    }
+    return null;
+  }
+
+  function handlePurgeMessage_(topic, payloadStr) {
+    var raw = String(payloadStr == null ? "" : payloadStr).trim();
+    if (!raw) return;
+
+    var changed = false;
+
+    if (raw.charAt(0) === "{") {
+      try {
+        var obj = JSON.parse(raw);
+
+        if (obj && typeof obj === "object") {
+          var targetName = obj.name || obj.point || obj.device || obj.id;
+          var singleVal = obj.purge ?? obj.purge_air ?? obj.purgeAir ?? obj.pressure ?? obj.val ?? obj.value;
+          if (targetName && purgeState[String(targetName)] && singleVal != null && isFinite(Number(singleVal))) {
+            purgeState[String(targetName)].val = Number(singleVal);
+            if (obj.unit) purgeState[String(targetName)].unit = String(obj.unit);
+            changed = true;
+          }
+
+          for (var i = 0; i < PURGE_POINTS.length; i++) {
+            var pName = PURGE_POINTS[i].name;
+            if (Object.prototype.hasOwnProperty.call(obj, pName) && obj[pName] != null && isFinite(Number(obj[pName]))) {
+              purgeState[pName].val = Number(obj[pName]);
+              if (obj.unit) purgeState[pName].unit = String(obj.unit);
+              changed = true;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!changed) {
+      var matchedName = matchPointNameFromTopic_(topic);
+      if (matchedName) {
+        var parsed = parseNumUnit_(raw);
+        if (parsed) {
+          purgeState[matchedName].val = parsed.val;
+          if (parsed.unit) purgeState[matchedName].unit = parsed.unit;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      renderPurgeList_();
+      updatePurgeTimestamp_();
+    }
+  }
+
+  function scheduleReconnect_() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(function() {
+      reconnectTimer = null;
+      connectMqtt_();
+    }, 5000);
+  }
+
+  function connectMqtt_() {
+    if (typeof Paho === "undefined" || !Paho.MQTT) {
+      setPurgeConnState_("err", "NO LIB");
+      scheduleReconnect_();
+      return;
+    }
+
+    try {
+      var clientId = "scada_tv_purge8_" + Math.random().toString(16).slice(2, 10);
+      pahoClient = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, "/mqtt", clientId);
+
+      pahoClient.onConnectionLost = function(resp) {
+        setPurgeConnState_("err", "RETRY");
+        if (resp && resp.errorCode !== 0) {
+          console.warn("MQTT Purge lost:", resp.errorMessage);
+        }
+        scheduleReconnect_();
+      };
+
+      pahoClient.onMessageArrived = function(msg) {
+        handlePurgeMessage_(msg.destinationName || "", msg.payloadString || "");
+      };
+
+      setPurgeConnState_("offline", "CONN");
+      pahoClient.connect({
+        userName: MQTT_USER,
+        password: MQTT_PASS,
+        useSSL: true,
+        timeout: 10,
+        keepAliveInterval: 30,
+        reconnect: false,
+        onSuccess: function() {
+          setPurgeConnState_("online", "MQTT");
+          MQTT_TOPICS.forEach(function(tp) {
+            try {
+              pahoClient.subscribe(tp, { qos: 0 });
+            } catch (e) {
+              console.warn("Subscribe err:", tp, e);
+            }
+          });
+        },
+        onFailure: function(err) {
+          setPurgeConnState_("err", "FAIL");
+          console.warn("MQTT Purge connect failed:", err && err.errorMessage);
+          scheduleReconnect_();
+        }
+      });
+    } catch (err) {
+      setPurgeConnState_("err", "ERR");
+      scheduleReconnect_();
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function() {
+      renderPurgeList_();
+      connectMqtt_();
+    });
+  } else {
+    renderPurgeList_();
+    connectMqtt_();
+  }
 })();
