@@ -296,20 +296,36 @@ function updateMuteBtn(){
 }
 function ensureAudio(){ if(audioCtx) return true; try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){audioCtx=null;return false;} return true; }
 function beepOnce(){
-  if(!getBeepEnabled()) return; if(!ensureAudio()) return;
-  if(audioCtx.state==="suspended") audioCtx.resume().catch(function(){});
+  if(!getBeepEnabled()) return;
+  if(!ensureAudio()) return;
+
+  if(audioCtx.state === "suspended"){
+    audioCtx.resume().catch(function(){});
+    return;
+  }
+  if(audioCtx.state !== "running") return;
+
   var now=Date.now();
   if(now-lastBeepAt<BEEP_COOLDOWN_MS) return;
   lastBeepAt=now;
-  var t0=audioCtx.currentTime;
-  function tone(freq,start,dur,gainVal){
-    var osc=audioCtx.createOscillator(); var gain=audioCtx.createGain();
-    osc.type="square"; osc.frequency.setValueAtTime(freq,start);
-    gain.gain.setValueAtTime(0.0001,start); gain.gain.exponentialRampToValueAtTime(gainVal,start+0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001,start+dur);
-    osc.connect(gain).connect(audioCtx.destination); osc.start(start); osc.stop(start+dur+0.02);
-  }
-  tone(1100,t0+0.00,0.10,0.18); tone(900,t0+0.14,0.12,0.14);
+
+  try {
+    var t0=audioCtx.currentTime;
+    function tone(freq,start,dur,gainVal){
+      var osc=audioCtx.createOscillator();
+      var gain=audioCtx.createGain();
+      osc.type="square";
+      osc.frequency.setValueAtTime(freq,start);
+      gain.gain.setValueAtTime(0.0001,start);
+      gain.gain.exponentialRampToValueAtTime(gainVal,start+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001,start+dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start+dur+0.02);
+    }
+    tone(1100,t0+0.00,0.10,0.18);
+    tone(900,t0+0.14,0.12,0.14);
+  } catch (err) {}
 }
 function handleBeepFromData(data){
   if(document.hidden || (__PAGE_MODE__ !== "BELT" && __PAGE_MODE__ !== "AI")) return;
