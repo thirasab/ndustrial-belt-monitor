@@ -1,281 +1,284 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  
-  <!-- Preconnect & DNS Prefetch -->
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr">
-  
-  <!-- External CSS Libraries -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  
-  <!-- Main CSS -->
-  <link rel="stylesheet" href="style.css?v=19" />
-  <title>Industrial Belt Monitor</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Industrial Belt Monitor — SCADA</title>
 
-  <!-- External JS Libraries -->
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
-  <!-- Main JS -->
-  <script defer src="script.js?v=19"></script>
+  <!-- Chart.js + Zoom Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+  <!-- Paho MQTT over WebSockets -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
+
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Project Stylesheet -->
+  <link rel="stylesheet" href="style.css?v=18" />
 </head>
+<body data-theme="night" data-mode="PM10">
 
-<body data-theme="night" data-mode="BELT">
-  
-  <!-- ปุ่มลอยสำหรับเรียกเมนูคืนเมื่ออยู่ในโหมดซ่อน Header (เฉพาะจอใหญ่ TV/PC) -->
-  <button id="floatingHeaderToggle" class="floating-header-btn" title="Show Header">☰ Menu</button>
+  <!-- ปุ่มลอยสำหรับเรียกแถบเมนูกลับมาเมื่อซ่อน Header -->
+  <button id="floatingHeaderToggle" class="floating-header-btn" type="button" title="Show Menu">☰ Menu</button>
 
-  <!-- ================= TOP BAR (COMPACT SINGLE LINE) ================= -->
-  <div class="top">
+  <!-- แจ้งเตือนมุมขวาบน (Toast) -->
+  <div id="toastWrap" class="toastWrap"></div>
+
+  <!-- ========================================================= -->
+  <!-- FLOATING PURGE AIR WIDGET (8 POINTS TOP-RIGHT ALL PAGES)  -->
+  <!-- ========================================================= -->
+  <div id="purgeAirWidget" class="purge-air-widget mono" title="Bag Filter Purge Air Pressure (MQTT)">
+    <div class="purge-air-head">
+      <span class="purge-air-title">💨 PURGE AIR</span>
+      <span id="purgeMqttStatus" class="purge-mqtt-dot offline">OFF</span>
+    </div>
+    <div id="purgeAirList" class="purge-air-list grid2"></div>
+    <div id="purgeAirTime" class="purge-air-time">Waiting MQTT...</div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- TOP NAVIGATION BAR -->
+  <!-- ========================================================= -->
+  <header class="top" id="topBar">
     <div class="left">
+      <img id="logoImg" alt="Logo" />
       <div class="brand">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <img id="logoImg" alt="logo" />
-          <div style="display:flex;flex-direction:column;gap:1px;">
-            <div class="h1" id="title">Monitor</div>
-            <div class="sub" id="subtitle">focus Cement transport</div>
-          </div>
-        </div>
+        <div class="h1" id="title">Monitor</div>
+        <div class="sub" id="subtitle">SCADA Monitoring</div>
       </div>
-      <div class="connBadge ok" id="connBadge">
-        <span class="connDot"></span><span id="connTxt">LIVE</span>
+      <div id="connBadge" class="connBadge warn">
+        <span class="connDot"></span>
+        <span id="connTxt">...</span>
       </div>
+      <span id="opPill" class="pill mono">OP: -</span>
+      <span id="legendPill" class="pill mono"></span>
     </div>
 
     <div class="right">
-      <div class="pill" id="legendPill">
-        <span class="lg open">OPEN</span> • <span class="lg stuck">STUCK</span> • <span class="lg stale">STALE</span>
-      </div>
-      
-      <button class="btn modeBtn headBtn primary" id="modeBeltBtn">Damaged belt</button>
-      <button class="btn modeBtn pmBtn" id="modePm10Btn">PM10</button>
-      <button class="btn modeBtn vibBtn" id="modeVibDashBtn" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button>
-      <button class="btn modeBtn" id="modeAiBtn" style="background-color: #0d9488; border-color: #0f766e; color: #fff; font-weight: 1000;">Noise Sensor</button>
-
-      <button class="btn" id="autoSwitchBtn" style="font-weight: 1000; letter-spacing: .3px;">⏸ Auto: OFF</button>
+      <button id="modeBeltBtn" class="btn modeBtn headBtn" type="button">Damaged belt</button>
+      <button id="modePm10Btn" class="btn modeBtn pmBtn" type="button">PM10</button>
+      <button id="modeVibDashBtn" class="btn modeBtn vibBtn" type="button">Vib Dashboard</button>
+      <button id="modeAiBtn" class="btn modeBtn aiBtn" type="button">Noise Sensor</button>
+      <button id="autoSwitchBtn" class="btn" type="button">🔄 Auto: ON 60s</button>
+      <button id="reportBtn" class="btn btn-report" type="button">📝 Report</button>
 
       <div class="dropdown">
-        <button class="btn dropbtn" data-target="ddMainMenu" style="font-weight: 1000;">⚙️ Menu ▾</button>
-        <div class="dropdown-content" id="ddMainMenu">
-          <button id="toggleHeaderBtn">👁️ Hide Header Now</button>
-          <button id="tvFullscreenBtn">🖥️ Fullscreen</button>
-          <button id="editLayoutBtn">🛠️ Edit POS & Card</button>
-          <button id="qrBtn">📱 QR code webapp</button>
-          <div style="border-top:1px solid rgba(150,160,180,0.15); margin: 4px 0;"></div>
-          <button id="opBtn">👤 Operator: -</button>
-          <button id="muteBtn">🔊 Beep: ON</button>
-          <button id="themeBtnToggle">🌙 Theme: NIGHT</button>
-          <div style="border-top:1px solid rgba(150,160,180,0.15); margin: 4px 0;"></div>
-          <button id="reportBtn">📝 Report Form</button>
-          <button id="alarmLogBtn">🚨 Alarm Log 24h</button>
-          <button id="eventListBtn">📜 Event List 24h</button>
+        <button class="btn dropbtn" type="button" data-target="ddMainMenu">⚙️ Menu ▾</button>
+        <div id="ddMainMenu" class="dropdown-content">
+          <button id="opBtn" type="button">👤 Operator Login</button>
+          <button id="alarmLogBtn" type="button">🚨 Alarm Log 24h</button>
+          <button id="eventListBtn" type="button">📋 Event List 24h</button>
+          <button id="themeBtnToggle" type="button">🌙 Theme: NIGHT</button>
+          <button id="themeModeBtn" type="button">🕒 Theme Mode: AUTO</button>
+          <button id="muteBtn" type="button">🔊 Beep: ON</button>
+          <button id="qrBtn" type="button">📱 QR Code</button>
+          <button id="editLayoutBtn" type="button">🛠️ Edit POS &amp; Card</button>
+          <button id="toggleHeaderBtn" type="button">👁️ Hide Header Now</button>
+          <button id="tvFullscreenBtn" type="button">🖥️ Fullscreen</button>
         </div>
       </div>
     </div>
 
-    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">☰</button>
-  </div>
+    <button id="hamburgerBtn" class="hamburger" type="button" aria-label="Toggle menu">☰</button>
 
-  <!-- ================= TICKER BAR (Live Feed) ================= -->
-  <div class="scada-ticker-wrap">
+    <div id="mobileMenu" class="mobileMenu">
+      <div class="right">
+        <button id="modeBeltBtn2" class="btn modeBtn headBtn" type="button">Damaged belt</button>
+        <button id="modePm10Btn2" class="btn modeBtn pmBtn" type="button">PM10</button>
+        <button id="modeVibDashBtn2" class="btn modeBtn vibBtn" type="button">Vib Dashboard</button>
+        <button id="modeAiBtn2" class="btn modeBtn aiBtn" type="button">Noise Sensor</button>
+        <button id="autoSwitchBtn2" class="btn" type="button">🔄 Auto: ON 60s</button>
+        <button id="reportBtn2" class="btn btn-report" type="button">📝 Report</button>
+        <button id="opBtn2" class="btn" type="button">👤 Operator Login</button>
+        <button id="alarmLogBtn2" class="btn" type="button">🚨 Alarm Log 24h</button>
+        <button id="eventListBtn2" class="btn" type="button">📋 Event List 24h</button>
+        <button id="themeBtnToggle2" class="btn" type="button">🌙 Theme: NIGHT</button>
+        <button id="themeModeBtn2" class="btn" type="button">🕒 Theme Mode: AUTO</button>
+        <button id="muteBtn2" class="btn" type="button">🔊 Beep: ON</button>
+        <button id="qrBtn2" class="btn" type="button">📱 QR Code</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================= -->
+  <!-- LIVE LOG TICKER BAR (KEPT VISIBLE EVEN WHEN HEADER HIDDEN) -->
+  <!-- ========================================================= -->
+  <div class="scada-ticker-wrap" id="liveTickerWrap">
     <div class="scada-ticker-label">LIVE LOG</div>
     <div class="scada-ticker-content" id="liveTickerContent">
       <span>Waiting for telemetry data...</span>
     </div>
   </div>
 
-  <!-- ================= MOBILE MENU ================= -->
-  <div class="mobileMenu" id="mobileMenu">
-    <div class="right">
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
-        <button class="btn modeBtn headBtn primary" id="modeBeltBtn2">Damaged belt</button>
-        <button class="btn modeBtn pmBtn" id="modePm10Btn2">PM10</button>
-        <button class="btn modeBtn vibBtn" id="modeVibDashBtn2" style="background-color: #0284c7; border-color: #0369a1; color: #fff;">Vib Dashboard</button> 
-        <button class="btn modeBtn" id="modeAiBtn2" style="background-color: #0d9488; border-color: #0f766e; color: #fff; font-weight: 1000;">Noise Sensor</button>
-      </div>
-      
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-        <button class="btn" id="autoSwitchBtn2" style="font-weight: 1000; letter-spacing: .5px;">⏸ Auto: OFF</button>
-        <button class="btn" id="qrBtn2" style="font-weight: 1000; letter-spacing: .5px;">📱 QR code webapp</button>
-        <button class="btn" id="opBtn2">👤 Operator: -</button>
-        <button class="btn" id="muteBtn2">🔊 Beep: ON</button>
-        <button class="btn" id="themeBtnToggle2">🌙 Theme: NIGHT</button>
-        
-        <div style="grid-column: span 2; border-top:1px dashed var(--border); margin: 2px 0;"></div>
-        
-        <button class="btn btn-report" id="reportBtn2" style="grid-column: span 2;">📝 Report Form</button>
-        <button class="btn" id="alarmLogBtn2" style="background:rgba(255,59,48,0.15); border-color:rgba(255,59,48,0.3); color:#ff3b30;">🚨 Alarm Log</button>
-        <button class="btn" id="eventListBtn2">📜 Event List</button>
-      </div>
-    </div>
-  </div>
+  <!-- ========================================================= -->
+  <!-- MAIN VIEWPORT -->
+  <!-- ========================================================= -->
+  <main class="mainViewport">
 
-  <!-- ================= MAIN VIEWPORT WRAPPER ================= -->
-  <div class="mainViewport">
-    <!-- MAP SECTION -->
-    <div class="section" id="mapSection">
+    <!-- 1. MAP SECTION -->
+    <section id="mapSection" class="section">
       <div class="secHead">
         <div class="secTitle">
           <span class="dot ok"></span>
-          <span id="mapTitle">Plant Map • หัวสายพานชำรุด Check Points</span>
+          <span id="mapTitle">Plant Map</span>
         </div>
-        <div class="secMeta mono" id="mapHint">Click dot/card to view details</div>
+        <div class="secMeta mono">
+          <span id="mapHint">Click dot/card to view details</span>
+          <span>• Sheet: <b id="sheetLast">-</b></span>
+          <span>• Sleep: <b id="sleepLast">-</b></span>
+          <span>• Fetch: <b id="lastFetch">-</b></span>
+        </div>
       </div>
       <div class="mapOuter">
-        <div class="mapCanvas" id="mapCanvas"></div>
+        <div id="mapCanvas" class="mapCanvas"></div>
       </div>
-    </div>
+    </section>
 
-    <!-- NOISE SENSOR SECTION -->
-    <div class="section aiSection" id="aiSection">
+    <!-- 2. VIBRATION DASHBOARD SECTION -->
+    <section id="vibDashboardSection" class="section" style="display:none;">
       <div class="secHead">
         <div class="secTitle">
           <span class="dot ok"></span>
-          <span id="aiTitle">Noise Sensor Analysis</span>
+          <span>Vibration &amp; Sound Live Dashboard</span>
         </div>
-        <div class="secMeta mono" id="aiHint">Live Dashboard from External Source</div>
+        <div class="secMeta mono">
+          <span>Real-time Gear-Motor Telemetry</span>
+        </div>
       </div>
       <div class="iframeWrap">
-        <iframe data-src="https://thirasab.github.io/-noisesensor/" loading="lazy"></iframe>
+        <iframe id="vibDashIframe" src="about:blank" loading="lazy" referrerpolicy="no-referrer"></iframe>
       </div>
-    </div>
+    </section>
 
-    <!-- VIBRATION DASHBOARD SECTION -->
-    <div class="section" id="vibDashboardSection" style="display: none;">
-      <div class="secHead">
-        <div class="secTitle">
-          <span class="dot ok"></span>
-          <span id="vibDashTitle">Vibration Gear-Motor Dashboard</span>
-        </div>
-        <div class="secMeta mono">Live Dashboard from External Source</div>
-      </div>
-      <div class="iframeWrap">
-        <iframe data-src="https://thirasab.github.io/vibration-dashboard/" loading="lazy"></iframe>
-      </div>
-    </div>
-  </div>
+  </main>
 
-  <!-- ================= MODALS & OVERLAYS ================= -->
-  
-  <!-- History / Vib Modal -->
-  <div class="overlay" id="overlay">
-    <div class="modal" role="dialog" aria-modal="true">
+  <!-- ========================================================= -->
+  <!-- DETAIL MODAL (HISTORY / PM10 / VIBRATION / LOGS) -->
+  <!-- ========================================================= -->
+  <div id="overlay" class="overlay">
+    <div class="modal">
       <div class="modalHead">
-        <div class="modalTitle" id="modalTitle">History</div>
-        <button class="closeBtn" id="closeBtn">✕ Close</button>
+        <div id="modalTitle" class="modalTitle mono">Details</div>
+        <button id="closeBtn" class="closeBtn" type="button">✕ Close</button>
       </div>
-      <div class="modalBody" id="modalBody">Loading...</div>
+      <div id="modalBody" class="modalBody"></div>
     </div>
   </div>
 
-  <!-- Toast Wrap -->
-  <div class="toastWrap" id="toastWrap"></div>
-
-  <!-- QR Code Overlay -->
-  <div class="qrOverlay" id="qrOverlay" aria-hidden="true">
-    <div class="qrZoomBox" id="qrZoomBox">
-      <img id="qrZoomImg"
-           src="https://lh3.googleusercontent.com/d/1OLkLLT-nnUsJK6FeIS8x9kQwav53za-t"
-           alt="QR Zoom"
-           referrerpolicy="no-referrer" />
-      <div class="qrZoomHint">Click to close • ESC</div>
-    </div>
-  </div>
-
-  <!-- Report Data Table Overlay -->
-  <div class="reportOverlay" id="reportOverlay">
-    <div class="reportModal" role="dialog" aria-modal="true">
+  <!-- ========================================================= -->
+  <!-- REPORT LIST MODAL -->
+  <!-- ========================================================= -->
+  <div id="reportOverlay" class="reportOverlay">
+    <div class="reportModal">
       <div class="reportHead">
-        <div class="ttl">REPORT • รายงานเช็คหัวสายพาน</div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;">
-          <button class="rBtn primary" id="reportOpenFormBtn">+ New</button>
-          <button class="rBtn" id="reportRefreshBtn">Refresh</button>
-          <button class="rBtn danger" id="reportCloseBtn">✕ Close</button>
+        <div class="ttl">📝 FIELD INSPECTION REPORTS</div>
+        <div class="rActions">
+          <span id="r_count" class="rLabel mono">rows: 0</span>
+          <button id="reportOpenFormBtn" class="rBtn primary" type="button">+ New Report</button>
+          <button id="reportRefreshBtn" class="rBtn" type="button">↻ Refresh</button>
+          <button id="reportCloseBtn" class="rBtn danger" type="button">✕ Close</button>
         </div>
       </div>
       <div class="reportBody">
-        <div class="rCard">
-          <div style="display:flex;justify-content:space-between;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-            <div class="rLabel">Data table</div>
-            <div class="rMut rSmallMono" id="r_count">-</div>
-          </div>
-          <div class="rTableWrap">
-            <table class="rTable">
-              <thead><tr>
-                <th style="width:155px;">Check time</th>
-                <th style="width:100px;">Code</th>
+        <div class="rTableWrap">
+          <table class="rTable">
+            <thead>
+              <tr>
+                <th style="width:155px;">Check Time</th>
+                <th style="width:110px;">Code</th>
                 <th>Detail</th>
-                <th style="width:130px;">Images</th>
-                <th style="width:120px;">OP</th>
-                <th style="width:130px;">Action</th>
-              </tr></thead>
-              <tbody id="r_tbody"><tr><td colspan="6" class="rMut">Loading...</td></tr></tbody>
-            </table>
-          </div>
-          <div class="rMut" style="font-size:10px;margin-top:8px;">✅ คลิกรูปเพื่อขยาย • Edit เพื่อแก้ไข</div>
+                <th style="width:185px;">Images</th>
+                <th style="width:130px;">Operator</th>
+                <th style="width:105px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="r_tbody">
+              <tr><td colspan="6" class="rMut">No data</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Report Form Overlay -->
-  <div class="reportFormOverlay" id="reportFormOverlay">
-    <div class="reportFormBox" role="dialog" aria-modal="true">
+  <!-- ========================================================= -->
+  <!-- REPORT CREATE / EDIT FORM MODAL -->
+  <!-- ========================================================= -->
+  <div id="reportFormOverlay" class="reportFormOverlay">
+    <div class="reportFormBox">
       <div class="reportFormHead">
-        <div class="ttl" id="formHeadTitle">FORM • กรอก/แก้ไข รายงาน</div>
-        <button class="reportFormCloseBtn" id="reportFormCloseBtn">✕</button>
+        <div id="formHeadTitle" class="ttl">FORM • กรอก/แก้ไข รายงาน</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="r_editId" class="rSmallMono rMut"></span>
+          <button id="reportFormCloseBtn" class="reportFormCloseBtn" type="button">✕</button>
+        </div>
       </div>
       <div class="reportFormBody">
         <div class="rRow">
-          <div class="rLabel">เวลาเช็ค (Indochina time)</div>
-          <input class="rInput" id="r_checkTime" type="datetime-local" />
+          <label class="rLabel" for="r_checkTime">Check Time</label>
+          <input id="r_checkTime" class="rInput mono" type="datetime-local" />
         </div>
         <div class="rRow">
-          <div class="rLabel">Code</div>
-          <input class="rInput" id="r_code" placeholder="เช่น 542.21 / POS6" maxlength="80" />
+          <label class="rLabel" for="r_code">Code / Equipment</label>
+          <input id="r_code" class="rInput mono" type="text" placeholder="เช่น 525.09, POS 1, CM10" />
         </div>
         <div class="rRow">
-          <div class="rLabel">รายละเอียด</div>
-          <textarea class="rText" id="r_detail" placeholder="พิมพ์รายละเอียด..." maxlength="2000"></textarea>
+          <label class="rLabel" for="r_detail">Detail / Observation</label>
+          <textarea id="r_detail" class="rText" placeholder="รายละเอียดอาการหรือจุดที่ตรวจสอบ"></textarea>
         </div>
         <div class="rRow">
-          <div class="rLabel">แนบรูป (1–4 รูป)</div>
-          <input class="rInput" id="r_files" type="file" accept="image/*" multiple />
-          <div class="uploadBar" id="uploadBar"><div class="uploadBarFill" id="uploadBarFill"></div></div>
-          <div class="rThumbs" id="r_imgThumbs"></div>
+          <label class="rLabel" for="r_files">Images (สูงสุด 4 รูป)</label>
+          <input id="r_files" class="rInput" type="file" accept="image/*" multiple />
+          <div id="uploadBar" class="uploadBar">
+            <div id="uploadBarFill" class="uploadBarFill"></div>
+          </div>
+          <div id="r_imgThumbs" class="rThumbs"></div>
         </div>
         <div class="rActions">
-          <button class="rBtn primary" id="r_saveBtn">💾 Save</button>
-          <button class="rBtn" id="r_clearBtn">Clear</button>
-          <button class="rBtn danger" id="r_deleteBtn" style="display:none;">🗑 Delete</button>
-          <button class="rBtn" id="r_formCancelBtn">Close</button>
-          <span class="rMut rSmallMono" id="r_editId" style="font-size:10px;"></span>
+          <button id="r_saveBtn" class="rBtn primary" type="button">💾 Save</button>
+          <button id="r_deleteBtn" class="rBtn danger" type="button" style="display:none;">🗑️ Delete</button>
+          <button id="r_clearBtn" class="rBtn" type="button">↺ Clear</button>
+          <button id="r_formCancelBtn" class="rBtn" type="button">Cancel</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Fullscreen Image Viewer -->
-  <div class="imgViewer" id="imgViewer">
+  <!-- ========================================================= -->
+  <!-- IMAGE VIEWER MODAL (ZOOM & PAN) -->
+  <!-- ========================================================= -->
+  <div id="imgViewer" class="imgViewer">
     <div class="imgViewerBox">
       <div class="imgViewerHead">
-        <div class="imgViewerTitle" id="imgViewerTitle">Image</div>
-        <button class="imgViewerClose" id="imgViewerClose">✕ Close</button>
+        <div id="imgViewerTitle" class="imgViewerTitle mono">Image Viewer</div>
+        <button id="imgViewerClose" class="imgViewerClose" type="button">✕ Close</button>
       </div>
-      <div class="imgViewerBody" id="imgViewerBody">
-        <div class="imgViewerStage" id="imgViewerStage">
-          <img id="imgViewerImg" alt="preview" />
-          <div class="imgViewerHint">ลากเพื่อเลื่อน • ใช้ 2 นิ้วเพื่อย่อ/ขยาย • ดับเบิลแตะเพื่อซูม</div>
+      <div id="imgViewerBody" class="imgViewerBody">
+        <div id="imgViewerStage" class="imgViewerStage">
+          <img id="imgViewerImg" referrerpolicy="no-referrer" alt="Preview" />
         </div>
+        <div class="imgViewerHint mono">Scroll / Pinch to Zoom • Drag to Pan • Double-tap to Reset</div>
       </div>
     </div>
   </div>
 
+  <!-- ========================================================= -->
+  <!-- QR CODE ZOOM OVERLAY -->
+  <!-- ========================================================= -->
+  <div id="qrOverlay" class="qrOverlay" aria-hidden="true">
+    <div id="qrZoomBox" class="qrZoomBox">
+      <img id="qrZoomImg" referrerpolicy="no-referrer" alt="QR Code" />
+    </div>
+  </div>
+
+  <!-- Project Script -->
+  <script src="script.js?v=18"></script>
 </body>
 </html>
