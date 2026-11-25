@@ -997,6 +997,65 @@ body.header-hidden .scada-ticker-wrap {
   padding-right: 0 !important;
 }
 
+/* LIVE LOG SMART TV OVERRIDES (MIN-WIDTH 1201PX) */
+@media (min-width: 1201px) {
+  .scada-ticker-wrap {
+    height: 36px !important;
+    border-radius: 8px !important;
+    margin-top: 6px !important;
+  }
+
+  .scada-ticker-label {
+    font-size: 13px !important;
+    padding: 0 14px !important;
+    letter-spacing: 0.8px !important;
+  }
+
+  .scada-ticker-content {
+    font-size: 16px !important;
+    line-height: 36px !important;
+    font-weight: 700 !important;
+  }
+}
+
+/* LIVE LOG ALARM HIGHLIGHT STATE */
+.scada-ticker-wrap.has-alarm {
+  background: rgba(255, 59, 48, 0.22) !important;
+  border-color: rgba(255, 59, 48, 0.85) !important;
+  box-shadow: 0 0 16px rgba(255, 59, 48, 0.35), inset 0 0 8px rgba(255, 59, 48, 0.25) !important;
+  animation: tickerAlarmPulse 1.4s ease-in-out infinite;
+}
+
+[data-theme="day"] .scada-ticker-wrap.has-alarm {
+  background: rgba(255, 59, 48, 0.16) !important;
+  border-color: #d92d20 !important;
+}
+
+.scada-ticker-wrap.has-alarm .scada-ticker-label {
+  background: #ff2a1f !important;
+  color: #ffffff !important;
+  box-shadow: 2px 0 12px rgba(255, 59, 48, 0.75) !important;
+}
+
+.scada-ticker-wrap.has-alarm .scada-ticker-content {
+  color: #ffe5e3 !important;
+  font-weight: 900 !important;
+}
+
+[data-theme="day"] .scada-ticker-wrap.has-alarm .scada-ticker-content {
+  color: #991b1b !important;
+  font-weight: 900 !important;
+}
+
+@keyframes tickerAlarmPulse {
+  0%, 100% {
+    border-color: rgba(255, 59, 48, 0.65);
+  }
+  50% {
+    border-color: #ff6b63;
+  }
+}
+
 /* ========================================================= */
 /* 14. SMART TV & LARGE SCREEN OPTIMIZATION */
 /* ========================================================= */
