@@ -958,7 +958,7 @@ table th, .aiTable th {
   min-width: 0;
   height: 100%;
   display: block;
-  line-height: 20px;
+  line-height: 22px;
   overflow: hidden;
   white-space: nowrap;
   color: var(--scada-cyan);
@@ -971,6 +971,8 @@ table th, .aiTable th {
 
 .scada-ticker-content span {
   display: inline-block;
+  line-height: normal;
+  vertical-align: middle;
   padding-left: 0 !important;
   white-space: nowrap;
   will-change: transform;
@@ -1012,7 +1014,7 @@ body.header-hidden .scada-ticker-wrap {
   }
 
   .scada-ticker-content {
-    font-size: 16px !important;
+    font-size: 15px !important;
     line-height: 36px !important;
     font-weight: 700 !important;
   }
@@ -1202,6 +1204,16 @@ body[data-mode="PM10"] .posCard {
 }
 .scada-ticker-content {
   font-size: 11px !important;
+  line-height: 22px !important;
+}
+@media (min-width: 1201px) {
+  .scada-ticker-wrap {
+    height: 36px !important;
+  }
+  .scada-ticker-content {
+    font-size: 15px !important;
+    line-height: 36px !important;
+  }
 }
 
 .mainViewport {
