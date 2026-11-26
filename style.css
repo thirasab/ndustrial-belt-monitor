@@ -1092,6 +1092,28 @@ body[data-mode="PM10"] .posCard {
   }
 }
 
+@media (min-width: 1400px) {
+  body:not([data-mode="PM10"]) .posCard {
+    min-width: 145px !important;
+    max-width: 210px !important;
+    padding: 6px 8px !important;
+    border-radius: 10px !important;
+  }
+
+  body:not([data-mode="PM10"]) .posCardTitle .t,
+  body:not([data-mode="PM10"]) .posCardTitle .sum,
+  body:not([data-mode="PM10"]) .posLeft,
+  body:not([data-mode="PM10"]) .posRight {
+    font-size: 11.5px !important;
+    line-height: 1.25 !important;
+  }
+
+  body:not([data-mode="PM10"]) .posChip {
+    width: 8px !important;
+    height: 8px !important;
+  }
+}
+
 .posCardTitle {
   gap: 4px !important;
   margin-bottom: 2px !important;
@@ -1336,6 +1358,12 @@ body.header-hidden .floating-header-btn {
 
 body.header-hidden .mainViewport {
   margin-top: 4px !important;
+}
+
+body.header-hidden,
+body.header-hidden .mainViewport,
+body.header-hidden .mapCanvas {
+  cursor: none !important;
 }
 
 /* ========================================================= */
