@@ -17,7 +17,7 @@ let map;
 let __PAGE_MODE__ = "BELT"; // บังคับหน้าจอเริ่มต้นเป็นโหมด BELT ทุกครั้งที่เปิด/รีเฟรชหน้า
 try { localStorage.removeItem("scada_page_mode"); } catch (e) {}
 let AUTO_SWITCH_SEC = 60;
-let __AUTO_SWITCH_ENABLED__ = true; // ✅ เปลี่ยนจาก false เป็น true เพื่อให้เริ่มสลับหน้าอัตโนมัติทันทีที่เปิดเว็บ
+let __AUTO_SWITCH_ENABLED__ = true; // เริ่มโหมดสลับหน้าอัตโนมัติทันทีที่เปิดเว็บ
 try { localStorage.removeItem("scada_auto_switch"); } catch (e) {}
 let __AUTO_SWITCH_TIMER__ = null;
 let __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC;
@@ -293,11 +293,44 @@ function setConnBadge(state,txt){
 
 var BEEP_INTERVAL_MS=7000,BEEP_COOLDOWN_MS=1200;
 var lastBeepAt=0,beepedOpenIds={},audioCtx=null;
+var __AUDIO_UNLOCK_BANNER_ID__ = "tvAudioUnlockBanner";
+
+function updateTvAudioUnlockBanner_() {
+  var existing = $id(__AUDIO_UNLOCK_BANNER_ID__);
+  var isUnlocked = !!(audioCtx && audioCtx.state === "running");
+
+  if (!getBeepEnabled() || isUnlocked) {
+    if (existing) existing.remove();
+    return;
+  }
+
+  if (!existing) {
+    existing = document.createElement("button");
+    existing.id = __AUDIO_UNLOCK_BANNER_ID__;
+    existing.type = "button";
+    existing.textContent = "🔇 คลิกหน้าจอ 1 ครั้งเพื่อเปิดเสียงเตือน";
+    existing.style.cssText =
+      "position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:10030;" +
+      "padding:8px 14px;border-radius:999px;border:1px solid #ff9f0a;" +
+      "background:rgba(12,18,27,0.94);color:#ff9f0a;font-weight:900;font-size:12px;" +
+      "box-shadow:0 6px 20px rgba(0,0,0,0.65);cursor:pointer;";
+    existing.addEventListener("click", function() {
+      ensureAudio();
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().then(updateTvAudioUnlockBanner_).catch(function(){});
+      }
+      updateTvAudioUnlockBanner_();
+    });
+    document.body.appendChild(existing);
+  }
+}
+
 function getBeepEnabled(){ return localStorage.getItem("belt_beep")!=="0"; }
 function setBeepEnabled(on){ localStorage.setItem("belt_beep",on?"1":"0"); updateMuteBtn(); }
 function updateMuteBtn(){
   var lbl="Beep: "+(getBeepEnabled()?"ON":"MUTE");
   ["muteBtn","muteBtn2"].forEach(function(id){ var b=$id(id); if(b) b.textContent=lbl; });
+  updateTvAudioUnlockBanner_();
 }
 function ensureAudio(){ if(audioCtx) return true; try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){audioCtx=null;return false;} return true; }
 function beepOnce(){
@@ -306,6 +339,7 @@ function beepOnce(){
 
   if(audioCtx.state === "suspended"){
     audioCtx.resume().catch(function(){});
+    updateTvAudioUnlockBanner_();
     return;
   }
   if(audioCtx.state !== "running") return;
@@ -341,9 +375,12 @@ function beepPurgeLow_() {
   if (!ensureAudio()) return;
 
   if (audioCtx.state === "suspended") {
-    audioCtx.resume().catch(function(){});
+    audioCtx.resume().then(updateTvAudioUnlockBanner_).catch(function(){});
   }
-  if (audioCtx.state !== "running") return;
+  if (audioCtx.state !== "running") {
+    updateTvAudioUnlockBanner_();
+    return;
+  }
 
   var now = Date.now();
   if (now - lastPurgeBeepAt < PURGE_BEEP_INTERVAL_MS) return;
@@ -390,11 +427,16 @@ function handleBeepFromData(data){
   var btn=$id(id); if(!btn) return;
   btn.addEventListener("click",function(){
     var on=!getBeepEnabled(); setBeepEnabled(on); ensureAudio();
-    if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume().catch(function(){});
+    if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume().then(updateTvAudioUnlockBanner_).catch(function(){});
     showToast(on?"Beep ON":"Beep MUTED",on?"warn":"ok");
   });
 });
-document.addEventListener("click",function(){ ensureAudio(); if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume().catch(function(){}); },{once:true});
+document.addEventListener("click",function(){
+  ensureAudio();
+  if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume().then(updateTvAudioUnlockBanner_).catch(function(){});
+  setTimeout(updateTvAudioUnlockBanner_, 150);
+},{once:true});
+setInterval(updateTvAudioUnlockBanner_, 4000);
 
 // =========================================================
 // 6. UI RENDER HELPERS
@@ -687,15 +729,9 @@ function syncIframesForMode_(mode) {
       ifr.setAttribute("data-src", targetSrc);
     }
 
-    var shouldLoad = (mode === pairs[i].modeKey);
-    if (shouldLoad) {
-      if (targetSrc && ifr.getAttribute("src") !== targetSrc) {
-        ifr.setAttribute("src", targetSrc);
-      }
-    } else {
-      if (ifr.getAttribute("src") && ifr.getAttribute("src") !== "about:blank") {
-        ifr.setAttribute("src", "about:blank");
-      }
+    // โหลดครั้งแรกเมื่อเข้าโหมดนั้น แล้วคงไว้เพื่อลด RAM leak และรักษาการเชื่อมต่อ
+    if (mode === pairs[i].modeKey && targetSrc && ifr.getAttribute("src") !== targetSrc) {
+      ifr.setAttribute("src", targetSrc);
     }
   }
 }
@@ -1405,7 +1441,7 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
           type: 'linear', position: 'right',
           ticks: { color: '#3498db', font: { size: isMobile ? 9 : 11 }, maxTicksLimit: 6 },
           grid: { drawOnChartArea: false },
-          suggestedMin: targetMinSound, suggestedMax: targetMaxSound
+          suggestedMin: targetMinSound, suggestedMax: targetMinSound
         }
       }
     }
