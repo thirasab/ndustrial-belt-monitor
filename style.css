@@ -1901,22 +1901,24 @@ body.header-hidden .purge-overlay-panel {
 /* AUTO SWITCH PROGRESS BAR & PURGE TREND ARROWS             */
 /* ========================================================= */
 .auto-switch-progress-wrap {
+  position: relative;
   width: 100%;
   height: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   overflow: hidden;
   margin-top: 3px;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
+  z-index: 9998;
   display: none;
 }
 
 [data-theme="day"] .auto-switch-progress-wrap {
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.10);
 }
 
 .auto-switch-progress-wrap.active {
-  display: block;
+  display: block !important;
 }
 
 .auto-switch-progress-fill {
