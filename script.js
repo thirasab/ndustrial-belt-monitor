@@ -2590,8 +2590,8 @@ function setAutoSwitchButtons_(){
   var progWrap = $id("autoSwitchProgressWrap");
   var progFill = $id("autoSwitchProgressFill");
   if (!progWrap) {
-    var tickerWrap = document.querySelector(".scada-ticker-wrap");
-    if (tickerWrap && tickerWrap.parentNode) {
+    var topBar = document.querySelector(".top");
+    if (topBar && topBar.parentNode) {
       progWrap = document.createElement("div");
       progWrap.id = "autoSwitchProgressWrap";
       progWrap.className = "auto-switch-progress-wrap";
@@ -2599,7 +2599,7 @@ function setAutoSwitchButtons_(){
       progFill.id = "autoSwitchProgressFill";
       progFill.className = "auto-switch-progress-fill";
       progWrap.appendChild(progFill);
-      tickerWrap.parentNode.insertBefore(progWrap, tickerWrap.nextSibling);
+      topBar.parentNode.insertBefore(progWrap, topBar.nextSibling);
     }
   }
   if (progWrap && progFill) {
@@ -2660,7 +2660,6 @@ function setAutoSwitchEnabled_(on){
   ["modeVibDashBtn","modeVibDashBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setPageMode("VIB_DASH");});});
   ["autoSwitchBtn","autoSwitchBtn2"].forEach(function(id){var b=$id(id);if(b) b.addEventListener("click",function(){setAutoSwitchEnabled_(!__AUTO_SWITCH_ENABLED__);});});
 })();
-
 // =========================================================
 // 14. ALARM LOG & EVENT LIST
 // =========================================================
