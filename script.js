@@ -17,7 +17,7 @@ let map;
 let __PAGE_MODE__ = "BELT"; // บังคับหน้าจอเริ่มต้นเป็นโหมด BELT ทุกครั้งที่เปิด/รีเฟรชหน้า
 try { localStorage.removeItem("scada_page_mode"); } catch (e) {}
 let AUTO_SWITCH_SEC = 60;
-let __AUTO_SWITCH_ENABLED__ = false; // บังคับเป็น Manual (ปิด Auto Switch) ทุกครั้งที่เปิด/รีเฟรชหน้า
+let __AUTO_SWITCH_ENABLED__ = true; // ✅ เปลี่ยนจาก false เป็น true เพื่อให้เริ่มสลับหน้าอัตโนมัติทันทีที่เปิดเว็บ
 try { localStorage.removeItem("scada_auto_switch"); } catch (e) {}
 let __AUTO_SWITCH_TIMER__ = null;
 let __AUTO_SWITCH_REMAINING__ = AUTO_SWITCH_SEC;
