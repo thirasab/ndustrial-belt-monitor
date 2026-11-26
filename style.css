@@ -1897,3 +1897,58 @@ body.header-hidden .purge-overlay-panel {
     font-size: 9.5px;
   }
 }
+/* ========================================================= */
+/* AUTO SWITCH PROGRESS BAR & PURGE TREND ARROWS             */
+/* ========================================================= */
+.auto-switch-progress-wrap {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 3px;
+  flex-shrink: 0;
+  display: none;
+}
+
+[data-theme="day"] .auto-switch-progress-wrap {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.auto-switch-progress-wrap.active {
+  display: block;
+}
+
+.auto-switch-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #00e0ff, #1fd27a);
+  transition: width 0.95s linear, background-color 0.25s ease;
+}
+
+.auto-switch-progress-fill.warn {
+  background: linear-gradient(90deg, #ff9f0a, #ff3b30);
+}
+
+body.header-hidden .auto-switch-progress-wrap {
+  display: none !important;
+}
+
+.purge-trend {
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 1000;
+  line-height: 1;
+}
+
+.purge-trend.up {
+  color: #1fd27a;
+}
+
+.purge-trend.down {
+  color: #ff9f0a;
+}
+
+.purge-row.bad .purge-trend.down {
+  color: #ff3b30;
+}
