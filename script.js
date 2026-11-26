@@ -1441,7 +1441,7 @@ function drawVibDualChart_(canvasId, data, allD18, allD20) {
           type: 'linear', position: 'right',
           ticks: { color: '#3498db', font: { size: isMobile ? 9 : 11 }, maxTicksLimit: 6 },
           grid: { drawOnChartArea: false },
-          suggestedMin: targetMinSound, suggestedMax: targetMinSound
+          suggestedMin: targetMinSound, suggestedMax: targetMaxSound
         }
       }
     }
@@ -2586,6 +2586,33 @@ function setAutoSwitchButtons_(){
     if (isWarning) b.classList.add("btn-timer-warn");
     else b.classList.remove("btn-timer-warn");
   });
+
+  var progWrap = $id("autoSwitchProgressWrap");
+  var progFill = $id("autoSwitchProgressFill");
+  if (!progWrap) {
+    var tickerWrap = document.querySelector(".scada-ticker-wrap");
+    if (tickerWrap && tickerWrap.parentNode) {
+      progWrap = document.createElement("div");
+      progWrap.id = "autoSwitchProgressWrap";
+      progWrap.className = "auto-switch-progress-wrap";
+      progFill = document.createElement("div");
+      progFill.id = "autoSwitchProgressFill";
+      progFill.className = "auto-switch-progress-fill";
+      progWrap.appendChild(progFill);
+      tickerWrap.parentNode.insertBefore(progWrap, tickerWrap.nextSibling);
+    }
+  }
+  if (progWrap && progFill) {
+    progWrap.classList.toggle("active", !!__AUTO_SWITCH_ENABLED__);
+    if (__AUTO_SWITCH_ENABLED__ && AUTO_SWITCH_SEC > 0) {
+      var pct = Math.max(0, Math.min(100, (__AUTO_SWITCH_REMAINING__ / AUTO_SWITCH_SEC) * 100));
+      progFill.style.width = pct.toFixed(1) + "%";
+      progFill.classList.toggle("warn", !!isWarning);
+    } else {
+      progFill.style.width = "0%";
+      progFill.classList.remove("warn");
+    }
+  }
 }
 
 function stopAutoSwitch_(){
@@ -3744,14 +3771,14 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
   };
 
   const PURGE_NODES = [
-    { id: 'p1', sheetCol: 'PS1', name: '6526.04',  color: '#00e0ff', val: null, updatedAt: 0 },
-    { id: 'p2', sheetCol: 'PS2', name: '6524.041', color: '#1fd27a', val: null, updatedAt: 0 },
-    { id: 'p3', sheetCol: 'PS3', name: '6526.08',  color: '#ff9f0a', val: null, updatedAt: 0 },
-    { id: 'p4', sheetCol: 'PS4', name: '6536.04',  color: '#b38bff', val: null, updatedAt: 0 },
-    { id: 'p5', sheetCol: 'PS5', name: '6536.041', color: '#ff5e99', val: null, updatedAt: 0 },
-    { id: 'p6', sheetCol: 'PS6', name: '6536.08',  color: '#ffd60a', val: null, updatedAt: 0 },
-    { id: 'p7', sheetCol: 'PS7', name: '6511.76',  color: '#4dabf7', val: null, updatedAt: 0 },
-    { id: 'p8', sheetCol: 'PS8', name: '6511.80',  color: '#ff7a00', val: null, updatedAt: 0 }
+    { id: 'p1', sheetCol: 'PS1', name: '6526.04',  color: '#00e0ff', val: null, prevVal: null, updatedAt: 0 },
+    { id: 'p2', sheetCol: 'PS2', name: '6524.041', color: '#1fd27a', val: null, prevVal: null, updatedAt: 0 },
+    { id: 'p3', sheetCol: 'PS3', name: '6526.08',  color: '#ff9f0a', val: null, prevVal: null, updatedAt: 0 },
+    { id: 'p4', sheetCol: 'PS4', name: '6536.04',  color: '#b38bff', val: null, prevVal: null, updatedAt: 0 },
+    { id: 'p5', sheetCol: 'PS5', name: '6536.041', color: '#ff5e99', val: null, prevVal: null, updatedAt: 0 },
+    { id: 'p6', sheetCol: 'PS6', name: '6536.08',  color: '#ffd60a', val: null, prevVal: null, updatedAt: 0 },
+    { id: 'p7', sheetCol: 'PS7', name: '6511.76',  color: '#4dabf7', val: null, prevVal: null, updatedAt: 0 },
+    { id: 'p8', sheetCol: 'PS8', name: '6511.80',  color: '#ff7a00', val: null, prevVal: null, updatedAt: 0 }
   ];
 
   // เกณฑ์แจ้งเตือน Purge Air: ต่ำกว่า 4.0 Bar = Alarm แดง, 4.0 - 4.49 Bar = เฝ้าระวังส้ม, สูงกว่า 7.0 Bar = เฝ้าระวังส้ม
@@ -4006,13 +4033,24 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
       const node = PURGE_NODES[i];
       const cls = getPressureClass_(node.val, node.updatedAt);
       const isUnused = isPurgeUnused_(node.val);
+      const isStale = isPurgeStale_(node.updatedAt);
       const valText = (node.val === null || !isFinite(node.val))
         ? "--"
         : (isUnused ? "UNUSED" : Number(node.val).toFixed(2));
 
+      let trendHtml = "";
+      if (!isStale && !isUnused && node.val !== null && isFinite(node.val) && node.prevVal !== undefined && isFinite(node.prevVal)) {
+        const diff = Number(node.val) - Number(node.prevVal);
+        if (diff >= 0.02) {
+          trendHtml = '<span class="purge-trend up" title="เพิ่มขึ้นจาก ' + Number(node.prevVal).toFixed(2) + ' Bar">▲</span>';
+        } else if (diff <= -0.02) {
+          trendHtml = '<span class="purge-trend down" title="ลดลงจาก ' + Number(node.prevVal).toFixed(2) + ' Bar">▼</span>';
+        }
+      }
+
       html += `<div class="purge-row ${cls}" data-node-id="${esc(node.id)}" title="คลิกเพื่อดูกราฟย้อนหลัง ${esc(node.name)} (${esc(node.sheetCol)})">
         <span class="purge-name">${esc(node.name)}</span>
-        <span class="purge-val">${esc(valText)}</span>
+        <span class="purge-val">${esc(valText)}${trendHtml}</span>
       </div>`;
     }
     grid.innerHTML = html;
@@ -4563,6 +4601,11 @@ setTimeout(function() { location.reload(); }, 6 * 60 * 60 * 1000);
     if (!isFinite(num)) return;
     const node = PURGE_NODES.find(n => n.id.toLowerCase() === String(id).toLowerCase());
     if (node) {
+      if (node.val !== null && isFinite(node.val) && !isPurgeUnused_(node.val) && !isPurgeUnused_(num)) {
+        if (Math.abs(num - Number(node.val)) >= 0.02) {
+          node.prevVal = Number(node.val);
+        }
+      }
       node.val = num;
       node.updatedAt = Date.now();
     }
